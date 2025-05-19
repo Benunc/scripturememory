@@ -6,6 +6,16 @@ let accessToken: string | null = null;
 let tokenExpiry: number | null = null;
 let isAuthenticating = false;
 
+// Load token from localStorage on initialization
+const loadStoredToken = () => {
+  const storedToken = localStorage.getItem('google_access_token');
+  const storedExpiry = localStorage.getItem('google_token_expiry');
+  if (storedToken && storedExpiry) {
+    accessToken = storedToken;
+    tokenExpiry = parseInt(storedExpiry);
+  }
+};
+
 // Initialize the Google Identity Services client
 const initClient = () => {
   return new Promise<void>((resolve, reject) => {
@@ -38,7 +48,12 @@ const isTokenValid = () => {
 };
 
 // Get an access token using Google Identity Services
-const getAccessToken = async () => {
+export const getAccessToken = async () => {
+  // Load stored token on first call
+  if (!accessToken) {
+    loadStoredToken();
+  }
+
   // Return cached token if it's still valid
   if (isTokenValid()) {
     return accessToken;
@@ -65,6 +80,9 @@ const getAccessToken = async () => {
             // Cache the token and set expiry (default 1 hour)
             accessToken = response.access_token;
             tokenExpiry = Date.now() + (response.expires_in || 3600) * 1000;
+            // Store in localStorage
+            localStorage.setItem('google_access_token', response.access_token);
+            localStorage.setItem('google_token_expiry', tokenExpiry.toString());
             resolve(response.access_token);
           } else {
             reject(new Error('No access token received'));
