@@ -11,6 +11,16 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: undefined,
+        // Ensure proper MIME types
+        assetFileNames: (assetInfo) => {
+          if (!assetInfo.name) return 'assets/[name].[hash].[ext]';
+          const info = assetInfo.name.split('.');
+          const ext = info[info.length - 1];
+          if (/\.(js|mjs)$/.test(assetInfo.name)) {
+            return `assets/[name].[hash].js`;
+          }
+          return `assets/[name].[hash].[ext]`;
+        },
       },
     },
   },

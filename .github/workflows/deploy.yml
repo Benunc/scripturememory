@@ -45,4 +45,12 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4 
+        uses: actions/deploy-pages@v4
+      - name: Configure GitHub Pages
+        run: |
+          echo "Setting up GitHub Pages configuration..."
+          echo "::set-output name=base_path::/"
+          echo "::set-output name=clean_urls::true"
+          echo "::set-output name=pretty_urls::true"
+          echo "::set-output name=trailing_slashes::false"
+          echo "::set-output name=redirects::true" 
