@@ -9,6 +9,9 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     rollupOptions: {
+      input: {
+        main: './src/main.tsx'
+      },
       output: {
         manualChunks: undefined,
         assetFileNames: 'assets/[name].[hash][extname]',

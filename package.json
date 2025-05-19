@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "cp index.prod.html index.html && vite build && cp index.html dist/ && git checkout index.html",
+    "build": "vite build && cp index.prod.html dist/index.html",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
