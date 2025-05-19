@@ -21,7 +21,16 @@ export default defineConfig({
           }
           return `assets/[name].[hash].[ext]`;
         },
+        // Ensure proper MIME types for JavaScript modules
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
       },
     },
   },
+  server: {
+    headers: {
+      'Content-Type': 'text/javascript',
+      'X-Content-Type-Options': 'nosniff'
+    }
+  }
 })

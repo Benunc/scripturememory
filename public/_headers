@@ -4,4 +4,12 @@
 
 /assets/*
   Content-Type: text/javascript
+  X-Content-Type-Options: nosniff
+
+/*.js
+  Content-Type: text/javascript
+  X-Content-Type-Options: nosniff
+
+/*.mjs
+  Content-Type: text/javascript
   X-Content-Type-Options: nosniff 
