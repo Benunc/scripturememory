@@ -6,8 +6,8 @@ interface IntroProps {
 
 export const Intro = ({ onLogin }: IntroProps) => {
   return (
-    <Box className="App">
-      <Box as="header" className="App-header">
+    <Box>
+      <Box as="header">
         <Heading as="h1" size="xl">Scripture Memory</Heading>
       </Box>
       <Box as="main" p={8}>

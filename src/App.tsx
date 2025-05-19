@@ -1,6 +1,5 @@
 import { Box, Heading } from '@chakra-ui/react'
-import { useState, useEffect } from 'react'
-import './App.css'
+import { useState } from 'react'
 import { AddVerse } from './components/AddVerse'
 import { VerseList } from './components/VerseList'
 import { Intro } from './components/Intro'
@@ -31,8 +30,8 @@ function App() {
   }
 
   return (
-    <Box className="App">
-      <Box as="header" className="App-header">
+    <Box>
+      <Box as="header">
         <Heading as="h1" size="xl">Scripture Memory</Heading>
       </Box>
       <Box as="main">

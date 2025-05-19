@@ -17,6 +17,35 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background-color: #282c34;
+}
+
+#root {
+  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #282c34;
+  color: white;
+}
+
+header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+main {
+  flex: 1;
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 @media (prefers-color-scheme: light) {
