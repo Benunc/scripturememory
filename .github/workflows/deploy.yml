@@ -53,4 +53,5 @@ jobs:
           echo "::set-output name=clean_urls::true"
           echo "::set-output name=pretty_urls::true"
           echo "::set-output name=trailing_slashes::false"
-          echo "::set-output name=redirects::true" 
+          echo "::set-output name=redirects::true"
+          echo "::set-output name=headers::true" 

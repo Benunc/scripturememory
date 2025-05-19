@@ -1,5 +1,5 @@
 /*
-  Content-Type: text/javascript
+  Content-Type: text/html
   X-Content-Type-Options: nosniff
 
 /assets/*
@@ -12,4 +12,8 @@
 
 /*.mjs
   Content-Type: text/javascript
+  X-Content-Type-Options: nosniff
+
+/*.svg
+  Content-Type: image/svg+xml
   X-Content-Type-Options: nosniff 

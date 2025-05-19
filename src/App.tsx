@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
-import { ChakraProvider, Container, Heading, Flex, Box } from '@chakra-ui/react'
-import { VerseList } from './components/VerseList'
+import { Box, Heading } from '@chakra-ui/react'
+import { useState } from 'react'
+import './App.css'
 import { AddVerse } from './components/AddVerse'
+import { VerseList } from './components/VerseList'
 
 function App() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -11,19 +12,15 @@ function App() {
   };
 
   return (
-    <ChakraProvider>
-      <Container maxW="container.md" py={8}>
-        <Flex direction="column" gap={8}>
-          <Heading as="h1" size="xl" textAlign="center">
-            Scripture Memory
-          </Heading>
-          <Box>
-            <AddVerse onVerseAdded={handleVerseAdded} />
-          </Box>
-          <VerseList key={refreshTrigger} />
-        </Flex>
-      </Container>
-    </ChakraProvider>
+    <Box className="App">
+      <Box as="header" className="App-header">
+        <Heading as="h1" size="xl">Scripture Memory</Heading>
+      </Box>
+      <Box as="main">
+        <AddVerse onVerseAdded={handleVerseAdded} />
+        <VerseList key={refreshTrigger} />
+      </Box>
+    </Box>
   )
 }
 

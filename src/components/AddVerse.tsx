@@ -11,7 +11,11 @@ import {
 } from '@chakra-ui/react';
 import { addVerse } from '../utils/sheets';
 
-export const AddVerse: React.FC = () => {
+interface AddVerseProps {
+  onVerseAdded: () => void;
+}
+
+export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
   const [reference, setReference] = useState('');
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,6 +29,7 @@ export const AddVerse: React.FC = () => {
       await addVerse(reference, text);
       setReference('');
       setText('');
+      onVerseAdded();
       toast({
         title: 'Verse added',
         description: 'Your verse has been added successfully',
