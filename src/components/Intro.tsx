@@ -1,10 +1,18 @@
-import { Box, Button, Heading, Text, VStack } from '@chakra-ui/react'
+import { Box, Button, Heading, Text, VStack, Link } from '@chakra-ui/react'
+import { useState } from 'react'
+import { PrivacyPolicy } from './PrivacyPolicy'
 
 interface IntroProps {
   onLogin: () => void;
 }
 
 export const Intro = ({ onLogin }: IntroProps) => {
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+
+  if (showPrivacyPolicy) {
+    return <PrivacyPolicy onBack={() => setShowPrivacyPolicy(false)} />;
+  }
+
   return (
     <Box>
       <Box as="header">
@@ -25,6 +33,16 @@ export const Intro = ({ onLogin }: IntroProps) => {
           >
             Sign in with Google
           </Button>
+          <Text fontSize="sm" textAlign="center" mt={4}>
+            By signing in, you agree to our{' '}
+            <Link 
+              color="blue.500" 
+              textDecoration="underline" 
+              onClick={() => setShowPrivacyPolicy(true)}
+            >
+              Privacy Policy
+            </Link>
+          </Text>
         </VStack>
       </Box>
     </Box>
