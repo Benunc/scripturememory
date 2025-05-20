@@ -1,4 +1,4 @@
-import { Box, Heading, Text, HStack, Avatar, Button, useToast, VStack, UnorderedList, ListItem } from '@chakra-ui/react'
+import { Box, Heading, Text, HStack, Avatar, Button, useToast, VStack, UnorderedList, ListItem, Flex } from '@chakra-ui/react'
 import { useState, useEffect } from 'react'
 import { AddVerse } from './components/AddVerse'
 import { VerseList } from './components/VerseList'
@@ -41,7 +41,58 @@ function App() {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isExampleActive, setIsExampleActive] = useState(false);
+  const [revealedWords, setRevealedWords] = useState<number[]>([]);
+  const [showFullVerse, setShowFullVerse] = useState(false);
   const toast = useToast();
+
+  const exampleVerse = {
+    reference: 'John 3:16',
+    text: 'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.',
+  };
+
+  const handleStartExample = () => {
+    setIsExampleActive(true);
+    setRevealedWords([]);
+    setShowFullVerse(false);
+  };
+
+  const handleShowHint = () => {
+    const words = exampleVerse.text.split(' ');
+    const nextWordIndex = revealedWords.length;
+    if (nextWordIndex < words.length) {
+      setRevealedWords(prev => [...prev, nextWordIndex]);
+    }
+  };
+
+  const handleReset = () => {
+    setRevealedWords([]);
+    setShowFullVerse(false);
+  };
+
+  const handleShowVerse = () => {
+    setShowFullVerse(prev => !prev);
+    if (!showFullVerse) {
+      setRevealedWords([]);
+    }
+  };
+
+  const renderVerseText = () => {
+    if (showFullVerse) {
+      return exampleVerse.text;
+    }
+
+    if (!isExampleActive) {
+      return exampleVerse.text.split(' ').map(() => '_____').join(' ');
+    }
+
+    return exampleVerse.text.split(' ').map((word, index) => {
+      if (revealedWords.includes(index)) {
+        return word;
+      }
+      return '_____';
+    }).join(' ');
+  };
 
   useEffect(() => {
     const checkAuthorization = async () => {
@@ -163,7 +214,7 @@ function App() {
               This app helps you track your scripture memory progress. Each user gets their own space to add and track verses they're memorizing.
             </Text>
             <Text>
-              To get started, please contact the administrator (benmeredith@gmail.com) to request access. Once approved, you'll be able to:
+              To get started, please contact the administrator (ben@benandjacq.com) to request access. Once approved, you'll be able to:
             </Text>
             <Box pl={4}>
               <UnorderedList>
@@ -173,14 +224,94 @@ function App() {
               </UnorderedList>
             </Box>
             <Text>
-              In the meantime, you can see how it works with our sample verse: John 3:16
+              Here's an example of how it works:
             </Text>
-            <Box p={4} bg="gray.50" borderRadius="md">
-              <Text fontWeight="bold">John 3:16</Text>
-              <Text mt={2}>
-                "For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life."
-              </Text>
+            <Box 
+              p={4} 
+              borderWidth="1px" 
+              borderRadius="md" 
+              borderColor="chakra-border-color"
+              bg="chakra-body-bg"
+              color="chakra-body-text"
+            >
+              <VStack align="stretch" spacing={4}>
+                <Box>
+                  <Text fontWeight="bold">{exampleVerse.reference}</Text>
+                  <Text mt={2}>{renderVerseText()}</Text>
+                </Box>
+                <Flex gap={2} wrap="wrap">
+                  {!isExampleActive ? (
+                    <Button
+                      size="sm"
+                      colorScheme="blue"
+                      onClick={handleStartExample}
+                    >
+                      Start Memorizing
+                    </Button>
+                  ) : (
+                    <>
+                      {revealedWords.length >= exampleVerse.text.split(' ').length ? (
+                        <Button
+                          size="sm"
+                          colorScheme="orange"
+                          onClick={handleReset}
+                        >
+                          Reset
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            colorScheme="purple"
+                            onClick={handleShowHint}
+                          >
+                            Show Hint
+                          </Button>
+                          <Button
+                            size="sm"
+                            colorScheme="teal"
+                            onClick={handleShowVerse}
+                          >
+                            {showFullVerse ? 'Hide Verse' : 'Show Verse'}
+                          </Button>
+                        </>
+                      )}
+                    </>
+                  )}
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    variant="outline"
+                    onClick={() => toast({
+                      title: "Status updated",
+                      description: "This is just a demo - you'll be able to update statuses once you have access",
+                      status: "info",
+                      duration: 3000,
+                      isClosable: true,
+                    })}
+                  >
+                    In Progress
+                  </Button>
+                  <Button
+                    size="sm"
+                    colorScheme="green"
+                    variant="outline"
+                    onClick={() => toast({
+                      title: "Status updated",
+                      description: "This is just a demo - you'll be able to update statuses once you have access",
+                      status: "info",
+                      duration: 3000,
+                      isClosable: true,
+                    })}
+                  >
+                    Mastered
+                  </Button>
+                </Flex>
+              </VStack>
             </Box>
+            <Text fontSize="sm" opacity={0.7} textAlign="center">
+              Once you have access, you'll be able to update the status of your verses, add new ones to memorize, and test your memory by showing/hiding verses.
+            </Text>
           </VStack>
         </Box>
       </Box>
