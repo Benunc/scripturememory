@@ -202,8 +202,13 @@ function App() {
   if (!isAuthorized) {
     return (
       <Box className="App">
-        <Box as="header">
-          <Heading as="h1" size="xl">Scripture Memory</Heading>
+        <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
+          <HStack justify="space-between" align="center">
+            <Heading as="h1" size="xl">Scripture Memory</Heading>
+            <Button onClick={handleSignOut} colorScheme="red" size="sm">
+              Sign Out
+            </Button>
+          </HStack>
         </Box>
         <Box as="main" p={8}>
           <VStack spacing={6} align="stretch" maxW="600px" mx="auto">
@@ -216,8 +221,8 @@ function App() {
             <Text>
               To get started, please contact the administrator (ben@benandjacq.com) to request access. Once approved, you'll be able to:
             </Text>
-            <Box pl={4}>
-              <UnorderedList>
+            <Box pl={4} display="flex" justifyContent="center">
+              <UnorderedList listStylePos="inside" textAlign="left">
                 <ListItem>Create your own verse list</ListItem>
                 <ListItem>Track your memorization progress</ListItem>
                 <ListItem>Add new verses to memorize</ListItem>
