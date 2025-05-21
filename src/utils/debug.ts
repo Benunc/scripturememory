@@ -6,6 +6,7 @@ interface DebugConfig {
     token: boolean;
     sheets: boolean;
     verses: boolean;
+    db: boolean;
   };
 }
 
@@ -17,6 +18,7 @@ const defaultConfig: DebugConfig = {
     token: true,
     sheets: true,
     verses: true,
+    db: true
   },
 };
 
