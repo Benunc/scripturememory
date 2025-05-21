@@ -251,4 +251,99 @@ export const updateVerseStatus = async (userEmail: string, verseRef: string, new
     debug.error('sheets', 'Error updating verse status:', error);
     throw error;
   }
+};
+
+export const deleteVerse = async (userEmail: string, reference: string): Promise<void> => {
+  if (!rateLimiter.canMakeRequest(userEmail)) {
+    throw new Error('Rate limit exceeded. Please try again later.');
+  }
+  
+  try {
+    rateLimiter.recordRequest(userEmail);
+    const token = await getAccessToken();
+    const tabName = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
+
+    // Check if user has permission to access this tab
+    if (!canAccessTab(userEmail, tabName)) {
+      throw new Error('User does not have permission to access this tab');
+    }
+
+    // Get spreadsheet metadata to find sheet ID
+    const metadataResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!metadataResponse.ok) {
+      throw new Error('Failed to fetch spreadsheet metadata');
+    }
+
+    const metadata = await metadataResponse.json();
+    const sheet = metadata.sheets.find((s: any) => s.properties.title === tabName);
+    if (!sheet) {
+      throw new Error('User tab not found');
+    }
+
+    const sheetId = sheet.properties.sheetId;
+
+    // First, find the row number for this verse
+    const getResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A:A`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!getResponse.ok) {
+      throw new Error('Failed to fetch verses');
+    }
+
+    const data = await getResponse.json() as ValuesResponse;
+    const values = data.values || [];
+    const rowIndex = values.findIndex((row) => row[0] === reference);
+
+    if (rowIndex === -1) {
+      debug.error('sheets', 'Verse not found:', reference);
+      throw new Error('Verse not found');
+    }
+
+    // Delete the row using the sheets API
+    const deleteResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId,
+                dimension: 'ROWS',
+                startIndex: rowIndex,
+                endIndex: rowIndex + 1
+              }
+            }
+          }]
+        })
+      }
+    );
+
+    if (!deleteResponse.ok) {
+      throw new Error('Failed to delete verse');
+    }
+
+    debug.log('sheets', 'Successfully deleted verse:', reference);
+  } catch (error) {
+    debug.error('sheets', 'Error deleting verse:', error);
+    throw error;
+  }
 }; 

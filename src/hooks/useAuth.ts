@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getAccessToken, fetchUserEmail, isUserAuthorized } from '../utils/auth';
 import { getStoredToken, storeToken, clearStoredToken, isTokenValid, startTokenValidation, stopTokenValidation } from '../utils/token';
+import { debug, handleError } from '../utils/debug';
 
 export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -40,9 +41,9 @@ export const useAuth = () => {
       });
 
       isInitialized.current = true;
-      console.log('Google client initialized successfully');
+      debug.log('auth', 'Google client initialized successfully');
     } catch (error) {
-      console.error('Error initializing Google client:', error);
+      debug.error('auth', 'Error initializing Google client:', error);
       throw error;
     }
   };
@@ -50,20 +51,20 @@ export const useAuth = () => {
   // Check authentication status
   const checkAuth = async () => {
     if (hasCheckedToken.current) {
-      console.log('Skipping token check - already checked');
+      debug.log('auth', 'Skipping token check - already checked');
       return;
     }
 
     try {
-      console.log('Checking authentication status...');
+      debug.log('auth', 'Checking authentication status...');
       const token = getStoredToken();
       
       if (token) {
-        console.log('Found stored token, validating...');
+        debug.log('auth', 'Found stored token, validating...');
         const isValid = isTokenValid();
         
         if (isValid) {
-          console.log('Token is valid, fetching user email...');
+          debug.log('auth', 'Token is valid, fetching user email...');
           const email = await fetchUserEmail();
           
           // Check if user is authorized before updating state
@@ -76,23 +77,26 @@ export const useAuth = () => {
           
           if (authorized) {
             startTokenValidation();
+          } else {
+            setError(handleError.auth.unauthorized(email).description);
           }
         } else {
-          console.log('Token is invalid, clearing state...');
+          debug.log('auth', 'Token is invalid, clearing state...');
           clearStoredToken();
           setIsAuthenticated(false);
           setIsAuthorized(false);
           setUserEmail(null);
+          setError(handleError.auth.tokenExpired().description);
         }
       } else {
-        console.log('No stored token found');
+        debug.log('auth', 'No stored token found');
         setIsAuthenticated(false);
         setIsAuthorized(false);
         setUserEmail(null);
       }
     } catch (error) {
-      console.error('Error checking auth:', error);
-      setError(error instanceof Error ? error.message : 'Authentication check failed');
+      debug.error('auth', 'Error checking auth:', error);
+      setError(handleError.auth.notSignedIn().description);
       setIsAuthenticated(false);
       setIsAuthorized(false);
       setUserEmail(null);
@@ -133,10 +137,12 @@ export const useAuth = () => {
       
       if (authorized) {
         startTokenValidation();
+      } else {
+        setError(handleError.auth.unauthorized(email).description);
       }
     } catch (error) {
-      console.error('Error signing in:', error);
-      setError(error instanceof Error ? error.message : 'Sign in failed');
+      debug.error('auth', 'Error signing in:', error);
+      setError(handleError.auth.notSignedIn().description);
       setIsAuthenticated(false);
       setIsAuthorized(false);
       setUserEmail(null);
