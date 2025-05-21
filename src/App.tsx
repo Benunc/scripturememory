@@ -65,7 +65,7 @@ function App() {
         <Flex justify="space-between" align="center">
           <Flex align="center" gap={4}>
             <img 
-              src="/scripturememory/assets/images/ScriptureMemory.svg" 
+              src="/assets/images/ScriptureMemory.svg" 
               alt="Scripture Memory" 
               style={{ height: '40px' }}
             />
