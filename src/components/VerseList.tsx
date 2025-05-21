@@ -42,40 +42,45 @@ export const VerseList: React.FC = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+  const fetchVerses = async () => {
+    if (!userEmail || !isAuthenticated) {
+      setVerses([]);
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      setError(null);
+      const verses = await getVerses(userEmail);
+      setVerses(verses);
+      setLastRefreshTime(new Date());
+    } catch (error) {
+      debug.error('verses', 'Error fetching verses:', error);
+      toast({
+        title: handleError.verses.fetchFailed().title,
+        description: handleError.verses.fetchFailed().description,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoading(false);
+      setIsInitialLoad(false);
+    }
+  };
+
   // Fetch verses when user email is available and authenticated
   useEffect(() => {
-    const fetchVerses = async () => {
-      if (!userEmail || !isAuthenticated) {
-        setVerses([]);
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        setIsLoading(true);
-        setError(null);
-        const verses = await getVerses(userEmail);
-        setVerses(verses);
-        setLastRefreshTime(new Date());
-      } catch (error) {
-        debug.error('verses', 'Error fetching verses:', error);
-        toast({
-          title: handleError.verses.fetchFailed().title,
-          description: handleError.verses.fetchFailed().description,
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        });
-      } finally {
-        setIsLoading(false);
-        setIsInitialLoad(false);
-      }
-    };
-
     fetchVerses();
   }, [userEmail, isAuthenticated]);
 
   const handleStatusChange = async (reference: string, newStatus: string) => {
+    if (!userEmail) {
+      debug.error('verses', 'Cannot update status: user email is null');
+      return;
+    }
+
     try {
       await updateVerseStatus(userEmail, reference, newStatus);
       await fetchVerses();
