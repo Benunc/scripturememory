@@ -1,5 +1,5 @@
 import { getAccessToken, resetClientState } from './token';
-import { canAccessTab, getUserTabs, rateLimiter } from './auth';
+import { canAccessTab, getUserTabs, rateLimiter, getAuthorizedUsers } from './auth';
 import { ProgressStatus } from './progress';
 
 const SPREADSHEET_ID = import.meta.env.VITE_GOOGLE_SHEET_ID;
@@ -33,9 +33,11 @@ export const ensureUserTab = async (email: string): Promise<void> => {
     const token = await getAccessToken();
     const tabName = email.replace(/[^a-zA-Z0-9]/g, '_');
 
-    // Check if user has permission to access this tab
-    if (!canAccessTab(email, tabName)) {
-      throw new Error('User does not have permission to access this tab');
+    // First check if user is authorized at all
+    const authorizedUsers = getAuthorizedUsers();
+    const user = authorizedUsers.find(u => u.email === email);
+    if (!user) {
+      throw new Error('User is not authorized');
     }
 
     // Check if tab exists
@@ -175,10 +177,8 @@ export const addVerse = async (userEmail: string, verseData: Omit<Verse, 'dateAd
     const token = await getAccessToken();
     const tabName = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
 
-    // Check if user has permission to access this tab
-    if (!canAccessTab(userEmail, tabName)) {
-      throw new Error('User does not have permission to access this tab');
-    }
+    // Ensure user's tab exists first
+    await ensureUserTab(userEmail);
 
     const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A:D:append?valueInputOption=USER_ENTERED`,

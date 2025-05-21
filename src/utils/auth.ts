@@ -11,7 +11,7 @@ interface AuthorizedUser {
 }
 
 // Parse authorized users from environment variable
-const getAuthorizedUsers = (): AuthorizedUser[] => {
+export const getAuthorizedUsers = (): AuthorizedUser[] => {
   try {
     const usersStr = import.meta.env.VITE_AUTHORIZED_USERS;
     if (!usersStr) return [];

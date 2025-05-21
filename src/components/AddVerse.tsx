@@ -10,6 +10,7 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import { addVerse } from '../utils/sheets';
+import { useAuth } from '../hooks/useAuth';
 
 interface AddVerseProps {
   onVerseAdded: () => void;
@@ -20,13 +21,25 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
+  const { userEmail } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userEmail) {
+      toast({
+        title: 'Error',
+        description: 'You must be signed in to add verses',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      await addVerse(reference, text);
+      await addVerse(userEmail, { reference, text, status: 'not_started' });
       setReference('');
       setText('');
       onVerseAdded();
