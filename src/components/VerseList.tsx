@@ -7,9 +7,15 @@ import {
   useToast,
   VStack,
   HStack,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
 } from '@chakra-ui/react';
 import { ProgressStatus } from '../utils/progress';
-import { getVerses, updateVerseStatus } from '../utils/sheets';
+import { getVerses, updateVerseStatus, deleteVerse } from '../utils/sheets';
 import { fetchUserEmail, sanitizeVerseText } from '../utils/auth';
 import { useAuth } from '../hooks/useAuth';
 import { debug, handleError } from '../utils/debug';
@@ -41,6 +47,10 @@ export const VerseList: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [verseToDelete, setVerseToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const cancelRef = React.useRef<HTMLButtonElement>(null);
 
   const fetchVerses = async () => {
     if (!userEmail || !isAuthenticated) {
@@ -136,6 +146,44 @@ export const VerseList: React.FC = () => {
     });
   };
 
+  const handleDeleteClick = (reference: string) => {
+    setVerseToDelete(reference);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!verseToDelete || !userEmail || isDeleting) {
+      debug.error('verses', 'Cannot delete verse: missing reference, user email, or already deleting');
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      await deleteVerse(userEmail, verseToDelete);
+      await fetchVerses();
+      toast({
+        title: 'Verse deleted',
+        description: 'The verse has been permanently deleted.',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    } catch (error) {
+      debug.error('verses', 'Error deleting verse:', error);
+      toast({
+        title: handleError.verses.deleteFailed().title,
+        description: handleError.verses.deleteFailed().description,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+      setVerseToDelete(null);
+    }
+  };
+
   const renderVerseText = (verse: Verse) => {
     if (showFullVerse[verse.reference]) {
       return verse.text;
@@ -190,7 +238,19 @@ export const VerseList: React.FC = () => {
             _hover={{ borderColor: 'blue.500' }}
           >
             <VStack align="stretch" spacing={2}>
-              <Text fontWeight="bold">{verse.reference}</Text>
+              <Flex justify="space-between" align="center">
+                <Text fontWeight="bold">{verse.reference}</Text>
+                <Text
+                  as="button"
+                  color="red.500"
+                  fontWeight="bold"
+                  onClick={() => handleDeleteClick(verse.reference)}
+                  _hover={{ color: 'red.600' }}
+                  cursor="pointer"
+                >
+                  Delete
+                </Text>
+              </Flex>
               <Text>{renderVerseText(verse)}</Text>
               <Flex gap={2} wrap="wrap">
                 {activeVerseId !== verse.reference ? (
@@ -257,6 +317,43 @@ export const VerseList: React.FC = () => {
           </Box>
         ))}
       </VStack>
+
+      <AlertDialog
+        isOpen={isDeleteDialogOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={() => !isDeleting && setIsDeleteDialogOpen(false)}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              Delete Verse
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              Are you sure you want to delete this verse? This action cannot be undone.
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button 
+                ref={cancelRef} 
+                onClick={() => setIsDeleteDialogOpen(false)}
+                isDisabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button 
+                colorScheme="red" 
+                onClick={handleDeleteConfirm} 
+                ml={3}
+                isLoading={isDeleting}
+                loadingText="Deleting..."
+              >
+                Delete
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </Box>
   );
 }; 
