@@ -1,4 +1,9 @@
-import { getAccessToken } from './token';
+import { getAccessToken as getGoogleToken } from './token';
+
+// Constants
+const SHEET_ID = import.meta.env.VITE_GOOGLE_SHEET_ID;
+const SHEET_NAME = 'Verses';
+const AUTHORIZED_USERS_SHEET = 'AuthorizedUsers';
 
 interface AuthorizedUser {
   email: string;
@@ -6,57 +11,49 @@ interface AuthorizedUser {
 }
 
 // Parse authorized users from environment variable
-const AUTHORIZED_USERS: Record<string, string[]> = (() => {
+const getAuthorizedUsers = (): AuthorizedUser[] => {
   try {
-    // console.log('Raw VITE_AUTHORIZED_USERS:', import.meta.env.VITE_AUTHORIZED_USERS);
-    const users = JSON.parse(import.meta.env.VITE_AUTHORIZED_USERS || '[]') as AuthorizedUser[];
-    // console.log('Parsed users:', users);
-    const result: Record<string, string[]> = {};
-    
-    users.forEach(user => {
-      result[user.email] = user.isAdmin ? ['*'] : [user.email.replace(/[^a-zA-Z0-9]/g, '_')];
-    });
-    
-    // console.log('Final AUTHORIZED_USERS mapping:', result);
-    return result;
+    const usersStr = import.meta.env.VITE_AUTHORIZED_USERS;
+    if (!usersStr) return [];
+    return JSON.parse(usersStr);
   } catch (error) {
     console.error('Error parsing authorized users:', error);
-    return {};
+    return [];
   }
-})();
-
-// Check if a user is authorized
-export const isUserAuthorized = (email: string): boolean => {
-  // console.log('Checking authorization for:', email);
-  // console.log('Available authorized users:', AUTHORIZED_USERS);
-  const isAuthorized = email in AUTHORIZED_USERS;
-  // console.log('Is authorized:', isAuthorized);
-  return isAuthorized;
 };
 
-// Get the tabs a user is allowed to access
-export const getUserTabs = (email: string): string[] => {
-  // console.log('Getting tabs for:', email);
-  const tabs = AUTHORIZED_USERS[email] || [];
-  // console.log('Available tabs:', tabs);
-  return tabs;
-};
+// Validate environment variables
+export const validateEnvVariables = () => {
+  const requiredVars = [
+    'VITE_GOOGLE_CLIENT_ID',
+    'VITE_GOOGLE_SHEET_ID',
+    'VITE_AUTHORIZED_USERS',
+  ];
 
-// Check if a user can access a specific tab
-export const canAccessTab = (email: string, tabName: string): boolean => {
-  const allowedTabs = getUserTabs(email);
-  // If user has access to all tabs (admin), return true immediately
-  if (allowedTabs.includes('*')) {
-    return true;
+  const missingVars = requiredVars.filter(varName => !import.meta.env[varName]);
+  if (missingVars.length > 0) {
+    throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
   }
-  return allowedTabs.includes(tabName);
 };
 
-// Fetch user email using Google API token
+// Get access token from Google
+export const getAccessToken = async (): Promise<string> => {
+  try {
+    const token = await getGoogleToken();
+    if (!token) {
+      throw new Error('Failed to get access token');
+    }
+    return token;
+  } catch (error) {
+    console.error('Error getting access token:', error);
+    throw error;
+  }
+};
+
+// Fetch user email from Google
 export const fetchUserEmail = async (): Promise<string> => {
   try {
     const token = await getAccessToken();
-    
     const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -68,13 +65,30 @@ export const fetchUserEmail = async (): Promise<string> => {
     }
 
     const data = await response.json();
-    // console.log('Google user info response:', data);
-    // console.log('Email from Google:', data.email);
     return data.email;
   } catch (error) {
     console.error('Error fetching user email:', error);
     throw error;
   }
+};
+
+// Check if user is authorized
+export const isUserAuthorized = async (email: string): Promise<boolean> => {
+  try {
+    const authorizedUsers = getAuthorizedUsers();
+    return authorizedUsers.some(user => user.email === email);
+  } catch (error) {
+    console.error('Error checking user authorization:', error);
+    return false;
+  }
+};
+
+// Sanitize verse text
+export const sanitizeVerseText = (text: string): string => {
+  return text
+    .replace(/[^\w\s.,!?;:'"()-]/g, '') // Remove special characters
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
 };
 
 export const handleSignOut = async () => {
@@ -97,19 +111,22 @@ export const handleSignOut = async () => {
   }
 };
 
-export const sanitizeVerseText = (text: string): string => {
-  // Remove any HTML tags
-  const sanitized = text.replace(/<[^>]*>/g, '');
-  // Remove any script tags
-  return sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+export const getUserTabs = (email: string): string[] => {
+  const authorizedUsers = getAuthorizedUsers();
+  const user = authorizedUsers.find(u => u.email === email);
+  
+  if (!user) return [];
+  if (user.isAdmin) return ['*']; // Admin can access all tabs
+  return [email.replace(/[^a-zA-Z0-9]/g, '_')]; // Regular users can only access their own tab
 };
 
-export const validateEnvVariables = () => {
-  const required = ['VITE_GOOGLE_SHEET_ID', 'VITE_GOOGLE_CLIENT_ID'];
-  const missing = required.filter(key => !import.meta.env[key]);
-  if (missing.length > 0) {
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
-  }
+export const canAccessTab = (email: string, tabName: string): boolean => {
+  const authorizedUsers = getAuthorizedUsers();
+  const user = authorizedUsers.find(u => u.email === email);
+  
+  if (!user) return false;
+  if (user.isAdmin) return true; // Admin can access any tab
+  return tabName === email.replace(/[^a-zA-Z0-9]/g, '_'); // Regular users can only access their own tab
 };
 
 export const rateLimiter = {

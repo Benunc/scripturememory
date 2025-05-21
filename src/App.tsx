@@ -1,10 +1,10 @@
-import { Box, Button, HStack, Heading, Text, Avatar, useToast } from '@chakra-ui/react'
+import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack } from '@chakra-ui/react'
 import { useState, useEffect } from 'react'
 import { Intro } from './components/Intro'
 import { AddVerse } from './components/AddVerse'
 import { VerseList } from './components/VerseList'
-import { getAccessToken, resetClientState } from './utils/token'
-import { fetchUserEmail, isUserAuthorized, validateEnvVariables } from './utils/auth'
+import { validateEnvVariables } from './utils/auth'
+import { useAuth } from './hooks/useAuth'
 
 // Add type for Google client
 declare global {
@@ -14,30 +14,15 @@ declare global {
 }
 
 function App() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const { isAuthenticated, isAuthorized, userEmail, signOut, signIn } = useAuth();
   const toast = useToast();
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const initializeApp = async () => {
       try {
         // Validate environment variables first
         validateEnvVariables();
-        
-        // Only check for existing token without triggering sign-in
-        const existingToken = localStorage.getItem('google_access_token');
-        if (existingToken) {
-          const email = await fetchUserEmail();
-          // console.log('Initialization - Got email:', email);
-          setUserEmail(email);
-          setIsAuthenticated(true);
-          const authorized = isUserAuthorized(email);
-          // console.log('Initialization - Authorization check:', authorized);
-          setIsAuthorized(authorized);
-        }
       } catch (error) {
         console.error('Initialization error:', error);
         toast({
@@ -56,79 +41,54 @@ function App() {
   }, [toast]);
 
   const handleVerseAdded = () => {
-    setRefreshTrigger(prev => prev + 1);
-  };
-
-  const handleLogin = async () => {
-    try {
-      const token = await getAccessToken();
-      if (token) {
-        const email = await fetchUserEmail();
-        setUserEmail(email);
-        setIsAuthenticated(true);
-        setIsAuthorized(isUserAuthorized(email));
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      toast({
-        title: "Login Error",
-        description: error instanceof Error ? error.message : 'Failed to login',
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await resetClientState();
-      setIsAuthenticated(false);
-      setIsAuthorized(false);
-      setUserEmail(null);
-    } catch (error) {
-      console.error('Sign out error:', error);
-      toast({
-        title: "Sign Out Error",
-        description: error instanceof Error ? error.message : 'Failed to sign out',
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
+    // Refresh verses list
+    window.location.reload();
   };
 
   if (isLoading) {
-    // console.log('App: Loading state');
     return null; // Or a loading spinner
   }
 
   if (!isAuthenticated) {
-    // console.log('App: Not authenticated');
-    return <Intro onLogin={handleLogin} />;
+    return <Intro onSignIn={signIn} />;
   }
 
   if (!isAuthorized) {
-    // console.log('App: Not authorized', { isAuthenticated, isAuthorized, userEmail });
     return (
-      <Box className="App">
+      <Box>
         <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
           <HStack justify="space-between" align="center">
             <Heading as="h1" size="xl">Scripture Memory</Heading>
-            <Button onClick={handleSignOut} colorScheme="red" size="sm">
-              Sign Out
-            </Button>
+            <HStack spacing={4}>
+              <HStack spacing={2}>
+                <Avatar size="sm" name={userEmail || undefined} />
+                <Text>{userEmail}</Text>
+              </HStack>
+              <Button onClick={signOut} colorScheme="red" size="sm">
+                Sign Out
+              </Button>
+            </HStack>
           </HStack>
         </Box>
-        <Box p={4}>
-          <Text>You are not authorized to access this application.</Text>
-          <Text mt={2}>Please contact the administrator if you believe this is an error.</Text>
+        <Box as="main" p={8}>
+          <VStack spacing={6} align="center">
+            <Heading as="h2" size="lg">Access Denied</Heading>
+            <Text fontSize="lg" textAlign="center">
+              Your email ({userEmail}) is not authorized to use this application.
+            </Text>
+            <Text>
+              To request access, please contact the administrator at{' '}
+              <Text as="span" color="blue.500">ben@benandjacq.com</Text>
+            </Text>
+            <Button onClick={signOut} colorScheme="blue">
+              Sign Out
+            </Button>
+          </VStack>
         </Box>
       </Box>
     );
   }
 
-  // console.log('App: Rendering main view', { isAuthenticated, isAuthorized, userEmail });
   return (
     <Box>
       <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
@@ -139,7 +99,7 @@ function App() {
               <Avatar size="sm" name={userEmail || undefined} />
               <Text>{userEmail}</Text>
             </HStack>
-            <Button onClick={handleSignOut} colorScheme="red" size="sm">
+            <Button onClick={signOut} colorScheme="red" size="sm">
               Sign Out
             </Button>
           </HStack>
@@ -147,7 +107,7 @@ function App() {
       </Box>
       <Box as="main">
         <AddVerse onVerseAdded={handleVerseAdded} />
-        <VerseList key={refreshTrigger} />
+        <VerseList />
       </Box>
     </Box>
   );

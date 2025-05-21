@@ -11,6 +11,7 @@ import {
 import { ProgressStatus } from '../utils/progress';
 import { getVerses, updateVerseStatus } from '../utils/sheets';
 import { fetchUserEmail, sanitizeVerseText } from '../utils/auth';
+import { useAuth } from '../hooks/useAuth';
 
 interface Verse {
   reference: string;
@@ -34,58 +35,54 @@ export const VerseList: React.FC = () => {
   const [revealedWords, setRevealedWords] = useState<number[]>([]);
   const [showFullVerse, setShowFullVerse] = useState<Record<string, boolean>>({});
   const toast = useToast();
+  const { userEmail, isAuthenticated } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+  // Fetch verses when user email is available and authenticated
   useEffect(() => {
     const fetchVerses = async () => {
+      if (!userEmail || !isAuthenticated) {
+        setVerses([]);
+        setLoading(false);
+        return;
+      }
+      
       try {
-        setLoading(true);
+        setIsLoading(true);
         setError(null);
-        
-        const email = await fetchUserEmail();
-        
-        const verses = await getVerses(email);
-        
+        const verses = await getVerses(userEmail);
         setVerses(verses);
+        setLastRefreshTime(new Date());
       } catch (error) {
         console.error('Error fetching verses:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch verses');
+        setError('Failed to fetch verses');
       } finally {
-        setLoading(false);
+        setIsLoading(false);
+        setIsInitialLoad(false);
       }
     };
 
     fetchVerses();
-  }, []);
+  }, [userEmail, isAuthenticated]);
 
-  const handleStatusChange = async (reference: string, newStatus: ProgressStatus) => {
+  const handleStatusChange = async (verseId: string, newStatus: string) => {
     try {
-      const email = await fetchUserEmail();
-      await updateVerseStatus(email, reference, newStatus);
-
-      setVerses(prevVerses =>
-        prevVerses.map(verse =>
-          verse.reference === reference
-            ? { ...verse, status: newStatus }
-            : verse
+      if (!userEmail) {
+        throw new Error('User email not available');
+      }
+      
+      await updateVerseStatus(verseId, newStatus, userEmail);
+      setVerses(prevVerses => 
+        prevVerses.map(verse => 
+          verse.reference === verseId ? { ...verse, status: newStatus } : verse
         )
       );
-
-      toast({
-        title: 'Status updated',
-        description: 'Verse status has been updated successfully',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
     } catch (error) {
-      console.error('Error updating status:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update status. Please try again.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      console.error('Error updating verse status:', error);
+      toast.error('Failed to update verse status');
     }
   };
 
@@ -144,26 +141,6 @@ export const VerseList: React.FC = () => {
       }
       return '_____';
     }).join(' ');
-  };
-
-  const renderVerse = (verse: Verse) => {
-    const sanitizedText = sanitizeVerseText(verse.text);
-    return (
-      <div key={verse.reference} className="verse-item">
-        <div className="verse-reference">{verse.reference}</div>
-        <div className="verse-text">{sanitizedText}</div>
-        <div className="verse-status">
-          <select
-            value={verse.status}
-            onChange={(e) => handleStatusChange(verse.reference, e.target.value as ProgressStatus)}
-          >
-            <option value="Not Started">Not Started</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Memorized">Memorized</option>
-          </select>
-        </div>
-      </div>
-    );
   };
 
   if (loading) {

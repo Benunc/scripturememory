@@ -3,10 +3,10 @@ import { useState } from 'react'
 import { PrivacyPolicy } from './PrivacyPolicy'
 
 interface IntroProps {
-  onLogin: () => void;
+  onSignIn: () => Promise<void>;
 }
 
-export const Intro = ({ onLogin }: IntroProps) => {
+export function Intro({ onSignIn }: IntroProps) {
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [isExampleActive, setIsExampleActive] = useState(false);
   const [revealedWords, setRevealedWords] = useState<number[]>([]);
@@ -65,120 +65,84 @@ export const Intro = ({ onLogin }: IntroProps) => {
   }
 
   return (
-    <Box>
-      <Box as="header">
+    <Box className="App">
+      <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
         <Heading as="h1" size="xl">Scripture Memory</Heading>
       </Box>
       <Box as="main" p={8}>
-        <VStack spacing={6} align="stretch" maxW="600px" mx="auto">
-          <Text fontSize="lg">
-            Welcome to Scripture Memory! This app helps you track your scripture memory progress.
+        <VStack spacing={6} align="center">
+          <Text fontSize="lg" textAlign="center">
+            Welcome to Scripture Memory!
           </Text>
           <Text>
-            To get started:
+            This app helps you track your scripture memory progress. Each user gets their own space to add and track verses they're memorizing.
           </Text>
-          <Box pl={4}>
-            <Text>1. Sign in with your Google account</Text>
-            <Text>2. Request access from the administrator</Text>
-            <Text>3. Once approved, you'll get your own space to track your verses</Text>
-          </Box>
-          <Button
-            colorScheme="blue"
-            size="lg"
-            onClick={onLogin}
+          <Box 
+            p={4} 
+            borderWidth="1px" 
+            borderRadius="md" 
+            borderColor="chakra-border-color"
+            bg="chakra-body-bg"
+            color="chakra-body-text"
+            width="100%"
+            maxW="600px"
           >
-            Sign in with Google
-          </Button>
-          <Text fontSize="sm" textAlign="center" mt={4}>
-            By signing in, you agree to our{' '}
-            <Link 
-              color="blue.500" 
-              textDecoration="underline" 
-              onClick={() => setShowPrivacyPolicy(true)}
-            >
-              Privacy Policy
-            </Link>
-          </Text>
-
-          <Box mt={8}>
-            <Text fontSize="lg" mb={4}>
-              Here's how it works:
-            </Text>
-            <Box 
-              p={4} 
-              borderWidth="1px" 
-              borderRadius="md" 
-              borderColor="chakra-border-color"
-              bg="chakra-body-bg"
-              color="chakra-body-text"
-            >
-              <VStack align="stretch" spacing={4}>
-                <Box>
-                  <Text fontWeight="bold">{exampleVerse.reference}</Text>
-                  <Text mt={2}>{renderVerseText()}</Text>
-                </Box>
-                <Flex gap={2} wrap="wrap">
-                  {!isExampleActive ? (
-                    <Button
-                      size="sm"
-                      colorScheme="blue"
-                      onClick={handleStartExample}
-                    >
-                      Start Memorizing
-                    </Button>
-                  ) : (
-                    <>
-                      {revealedWords.length >= exampleVerse.text.split(' ').length ? (
-                        <Button
-                          size="sm"
-                          colorScheme="orange"
-                          onClick={handleReset}
-                        >
-                          Reset
-                        </Button>
-                      ) : (
-                        <>
-                          <Button
-                            size="sm"
-                            colorScheme="purple"
-                            onClick={handleShowHint}
-                          >
-                            Show Hint
-                          </Button>
-                          <Button
-                            size="sm"
-                            colorScheme="teal"
-                            onClick={handleShowVerse}
-                          >
-                            {showFullVerse ? 'Hide Verse' : 'Show Verse'}
-                          </Button>
-                        </>
-                      )}
-                    </>
-                  )}
+            <VStack align="stretch" spacing={4}>
+              <Box>
+                <Text fontWeight="bold">{exampleVerse.reference}</Text>
+                <Text mt={2}>{renderVerseText()}</Text>
+              </Box>
+              <Flex gap={2} wrap="wrap">
+                {!isExampleActive ? (
                   <Button
                     size="sm"
                     colorScheme="blue"
-                    variant="outline"
-                    isDisabled
+                    onClick={handleStartExample}
                   >
-                    In Progress
+                    Start Memorizing
                   </Button>
-                  <Button
-                    size="sm"
-                    colorScheme="green"
-                    variant="outline"
-                    isDisabled
-                  >
-                    Mastered
-                  </Button>
-                </Flex>
-              </VStack>
-            </Box>
-            <Text fontSize="sm" opacity={0.7} textAlign="center" mt={4}>
-              Try it out! Click "Start Memorizing" to begin practicing this verse.
-            </Text>
+                ) : (
+                  <>
+                    {revealedWords.length >= exampleVerse.text.split(' ').length ? (
+                      <Button
+                        size="sm"
+                        colorScheme="orange"
+                        onClick={handleReset}
+                      >
+                        Reset
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          colorScheme="purple"
+                          onClick={handleShowHint}
+                        >
+                          Show Hint
+                        </Button>
+                        <Button
+                          size="sm"
+                          colorScheme="teal"
+                          onClick={handleShowVerse}
+                        >
+                          {showFullVerse ? 'Hide Verse' : 'Show Verse'}
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
+              </Flex>
+            </VStack>
           </Box>
+          <Button onClick={onSignIn} colorScheme="blue">
+            Sign in with Google
+          </Button>
+          <Text fontSize="sm" opacity={0.7} textAlign="center">
+            By signing in, you agree to our{' '}
+            <Link color="blue.500" onClick={() => setShowPrivacyPolicy(true)}>
+              Privacy Policy
+            </Link>
+          </Text>
         </VStack>
       </Box>
     </Box>

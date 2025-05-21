@@ -7,195 +7,255 @@ declare global {
 }
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-// console.log('CLIENT_ID loaded:', CLIENT_ID ? 'present' : 'missing');
+const SCOPES = [
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/spreadsheets'
+];
 
-// Token management for user authentication
-let accessToken: string | null = null;
-let tokenExpiry: number | null = null;
+// Constants for token management
+const TOKEN_KEY = 'scripture_memory_token';
+const TOKEN_EXPIRY_KEY = 'scripture_memory_token_expiry';
+const TOKEN_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const TOKEN_REFRESH_THRESHOLD = 10 * 60 * 1000; // 10 minutes
+
+// State variables for token management
+let lastTokenCheck = 0;
+let cachedToken: string | null = null;
+let hasNoToken = false;
 let isAuthenticating = false;
-let currentUserEmail: string | null = null;
+let tokenCheckTimeout: NodeJS.Timeout | null = null;
 
-// Add encryption utilities
+// Simple encryption key - in production, this should be stored securely
+const ENCRYPTION_KEY = import.meta.env.VITE_ENCRYPTION_KEY || 'default-encryption-key';
+
+// Encrypt token
 const encryptToken = (token: string): string => {
-  // console.log('Encrypting token');
   try {
-    // Ensure the token is properly encoded
-    return btoa(unescape(encodeURIComponent(token)));
+    // Simple XOR encryption with the key
+    const keyBytes = new TextEncoder().encode(ENCRYPTION_KEY);
+    const tokenBytes = new TextEncoder().encode(token);
+    const encrypted = new Uint8Array(tokenBytes.length);
+    
+    for (let i = 0; i < tokenBytes.length; i++) {
+      encrypted[i] = tokenBytes[i] ^ keyBytes[i % keyBytes.length];
+    }
+    
+    return btoa(String.fromCharCode(...encrypted));
   } catch (error) {
     console.error('Error encrypting token:', error);
     throw error;
   }
 };
 
+// Decrypt token
 const decryptToken = (encryptedToken: string): string => {
-  // console.log('Decrypting token');
   try {
-    // Ensure the token is properly decoded
-    return decodeURIComponent(escape(atob(encryptedToken)));
+    // Convert from base64
+    const encrypted = Uint8Array.from(atob(encryptedToken), c => c.charCodeAt(0));
+    const keyBytes = new TextEncoder().encode(ENCRYPTION_KEY);
+    const decrypted = new Uint8Array(encrypted.length);
+    
+    // XOR decrypt
+    for (let i = 0; i < encrypted.length; i++) {
+      decrypted[i] = encrypted[i] ^ keyBytes[i % keyBytes.length];
+    }
+    
+    return new TextDecoder().decode(decrypted);
   } catch (error) {
     console.error('Error decrypting token:', error);
+    return '';
+  }
+};
+
+// Store token with expiry
+export const storeToken = (token: string, expiryTime: number): void => {
+  try {
+    const encryptedToken = encryptToken(token);
+    localStorage.setItem(TOKEN_KEY, encryptedToken);
+    localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
+    cachedToken = token;
+    hasNoToken = false;
+    console.log('Token stored successfully');
+  } catch (error) {
+    console.error('Error storing token:', error);
     throw error;
   }
 };
 
-// Load token from localStorage on initialization
-const loadStoredToken = (): { token: string | null; expiry: number | null } => {
-  // console.log('Loading stored token');
-  const storedToken = localStorage.getItem('google_access_token');
-  const storedExpiry = localStorage.getItem('google_token_expiry');
-  
-  // console.log('Stored data:', {
-  //   hasToken: !!storedToken,
-  //   hasExpiry: !!storedExpiry,
-  //   hasEmail: !!localStorage.getItem('user_email')
-  // });
-
-  if (!storedToken || !storedExpiry) {
-    return { token: null, expiry: null };
-  }
-
+// Get stored token
+export const getStoredToken = (): string | null => {
   try {
-    const token = decryptToken(storedToken);
-    // console.log('Token loaded successfully');
-    return {
-      token,
-      expiry: parseInt(storedExpiry, 10)
-    };
-  } catch (error) {
-    console.error('Error loading token:', error);
-    // Clear invalid token
-    localStorage.removeItem('google_access_token');
-    localStorage.removeItem('google_token_expiry');
-    return { token: null, expiry: null };
-  }
-};
-
-// Initialize the Google Identity Services client
-const initializeGoogleClient = () => {
-  // console.log('Initializing Google client');
-  return new Promise<void>((resolve) => {
-    if (document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
-      // console.log('Google client script loaded');
-      resolve();
-      return;
+    // Check if we have a cached token
+    if (cachedToken) {
+      const expiryTime = parseInt(localStorage.getItem(TOKEN_EXPIRY_KEY) || '0');
+      if (Date.now() < expiryTime) {
+        return cachedToken;
+      }
+      // Token expired, clear cache
+      cachedToken = null;
     }
 
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      // console.log('Google client script loaded');
-      resolve();
-    };
-    document.body.appendChild(script);
-  });
-};
+    // Check if we've already determined there's no token
+    if (hasNoToken) {
+      return null;
+    }
 
-// Ensure the client is initialized
-const ensureClientInitialized = async () => {
-  const clientInitialized = !!window.google?.accounts?.oauth2;
-  // console.log('Ensuring client initialized:', { clientInitialized });
+    const encryptedToken = localStorage.getItem(TOKEN_KEY);
+    if (!encryptedToken) {
+      hasNoToken = true;
+      return null;
+    }
 
-  if (!clientInitialized) {
-    await initializeGoogleClient();
-    // console.log('Client initialized');
+    const token = decryptToken(encryptedToken);
+    if (!token) {
+      hasNoToken = true;
+      return null;
+    }
+
+    const expiryTime = parseInt(localStorage.getItem(TOKEN_EXPIRY_KEY) || '0');
+    if (Date.now() >= expiryTime) {
+      console.log('Token expired, removing from storage');
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_EXPIRY_KEY);
+      hasNoToken = true;
+      return null;
+    }
+
+    cachedToken = token;
+    return token;
+  } catch (error) {
+    console.error('Error getting stored token:', error);
+    return null;
   }
 };
 
-// Check if the current token is still valid
-const isTokenValid = (): boolean => {
-  const { token, expiry } = loadStoredToken();
-  const now = Date.now();
-  const isValid = !!token && !!expiry && expiry > now;
+// Check if token is valid
+export const isTokenValid = (): boolean => {
+  try {
+    // Rate limit token checks
+    const now = Date.now();
+    if (now - lastTokenCheck < TOKEN_CHECK_INTERVAL) {
+      console.log('Skipping token check - rate limited');
+      return !!cachedToken;
+    }
+    lastTokenCheck = now;
+
+    const token = getStoredToken();
+    if (!token) {
+      console.log('No token found');
+      return false;
+    }
+
+    // Check if token is about to expire
+    const expiryTime = parseInt(localStorage.getItem(TOKEN_EXPIRY_KEY) || '0');
+    if (Date.now() + TOKEN_REFRESH_THRESHOLD >= expiryTime) {
+      console.log('Token about to expire, refreshing...');
+      return false; // Force token refresh
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error checking token validity:', error);
+    return false;
+  }
+};
+
+// Clear stored token
+export const clearStoredToken = (): void => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_EXPIRY_KEY);
+  cachedToken = null;
+  hasNoToken = true;
+  if (tokenCheckTimeout) {
+    clearTimeout(tokenCheckTimeout);
+    tokenCheckTimeout = null;
+  }
+};
+
+// Start periodic token validation
+export const startTokenValidation = (): void => {
+  if (tokenCheckTimeout) {
+    clearTimeout(tokenCheckTimeout);
+  }
   
-  // console.log('Checking token validity:', {
-  //   hasToken: !!token,
-  //   hasExpiry: !!expiry,
-  //   isValid
-  // });
-  
-  return isValid;
+  tokenCheckTimeout = setInterval(() => {
+    const isValid = isTokenValid();
+    if (!isValid) {
+      console.log('Token validation failed, clearing state');
+      clearStoredToken();
+    }
+  }, TOKEN_CHECK_INTERVAL);
+};
+
+// Stop periodic token validation
+export const stopTokenValidation = (): void => {
+  if (tokenCheckTimeout) {
+    clearTimeout(tokenCheckTimeout);
+    tokenCheckTimeout = null;
+  }
 };
 
 // Get an access token using Google Identity Services
 export const getAccessToken = async (): Promise<string> => {
-  // console.log('Getting access token');
-  
   // Check if we have a valid token
-  if (isTokenValid()) {
-    const { token } = loadStoredToken();
-    // console.log('Using cached token');
-    return token!;
+  const storedToken = getStoredToken();
+  if (storedToken) {
+    return storedToken;
   }
 
   // Check if authentication is already in progress
   if (window.isAuthenticating) {
-    // console.log('Authentication already in progress');
     return new Promise((resolve, reject) => {
       const checkInterval = setInterval(() => {
-        if (isTokenValid()) {
+        const token = getStoredToken();
+        if (token) {
           clearInterval(checkInterval);
-          const { token } = loadStoredToken();
-          resolve(token!);
+          resolve(token);
         }
       }, 100);
+
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        reject(new Error('Authentication timeout'));
+      }, 30000);
     });
   }
 
-  // console.log('Starting new authentication');
   window.isAuthenticating = true;
 
   try {
-    await ensureClientInitialized();
-    const token = await new Promise<string>((resolve, reject) => {
+    // Use Google Identity Services for authentication
+    return new Promise((resolve, reject) => {
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email',
+        scope: SCOPES.join(' '),
         callback: (response: any) => {
           if (response.error) {
+            window.isAuthenticating = false;
             reject(new Error(response.error));
             return;
           }
-          // console.log('Received new access token');
+          
           const { access_token, expires_in } = response;
-          const expiry = Date.now() + (expires_in * 1000);
+          const expiryTime = Date.now() + expires_in * 1000;
           
-          // Store token and expiry
-          localStorage.setItem('google_access_token', encryptToken(access_token));
-          localStorage.setItem('google_token_expiry', expiry.toString());
-          
+          storeToken(access_token, expiryTime);
+          window.isAuthenticating = false;
           resolve(access_token);
         },
       });
 
-      // console.log('Requesting access token');
-      client.requestAccessToken();
+      // Request token with popup
+      client.requestAccessToken({ prompt: 'consent' });
     });
-
-    return token;
-  } finally {
+  } catch (error) {
     window.isAuthenticating = false;
+    throw error;
   }
 };
 
 // Reset client state
-export const resetClientState = () => {
-  // console.log('Resetting client state');
-  localStorage.removeItem('google_access_token');
-  localStorage.removeItem('google_token_expiry');
-  localStorage.removeItem('user_email');
+export const resetClientState = (): void => {
+  clearStoredToken();
   window.isAuthenticating = false;
-};
-
-// Add type for Google OAuth response
-interface GoogleOAuthResponse {
-  access_token?: string;
-  error?: string;
-  expires_in?: number;
-}
-
-// Add type for Google OAuth error
-interface GoogleOAuthError {
-  message: string;
-} 
+}; 
