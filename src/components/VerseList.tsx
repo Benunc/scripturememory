@@ -140,6 +140,12 @@ export const VerseList: React.FC = () => {
       
       if (newState[reference] === false) {
         setRevealedWords([]);
+      } else if (activeVerseId === reference) {
+        // If this is the first time showing the verse after clicking Start Memorizing
+        const verse = verses.find(v => v.reference === reference);
+        if (verse && verse.status === ProgressStatus.NotStarted) {
+          handleStatusChange(reference, ProgressStatus.InProgress);
+        }
       }
       
       return newState;
