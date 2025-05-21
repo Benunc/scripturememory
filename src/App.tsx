@@ -6,6 +6,7 @@ import { VerseList } from './components/VerseList'
 import { FreeVersion } from './components/FreeVersion'
 import { validateEnvVariables } from './utils/auth'
 import { useAuth } from './hooks/useAuth'
+import { Footer } from './components/Footer'
 
 // Add type for Google client
 declare global {
@@ -59,7 +60,7 @@ function App() {
   }
 
   return (
-    <Box>
+    <Box minH="100vh" display="flex" flexDirection="column">
       <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
         <Flex justify="space-between" align="center">
           <Flex align="center" gap={4}>
@@ -77,11 +78,14 @@ function App() {
           )}
         </Flex>
       </Box>
-      <Box as="main">
-        <VerseList />
-        <Box p={4}>
+      <Box as="main" flex="1" w="100%">
+        <VStack spacing={8} align="stretch" p={4}>
+          <VerseList />
           <AddVerse onVerseAdded={handleVerseAdded} />
-        </Box>
+        </VStack>
+      </Box>
+      <Box w="100%">
+        <Footer />
       </Box>
     </Box>
   );

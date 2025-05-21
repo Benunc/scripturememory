@@ -47,4 +47,6 @@ export const sampleVerses: SampleVerse[] = [
     text: 'Come to me, all who labor and are heavy laden, and I will give you rest.',
     status: ProgressStatus.NotStarted
   }
-]; 
+];
+
+export const ESV_COPYRIGHT = 'Free Version uses verses from the ESV® Bible (The Holy Bible, English Standard Version®), copyright © 2001 by Crossway, a publishing ministry of Good News Publishers. Used by permission. All rights reserved.'; 

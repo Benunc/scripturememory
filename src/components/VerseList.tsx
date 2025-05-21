@@ -23,6 +23,7 @@ import { debug, handleError } from '../utils/debug';
 import { db } from '../utils/db';
 import { syncService } from '../utils/sync';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { Footer } from './Footer';
 
 interface Verse {
   reference: string;
@@ -477,9 +478,8 @@ export const VerseList: React.FC = () => {
   }
 
   return (
-    <Box p={4}>
-      <h2 className="text-2xl font-bold mb-4">Your Verses</h2>
-      <VStack spacing={4} align="stretch" w="100%">
+    <Box w="100%">
+      <VStack spacing={4} align="stretch" mb={8}>
         {verses.map((verse) => (
           <Box
             key={verse.reference}
