@@ -28,5 +28,7 @@ export default defineConfig({
         entryFileNames: 'assets/[name].[hash].js',
       },
     },
+    // Ensure public assets are copied
+    copyPublicDir: true,
   }
 })
