@@ -33,6 +33,8 @@ jobs:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_AUTHORIZED_USERS: ${{ secrets.VITE_AUTHORIZED_USERS }}
         run: |
+          # Create dist directory
+          mkdir -p dist
           # Copy public assets to dist
           cp -r public/* dist/
           # Build the app
