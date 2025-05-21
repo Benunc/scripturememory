@@ -30,5 +30,6 @@ export default defineConfig({
     },
     // Ensure public assets are copied
     copyPublicDir: true,
-  }
+  },
+  publicDir: 'public' // Explicitly set public directory
 })
