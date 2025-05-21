@@ -1,4 +1,5 @@
 import { getAccessToken as getGoogleToken } from './token';
+import { debug, handleError } from './debug';
 
 // Constants
 const SHEET_ID = import.meta.env.VITE_GOOGLE_SHEET_ID;
@@ -17,7 +18,7 @@ export const getAuthorizedUsers = (): AuthorizedUser[] => {
     if (!usersStr) return [];
     return JSON.parse(usersStr);
   } catch (error) {
-    console.error('Error parsing authorized users:', error);
+    debug.error('auth', 'Error parsing authorized users:', error);
     return [];
   }
 };
@@ -45,7 +46,7 @@ export const getAccessToken = async (): Promise<string> => {
     }
     return token;
   } catch (error) {
-    console.error('Error getting access token:', error);
+    debug.error('auth', 'Error getting access token:', error);
     throw error;
   }
 };
@@ -67,7 +68,7 @@ export const fetchUserEmail = async (): Promise<string> => {
     const data = await response.json();
     return data.email;
   } catch (error) {
-    console.error('Error fetching user email:', error);
+    debug.error('auth', 'Error fetching user email:', error);
     throw error;
   }
 };
@@ -78,7 +79,7 @@ export const isUserAuthorized = async (email: string): Promise<boolean> => {
     const authorizedUsers = getAuthorizedUsers();
     return authorizedUsers.some(user => user.email === email);
   } catch (error) {
-    console.error('Error checking user authorization:', error);
+    debug.error('auth', 'Error checking user authorization:', error);
     return false;
   }
 };
@@ -103,11 +104,9 @@ export const handleSignOut = async () => {
       });
     }
   } catch (error) {
-    console.error('Error revoking token:', error);
+    debug.error('auth', 'Error revoking token:', error);
   } finally {
-    // Clear all state and storage
     localStorage.clear();
-    // Reset app state
   }
 };
 
@@ -148,5 +147,15 @@ export const rateLimiter = {
     const userRequests = rateLimiter.requests.get(userId) || [];
     userRequests.push(now);
     rateLimiter.requests.set(userId, userRequests);
+  }
+};
+
+export const revokeToken = async (): Promise<void> => {
+  try {
+    const auth2 = window.gapi.auth2.getAuthInstance();
+    await auth2.signOut();
+  } catch (error) {
+    debug.error('auth', 'Error revoking token:', error);
+    throw new Error(handleError.auth.notSignedIn().description);
   }
 }; 

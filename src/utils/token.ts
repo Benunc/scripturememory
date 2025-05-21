@@ -1,3 +1,5 @@
+import { debug, handleError } from './debug';
+
 // Add type for Google client
 declare global {
   interface Window {
@@ -75,9 +77,9 @@ export const storeToken = (token: string, expiryTime: number): void => {
     localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
     cachedToken = token;
     hasNoToken = false;
-    console.log('Token stored successfully');
+    debug.log('token', 'Token stored successfully');
   } catch (error) {
-    console.error('Error storing token:', error);
+    debug.error('token', 'Error storing token:', error);
     throw error;
   }
 };
@@ -103,6 +105,7 @@ export const getStoredToken = (): string | null => {
     const encryptedToken = localStorage.getItem(TOKEN_KEY);
     if (!encryptedToken) {
       hasNoToken = true;
+      debug.log('token', 'No token found');
       return null;
     }
 
@@ -114,7 +117,7 @@ export const getStoredToken = (): string | null => {
 
     const expiryTime = parseInt(localStorage.getItem(TOKEN_EXPIRY_KEY) || '0');
     if (Date.now() >= expiryTime) {
-      console.log('Token expired, removing from storage');
+      debug.log('token', 'Token expired, removing from storage');
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(TOKEN_EXPIRY_KEY);
       hasNoToken = true;
@@ -124,7 +127,7 @@ export const getStoredToken = (): string | null => {
     cachedToken = token;
     return token;
   } catch (error) {
-    console.error('Error getting stored token:', error);
+    debug.error('token', 'Error getting stored token:', error);
     return null;
   }
 };
@@ -135,27 +138,27 @@ export const isTokenValid = (): boolean => {
     // Rate limit token checks
     const now = Date.now();
     if (now - lastTokenCheck < TOKEN_CHECK_INTERVAL) {
-      console.log('Skipping token check - rate limited');
+      debug.log('token', 'Skipping token check - rate limited');
       return !!cachedToken;
     }
     lastTokenCheck = now;
 
     const token = getStoredToken();
     if (!token) {
-      console.log('No token found');
+      debug.log('token', 'No token found');
       return false;
     }
 
     // Check if token is about to expire
     const expiryTime = parseInt(localStorage.getItem(TOKEN_EXPIRY_KEY) || '0');
     if (Date.now() + TOKEN_REFRESH_THRESHOLD >= expiryTime) {
-      console.log('Token about to expire, refreshing...');
+      debug.log('token', 'Token about to expire, refreshing...');
       return false; // Force token refresh
     }
 
     return true;
   } catch (error) {
-    console.error('Error checking token validity:', error);
+    debug.error('token', 'Error checking token validity:', error);
     return false;
   }
 };
@@ -170,6 +173,7 @@ export const clearStoredToken = (): void => {
     clearTimeout(tokenCheckTimeout);
     tokenCheckTimeout = null;
   }
+  debug.log('token', 'Token validation failed, clearing state');
 };
 
 // Start periodic token validation

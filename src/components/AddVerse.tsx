@@ -11,6 +11,7 @@ import {
 } from '@chakra-ui/react';
 import { addVerse } from '../utils/sheets';
 import { useAuth } from '../hooks/useAuth';
+import { debug, handleError } from '../utils/debug';
 
 interface AddVerseProps {
   onVerseAdded: () => void;
@@ -37,7 +38,6 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
     }
 
     setIsSubmitting(true);
-
     try {
       await addVerse(userEmail, { reference, text, status: 'not_started' });
       setReference('');
@@ -51,7 +51,7 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
         isClosable: true,
       });
     } catch (error) {
-      console.error('Error adding verse:', error);
+      debug.error('verses', 'Error adding verse:', error);
       toast({
         title: 'Error',
         description: 'Failed to add verse. Please try again.',

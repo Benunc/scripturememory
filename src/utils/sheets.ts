@@ -1,6 +1,7 @@
 import { getAccessToken, resetClientState } from './token';
 import { canAccessTab, getUserTabs, rateLimiter, getAuthorizedUsers } from './auth';
 import { ProgressStatus } from './progress';
+import { debug, handleError } from './debug';
 
 const SPREADSHEET_ID = import.meta.env.VITE_GOOGLE_SHEET_ID;
 
@@ -106,7 +107,7 @@ export const ensureUserTab = async (email: string): Promise<void> => {
       }
     }
   } catch (error) {
-    console.error('Error ensuring user tab:', error);
+    debug.error('sheets', 'Error ensuring user tab:', error);
     throw error;
   }
 };
@@ -120,34 +121,21 @@ export const getVerses = async (userEmail: string): Promise<Verse[]> => {
   try {
     rateLimiter.recordRequest(userEmail);
     const token = await getAccessToken();
-    const sanitizedEmail = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
+    const tabName = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
 
     // Check if user has permission to access this tab
-    if (!canAccessTab(userEmail, sanitizedEmail)) {
+    if (!canAccessTab(userEmail, tabName)) {
       throw new Error('User does not have permission to access this tab');
     }
 
-    // First try to fetch from the user's own tab
-    let response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${sanitizedEmail}!A2:D`,
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A2:D`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       }
     );
-
-    // If user's tab doesn't exist and they're an admin, try the "verses" tab
-    if (!response.ok && getUserTabs(userEmail).includes('*')) {
-      response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/verses!A2:D`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-    }
 
     if (!response.ok) {
       throw new Error('Failed to fetch verses');
@@ -161,7 +149,7 @@ export const getVerses = async (userEmail: string): Promise<Verse[]> => {
       dateAdded: row[3] || new Date().toISOString(),
     }));
   } catch (error) {
-    console.error('Error fetching verses:', error);
+    debug.error('sheets', 'Error fetching verses:', error);
     throw error;
   }
 };
@@ -198,7 +186,7 @@ export const addVerse = async (userEmail: string, verseData: Omit<Verse, 'dateAd
       throw new Error('Failed to add verse');
     }
   } catch (error) {
-    console.error('Error adding verse:', error);
+    debug.error('sheets', 'Error adding verse:', error);
     throw error;
   }
 };
@@ -260,7 +248,7 @@ export const updateVerseStatus = async (userEmail: string, verseRef: string, new
       throw new Error('Failed to update verse status');
     }
   } catch (error) {
-    console.error('Error updating verse status:', error);
+    debug.error('sheets', 'Error updating verse status:', error);
     throw error;
   }
 }; 

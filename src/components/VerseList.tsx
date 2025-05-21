@@ -12,6 +12,7 @@ import { ProgressStatus } from '../utils/progress';
 import { getVerses, updateVerseStatus } from '../utils/sheets';
 import { fetchUserEmail, sanitizeVerseText } from '../utils/auth';
 import { useAuth } from '../hooks/useAuth';
+import { debug, handleError } from '../utils/debug';
 
 interface Verse {
   reference: string;
@@ -57,8 +58,14 @@ export const VerseList: React.FC = () => {
         setVerses(verses);
         setLastRefreshTime(new Date());
       } catch (error) {
-        console.error('Error fetching verses:', error);
-        setError('Failed to fetch verses');
+        debug.error('verses', 'Error fetching verses:', error);
+        toast({
+          title: handleError.verses.fetchFailed().title,
+          description: handleError.verses.fetchFailed().description,
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
       } finally {
         setIsLoading(false);
         setIsInitialLoad(false);
@@ -68,21 +75,19 @@ export const VerseList: React.FC = () => {
     fetchVerses();
   }, [userEmail, isAuthenticated]);
 
-  const handleStatusChange = async (verseId: string, newStatus: string) => {
+  const handleStatusChange = async (reference: string, newStatus: string) => {
     try {
-      if (!userEmail) {
-        throw new Error('User email not available');
-      }
-      
-      await updateVerseStatus(verseId, newStatus, userEmail);
-      setVerses(prevVerses => 
-        prevVerses.map(verse => 
-          verse.reference === verseId ? { ...verse, status: newStatus } : verse
-        )
-      );
+      await updateVerseStatus(userEmail, reference, newStatus);
+      await fetchVerses();
     } catch (error) {
-      console.error('Error updating verse status:', error);
-      toast.error('Failed to update verse status');
+      debug.error('verses', 'Error updating verse status:', error);
+      toast({
+        title: handleError.verses.updateFailed().title,
+        description: handleError.verses.updateFailed().description,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     }
   };
 
