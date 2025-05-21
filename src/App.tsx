@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { Intro } from './components/Intro'
 import { AddVerse } from './components/AddVerse'
 import { VerseList } from './components/VerseList'
+import { FreeVersion } from './components/FreeVersion'
 import { validateEnvVariables } from './utils/auth'
 import { useAuth } from './hooks/useAuth'
 
@@ -50,43 +51,11 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    return <Intro onSignIn={signIn} />;
+    return <FreeVersion onSignIn={signIn} />;
   }
 
   if (!isAuthorized) {
-    return (
-      <Box>
-        <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
-          <HStack justify="space-between" align="center">
-            <Heading as="h1" size="xl">Scripture Memory</Heading>
-            <HStack spacing={4}>
-              <HStack spacing={2}>
-                <Avatar size="sm" name={userEmail || undefined} />
-                <Text>{userEmail}</Text>
-              </HStack>
-              <Button onClick={signOut} colorScheme="red" size="sm">
-                Sign Out
-              </Button>
-            </HStack>
-          </HStack>
-        </Box>
-        <Box as="main" p={8}>
-          <VStack spacing={6} align="center">
-            <Heading as="h2" size="lg">Access Denied</Heading>
-            <Text fontSize="lg" textAlign="center">
-              Your email ({userEmail}) is not authorized to use this application.
-            </Text>
-            <Text>
-              To request access, please contact the administrator at{' '}
-              <Text as="span" color="blue.500">ben@benandjacq.com</Text>
-            </Text>
-            <Button onClick={signOut} colorScheme="blue">
-              Sign Out
-            </Button>
-          </VStack>
-        </Box>
-      </Box>
-    );
+    return <FreeVersion userEmail={userEmail || ''} onSignOut={signOut} />;
   }
 
   return (
@@ -106,8 +75,10 @@ function App() {
         </HStack>
       </Box>
       <Box as="main">
-        <AddVerse onVerseAdded={handleVerseAdded} />
         <VerseList />
+        <Box p={4}>
+          <AddVerse onVerseAdded={handleVerseAdded} />
+        </Box>
       </Box>
     </Box>
   );
