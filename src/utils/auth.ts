@@ -1,47 +1,135 @@
-import { getAccessToken } from './sheets';
+import { getAccessToken } from './token';
 
-// Map of authorized users and their allowed tabs
-const authorizedUsers: Record<string, string[]> = {
-  'benmeredith@gmail.com': ['Verses'],
-  'ben.meredith@gmail.com': ['Verses'], // Adding your email with access to the Verses tab
-  'ben@benandjacq.com': ['Verses'],
-};
+interface AuthorizedUser {
+  email: string;
+  isAdmin?: boolean;
+}
 
-// Function to check if a user is authorized
-export const isUserAuthorized = (email: string): boolean => {
-  return email in authorizedUsers;
-};
-
-// Function to get the tabs a user can access
-export const getUserTabs = (email: string): string[] => {
-  return authorizedUsers[email] || [];
-};
-
-// Function to check if a user can access a specific tab
-export const canAccessTab = (email: string, tabName: string): boolean => {
-  return getUserTabs(email).includes(tabName);
-};
-
-// Function to get the user's email from the token
-export const getUserEmail = async (): Promise<string | null> => {
+// Parse authorized users from environment variable
+const AUTHORIZED_USERS: Record<string, string[]> = (() => {
   try {
-    // Ensure we have a valid token
-    const token = await getAccessToken();
+    // console.log('Raw VITE_AUTHORIZED_USERS:', import.meta.env.VITE_AUTHORIZED_USERS);
+    const users = JSON.parse(import.meta.env.VITE_AUTHORIZED_USERS || '[]') as AuthorizedUser[];
+    // console.log('Parsed users:', users);
+    const result: Record<string, string[]> = {};
     
-    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
+    users.forEach(user => {
+      result[user.email] = user.isAdmin ? ['*'] : [user.email.replace(/[^a-zA-Z0-9]/g, '_')];
     });
     
+    // console.log('Final AUTHORIZED_USERS mapping:', result);
+    return result;
+  } catch (error) {
+    console.error('Error parsing authorized users:', error);
+    return {};
+  }
+})();
+
+// Check if a user is authorized
+export const isUserAuthorized = (email: string): boolean => {
+  // console.log('Checking authorization for:', email);
+  // console.log('Available authorized users:', AUTHORIZED_USERS);
+  const isAuthorized = email in AUTHORIZED_USERS;
+  // console.log('Is authorized:', isAuthorized);
+  return isAuthorized;
+};
+
+// Get the tabs a user is allowed to access
+export const getUserTabs = (email: string): string[] => {
+  // console.log('Getting tabs for:', email);
+  const tabs = AUTHORIZED_USERS[email] || [];
+  // console.log('Available tabs:', tabs);
+  return tabs;
+};
+
+// Check if a user can access a specific tab
+export const canAccessTab = (email: string, tabName: string): boolean => {
+  const allowedTabs = getUserTabs(email);
+  // If user has access to all tabs (admin), return true immediately
+  if (allowedTabs.includes('*')) {
+    return true;
+  }
+  return allowedTabs.includes(tabName);
+};
+
+// Fetch user email using Google API token
+export const fetchUserEmail = async (): Promise<string> => {
+  try {
+    const token = await getAccessToken();
+    
+    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
     if (!response.ok) {
-      throw new Error('Failed to get user info');
+      throw new Error('Failed to fetch user info');
     }
 
     const data = await response.json();
+    // console.log('Google user info response:', data);
+    // console.log('Email from Google:', data.email);
     return data.email;
   } catch (error) {
-    console.error('Error getting user email:', error);
-    return null;
+    console.error('Error fetching user email:', error);
+    throw error;
+  }
+};
+
+export const handleSignOut = async () => {
+  try {
+    const token = localStorage.getItem('google_access_token');
+    if (token) {
+      await fetch(`https://oauth2.googleapis.com/revoke?token=${token}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+    }
+  } catch (error) {
+    console.error('Error revoking token:', error);
+  } finally {
+    // Clear all state and storage
+    localStorage.clear();
+    // Reset app state
+  }
+};
+
+export const sanitizeVerseText = (text: string): string => {
+  // Remove any HTML tags
+  const sanitized = text.replace(/<[^>]*>/g, '');
+  // Remove any script tags
+  return sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+};
+
+export const validateEnvVariables = () => {
+  const required = ['VITE_GOOGLE_SHEET_ID', 'VITE_GOOGLE_CLIENT_ID'];
+  const missing = required.filter(key => !import.meta.env[key]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+};
+
+export const rateLimiter = {
+  requests: new Map<string, number[]>(),
+  maxRequests: 100,
+  timeWindow: 60000, // 1 minute
+
+  canMakeRequest: (userId: string): boolean => {
+    const now = Date.now();
+    const userRequests = rateLimiter.requests.get(userId) || [];
+    // Remove old requests
+    const recentRequests = userRequests.filter(time => now - time < rateLimiter.timeWindow);
+    rateLimiter.requests.set(userId, recentRequests);
+    return recentRequests.length < rateLimiter.maxRequests;
+  },
+
+  recordRequest: (userId: string) => {
+    const now = Date.now();
+    const userRequests = rateLimiter.requests.get(userId) || [];
+    userRequests.push(now);
+    rateLimiter.requests.set(userId, userRequests);
   }
 }; 

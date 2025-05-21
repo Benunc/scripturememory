@@ -5,9 +5,12 @@ import {
   Button,
   Flex,
   useToast,
+  VStack,
+  HStack,
 } from '@chakra-ui/react';
 import { ProgressStatus } from '../utils/progress';
-import { testSheetsConnection, updateVerseStatus } from '../utils/sheets';
+import { getVerses, updateVerseStatus } from '../utils/sheets';
+import { fetchUserEmail, sanitizeVerseText } from '../utils/auth';
 
 interface Verse {
   reference: string;
@@ -32,48 +35,32 @@ export const VerseList: React.FC = () => {
   const [showFullVerse, setShowFullVerse] = useState<Record<string, boolean>>({});
   const toast = useToast();
 
-  const fetchVerses = async () => {
-    try {
-      const values = await testSheetsConnection();
-      console.log('Google Sheets response:', values);
-
-      if (!values || values.length === 0) {
-        setVerses([DEFAULT_VERSE]);
-        setError(null);
-        return;
-      }
-
-      const formattedVerses = values.map((row: any[]) => ({
-        reference: row[0] || '',
-        text: row[1] || '',
-        status: (row[2] as ProgressStatus) || ProgressStatus.NotStarted,
-        dateAdded: row[3] || new Date().toISOString(),
-      }));
-      setVerses(formattedVerses);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching verses:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch verses');
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch verses. Please try again.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchVerses = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const email = await fetchUserEmail();
+        
+        const verses = await getVerses(email);
+        
+        setVerses(verses);
+      } catch (error) {
+        console.error('Error fetching verses:', error);
+        setError(error instanceof Error ? error.message : 'Failed to fetch verses');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchVerses();
   }, []);
 
   const handleStatusChange = async (reference: string, newStatus: ProgressStatus) => {
     try {
-      const rowIndex = verses.findIndex(v => v.reference === reference) + 2;
-      await updateVerseStatus(rowIndex, newStatus);
+      const email = await fetchUserEmail();
+      await updateVerseStatus(email, reference, newStatus);
 
       setVerses(prevVerses =>
         prevVerses.map(verse =>
@@ -134,7 +121,6 @@ export const VerseList: React.FC = () => {
         [reference]: !prev[reference],
       };
       
-      // If we're hiding the verse, reset the revealed words
       if (newState[reference] === false) {
         setRevealedWords([]);
       }
@@ -160,84 +146,92 @@ export const VerseList: React.FC = () => {
     }).join(' ');
   };
 
+  const renderVerse = (verse: Verse) => {
+    const sanitizedText = sanitizeVerseText(verse.text);
+    return (
+      <div key={verse.reference} className="verse-item">
+        <div className="verse-reference">{verse.reference}</div>
+        <div className="verse-text">{sanitizedText}</div>
+        <div className="verse-status">
+          <select
+            value={verse.status}
+            onChange={(e) => handleStatusChange(verse.reference, e.target.value as ProgressStatus)}
+          >
+            <option value="Not Started">Not Started</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Memorized">Memorized</option>
+          </select>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
-    return <Text>Loading verses...</Text>;
+    return (
+      <Box p={4}>
+        <Text>Loading verses...</Text>
+      </Box>
+    );
   }
 
   if (error) {
-    return <Text color="red.500">Error: {error}</Text>;
+    return (
+      <Box p={4}>
+        <Text color="red.500">Error: {error}</Text>
+      </Box>
+    );
+  }
+
+  if (verses.length === 0) {
+    return (
+      <Box p={4}>
+        <Text>No verses added yet. Add your first verse above!</Text>
+      </Box>
+    );
   }
 
   return (
-    <Box>
-      {verses.map((verse) => (
-        <Box
-          key={verse.reference}
-          p={4}
-          borderWidth={1}
-          borderRadius="lg"
-          mb={4}
-        >
-          <Text fontWeight="bold" mb={2}>
-            {verse.reference}
-          </Text>
-          <Text mb={4}>{renderVerseText(verse)}</Text>
-          <Flex gap={2} wrap="wrap">
-            {activeVerseId !== verse.reference ? (
-              <Button
-                size="sm"
-                colorScheme="blue"
-                onClick={() => handleStart(verse.reference)}
-              >
-                Start Memorizing
-              </Button>
-            ) : (
-              <>
-                {revealedWords.length >= verse.text.split(' ').length ? (
-                  <Button
-                    size="sm"
-                    colorScheme="orange"
-                    onClick={() => handleReset(verse.reference)}
-                  >
-                    Reset
-                  </Button>
-                ) : (
-                  <>
-                    <Button
-                      size="sm"
-                      colorScheme="purple"
-                      onClick={() => handleShowHint(verse.reference)}
-                    >
-                      Show Hint
-                    </Button>
-                    <Button
-                      size="sm"
-                      colorScheme="teal"
-                      onClick={() => handleShowVerse(verse.reference)}
-                    >
-                      {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Verse'}
-                    </Button>
-                  </>
-                )}
-              </>
-            )}
-            <Button
-              size="sm"
-              colorScheme={verse.status === ProgressStatus.InProgress ? 'blue' : 'gray'}
-              onClick={() => handleStatusChange(verse.reference, ProgressStatus.InProgress)}
-            >
-              In Progress
-            </Button>
-            <Button
-              size="sm"
-              colorScheme={verse.status === ProgressStatus.Mastered ? 'green' : 'gray'}
-              onClick={() => handleStatusChange(verse.reference, ProgressStatus.Mastered)}
-            >
-              Mastered
-            </Button>
-          </Flex>
-        </Box>
-      ))}
+    <Box p={4}>
+      <VStack spacing={4} align="stretch">
+        {verses.map((verse) => (
+          <Box
+            key={verse.reference}
+            p={4}
+            borderWidth="1px"
+            borderRadius="md"
+            borderColor="gray.200"
+            _hover={{ borderColor: 'blue.500' }}
+          >
+            <VStack align="stretch" spacing={2}>
+              <Text fontWeight="bold">{verse.reference}</Text>
+              <Text>{renderVerseText(verse)}</Text>
+              <HStack spacing={2}>
+                <Button
+                  size="sm"
+                  colorScheme={verse.status === ProgressStatus.NotStarted ? 'blue' : 'gray'}
+                  onClick={() => handleStatusChange(verse.reference, ProgressStatus.NotStarted)}
+                >
+                  Not Started
+                </Button>
+                <Button
+                  size="sm"
+                  colorScheme={verse.status === ProgressStatus.InProgress ? 'orange' : 'gray'}
+                  onClick={() => handleStatusChange(verse.reference, ProgressStatus.InProgress)}
+                >
+                  In Progress
+                </Button>
+                <Button
+                  size="sm"
+                  colorScheme={verse.status === ProgressStatus.Mastered ? 'green' : 'gray'}
+                  onClick={() => handleStatusChange(verse.reference, ProgressStatus.Mastered)}
+                >
+                  Mastered
+                </Button>
+              </HStack>
+            </VStack>
+          </Box>
+        ))}
+      </VStack>
     </Box>
   );
 }; 

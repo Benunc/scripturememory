@@ -1,311 +1,266 @@
+import { getAccessToken, resetClientState } from './token';
+import { canAccessTab, getUserTabs, rateLimiter } from './auth';
+import { ProgressStatus } from './progress';
+
 const SPREADSHEET_ID = import.meta.env.VITE_GOOGLE_SHEET_ID;
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-// Token management for user authentication
-let accessToken: string | null = null;
-let tokenExpiry: number | null = null;
-let isAuthenticating = false;
-let currentUserEmail: string | null = null;
+interface Verse {
+  reference: string;
+  text: string;
+  status: ProgressStatus;
+  dateAdded: string;
+}
 
-// Load token from localStorage on initialization
-const loadStoredToken = () => {
-  const storedToken = localStorage.getItem('google_access_token');
-  const storedExpiry = localStorage.getItem('google_token_expiry');
-  const storedEmail = localStorage.getItem('user_email');
-  if (storedToken && storedExpiry) {
-    accessToken = storedToken;
-    tokenExpiry = parseInt(storedExpiry);
-    currentUserEmail = storedEmail;
-  }
-};
+interface SheetProperties {
+  title: string;
+}
 
-// Initialize the Google Identity Services client
-const initClient = () => {
-  return new Promise<void>((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      resolve();
-    };
-    script.onerror = reject;
-    document.body.appendChild(script);
-  });
-};
+interface Sheet {
+  properties: SheetProperties;
+}
 
-// Ensure the client is initialized
-let clientInitialized = false;
-const ensureClientInitialized = async () => {
-  if (!clientInitialized) {
-    await initClient();
-    clientInitialized = true;
-  }
-};
+interface SpreadsheetResponse {
+  sheets: Sheet[];
+}
 
-// Check if the current token is still valid
-const isTokenValid = () => {
-  if (!accessToken || !tokenExpiry) return false;
-  // Add a 5-minute buffer to prevent edge cases
-  return Date.now() < tokenExpiry - 5 * 60 * 1000;
-};
+interface ValuesResponse {
+  values: string[][];
+}
 
-// Get user's email from Google API
-export const getUserEmail = async (): Promise<string> => {
-  if (currentUserEmail) return currentUserEmail;
-
-  const token = await getAccessToken();
-  const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to get user info');
-  }
-
-  const data = await response.json();
-  currentUserEmail = data.email;
-  localStorage.setItem('user_email', data.email);
-  return data.email;
-};
-
-// Get an access token using Google Identity Services
-export const getAccessToken = async () => {
-  // Load stored token on first call
-  if (!accessToken) {
-    loadStoredToken();
-  }
-
-  // Return cached token if it's still valid
-  if (isTokenValid()) {
-    return accessToken;
-  }
-
-  // Prevent multiple simultaneous authentication attempts
-  if (isAuthenticating) {
-    throw new Error('Authentication already in progress. Please wait...');
-  }
-
-  isAuthenticating = true;
+// Ensure user's tab exists in the spreadsheet
+export const ensureUserTab = async (email: string): Promise<void> => {
   try {
-    await ensureClientInitialized();
-    return new Promise<string>((resolve, reject) => {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email',
-        callback: (response) => {
-          isAuthenticating = false;
-          if (response.error) {
-            console.error('OAuth error:', response.error);
-            reject(new Error(response.error));
-          } else if (response.access_token) {
-            // Cache the token and set expiry (default 1 hour)
-            accessToken = response.access_token;
-            tokenExpiry = Date.now() + (response.expires_in || 3600) * 1000;
-            // Store in localStorage
-            localStorage.setItem('google_access_token', response.access_token);
-            localStorage.setItem('google_token_expiry', tokenExpiry.toString());
-            resolve(response.access_token);
-          } else {
-            reject(new Error('No access token received'));
-          }
-        },
-        error_callback: (error) => {
-          isAuthenticating = false;
-          console.error('OAuth error callback:', error);
-          reject(new Error(error.message || 'Authentication failed'));
-        },
-      });
+    const token = await getAccessToken();
+    const tabName = email.replace(/[^a-zA-Z0-9]/g, '_');
 
-      try {
-        client.requestAccessToken();
-      } catch (error) {
-        isAuthenticating = false;
-        console.error('Error requesting access token:', error);
-        reject(error);
-      }
-    });
-  } catch (error) {
-    isAuthenticating = false;
-    throw error;
-  }
-};
-
-// Get the user's tab name
-const getUserTabName = async (): Promise<string> => {
-  const email = await getUserEmail();
-  // Remove special characters and spaces from email for tab name
-  return email.replace(/[^a-zA-Z0-9]/g, '_');
-};
-
-// Ensure user's tab exists
-const ensureUserTab = async () => {
-  const tabName = await getUserTabName();
-  const token = await getAccessToken();
-
-  // First, check if the tab exists
-  const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`,
-    {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
+    // Check if user has permission to access this tab
+    if (!canAccessTab(email, tabName)) {
+      throw new Error('User does not have permission to access this tab');
     }
-  );
 
-  if (!response.ok) {
-    throw new Error('Failed to check spreadsheet');
-  }
-
-  const data = await response.json();
-  const tabExists = data.sheets.some((sheet: any) => sheet.properties.title === tabName);
-
-  if (!tabExists) {
-    // Create the tab
-    const createResponse = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`,
+    // Check if tab exists
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`,
       {
-        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          requests: [{
-            addSheet: {
-              properties: {
-                title: tabName,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch spreadsheet');
+    }
+
+    const data = await response.json() as SpreadsheetResponse;
+    const sheets = data.sheets || [];
+    const tabExists = sheets.some((sheet) => sheet.properties.title === tabName);
+
+    if (!tabExists) {
+      // Create new tab
+      const createResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            requests: [
+              {
+                addSheet: {
+                  properties: {
+                    title: tabName,
+                  },
+                },
               },
-            },
-          }],
-        }),
+            ],
+          }),
+        }
+      );
+
+      if (!createResponse.ok) {
+        throw new Error('Failed to create user tab');
       }
-    );
 
-    if (!createResponse.ok) {
-      throw new Error('Failed to create user tab');
-    }
+      // Initialize tab with headers
+      const initResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A1:D1:append?valueInputOption=USER_ENTERED`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            values: [['Reference', 'Text', 'Status', 'Last Reviewed']],
+          }),
+        }
+      );
 
-    // Add headers to the new tab
-    const headerResponse = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A1:D1?valueInputOption=USER_ENTERED`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          values: [['Reference', 'Text', 'Status', 'Date Added']],
-        }),
+      if (!initResponse.ok) {
+        throw new Error('Failed to initialize user tab');
       }
-    );
-
-    if (!headerResponse.ok) {
-      throw new Error('Failed to add headers to user tab');
     }
-  }
-
-  return tabName;
-};
-
-// Function to test the connection to Google Sheets
-export const testSheetsConnection = async () => {
-  try {
-    const tabName = await ensureUserTab();
-    const token = await getAccessToken();
-    const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A2:D`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Failed to fetch verses: ${JSON.stringify(errorData)}`);
-    }
-
-    const data = await response.json();
-    console.log('Successfully connected to Google Sheets!');
-    return data.values || [];
   } catch (error) {
-    console.error('Error connecting to Google Sheets:', error);
+    console.error('Error ensuring user tab:', error);
     throw error;
   }
 };
 
-// Function to update a verse's status
-export const updateVerseStatus = async (rowIndex: number, status: string) => {
+// Get verses from user's tab
+export const getVerses = async (userEmail: string): Promise<Verse[]> => {
+  if (!rateLimiter.canMakeRequest(userEmail)) {
+    throw new Error('Rate limit exceeded. Please try again later.');
+  }
+  
   try {
-    const tabName = await ensureUserTab();
+    rateLimiter.recordRequest(userEmail);
     const token = await getAccessToken();
-    const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!C${rowIndex}?valueInputOption=USER_ENTERED`,
+    const sanitizedEmail = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
+
+    // Check if user has permission to access this tab
+    if (!canAccessTab(userEmail, sanitizedEmail)) {
+      throw new Error('User does not have permission to access this tab');
+    }
+
+    // First try to fetch from the user's own tab
+    let response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${sanitizedEmail}!A2:D`,
       {
-        method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          values: [[status]],
-        }),
       }
     );
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Failed to update status: ${JSON.stringify(errorData)}`);
+    // If user's tab doesn't exist and they're an admin, try the "verses" tab
+    if (!response.ok && getUserTabs(userEmail).includes('*')) {
+      response = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/verses!A2:D`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
     }
 
-    return await response.json();
+    if (!response.ok) {
+      throw new Error('Failed to fetch verses');
+    }
+
+    const data = await response.json() as ValuesResponse;
+    return (data.values || []).map((row) => ({
+      reference: row[0] || '',
+      text: row[1] || '',
+      status: (row[2] || 'Not Started') as ProgressStatus,
+      dateAdded: row[3] || new Date().toISOString(),
+    }));
   } catch (error) {
-    console.error('Error updating verse status:', error);
+    console.error('Error fetching verses:', error);
     throw error;
   }
 };
 
-// Function to add a new verse
-export const addVerse = async (reference: string, text: string) => {
+// Add a new verse to user's tab
+export const addVerse = async (userEmail: string, verseData: Omit<Verse, 'dateAdded'>): Promise<void> => {
+  if (!rateLimiter.canMakeRequest(userEmail)) {
+    throw new Error('Rate limit exceeded. Please try again later.');
+  }
+  
   try {
-    const tabName = await ensureUserTab();
+    rateLimiter.recordRequest(userEmail);
     const token = await getAccessToken();
+    const tabName = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
+
+    // Check if user has permission to access this tab
+    if (!canAccessTab(userEmail, tabName)) {
+      throw new Error('User does not have permission to access this tab');
+    }
+
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A:D:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A:D:append?valueInputOption=USER_ENTERED`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          values: [[reference, text, 'not_started', new Date().toISOString()]],
+          values: [[verseData.reference, verseData.text, 'New', new Date().toISOString()]],
         }),
       }
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Failed to append verse: ${JSON.stringify(errorData)}`);
+      throw new Error('Failed to add verse');
     }
-
-    return await response.json();
   } catch (error) {
     console.error('Error adding verse:', error);
     throw error;
   }
 };
 
-// Reset client state
-export const resetClientState = () => {
-  accessToken = null;
-  tokenExpiry = null;
-  isAuthenticating = false;
-  currentUserEmail = null;
-  clientInitialized = false;
+// Update verse status
+export const updateVerseStatus = async (userEmail: string, verseRef: string, newStatus: string): Promise<void> => {
+  if (!rateLimiter.canMakeRequest(userEmail)) {
+    throw new Error('Rate limit exceeded. Please try again later.');
+  }
+  
+  try {
+    rateLimiter.recordRequest(userEmail);
+    const token = await getAccessToken();
+    const tabName = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
+
+    // Check if user has permission to access this tab
+    if (!canAccessTab(userEmail, tabName)) {
+      throw new Error('User does not have permission to access this tab');
+    }
+
+    // First, find the row number for this verse
+    const getResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A:A`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!getResponse.ok) {
+      throw new Error('Failed to fetch verses');
+    }
+
+    const data = await getResponse.json() as ValuesResponse;
+    const values = data.values || [];
+    const rowIndex = values.findIndex((row) => row[0] === verseRef);
+
+    if (rowIndex === -1) {
+      throw new Error('Verse not found');
+    }
+
+    // Update the status and last reviewed date
+    const updateResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!C${rowIndex + 1}:D${rowIndex + 1}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          values: [[newStatus, new Date().toISOString()]],
+        }),
+      }
+    );
+
+    if (!updateResponse.ok) {
+      throw new Error('Failed to update verse status');
+    }
+  } catch (error) {
+    console.error('Error updating verse status:', error);
+    throw error;
+  }
 }; 

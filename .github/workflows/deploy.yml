@@ -31,6 +31,7 @@ jobs:
         env:
           VITE_GOOGLE_SHEET_ID: ${{ secrets.VITE_GOOGLE_SHEET_ID }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_AUTHORIZED_USERS: ${{ secrets.VITE_AUTHORIZED_USERS }}
         run: npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v4
