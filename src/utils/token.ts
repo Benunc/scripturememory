@@ -18,12 +18,24 @@ let currentUserEmail: string | null = null;
 // Add encryption utilities
 const encryptToken = (token: string): string => {
   // console.log('Encrypting token');
-  return btoa(token); // Simple base64 encoding for now
+  try {
+    // Ensure the token is properly encoded
+    return btoa(unescape(encodeURIComponent(token)));
+  } catch (error) {
+    console.error('Error encrypting token:', error);
+    throw error;
+  }
 };
 
 const decryptToken = (encryptedToken: string): string => {
   // console.log('Decrypting token');
-  return atob(encryptedToken); // Simple base64 decoding for now
+  try {
+    // Ensure the token is properly decoded
+    return decodeURIComponent(escape(atob(encryptedToken)));
+  } catch (error) {
+    console.error('Error decrypting token:', error);
+    throw error;
+  }
 };
 
 // Load token from localStorage on initialization
@@ -51,6 +63,9 @@ const loadStoredToken = (): { token: string | null; expiry: number | null } => {
     };
   } catch (error) {
     console.error('Error loading token:', error);
+    // Clear invalid token
+    localStorage.removeItem('google_access_token');
+    localStorage.removeItem('google_token_expiry');
     return { token: null, expiry: null };
   }
 };
