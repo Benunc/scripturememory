@@ -205,7 +205,45 @@ export const VerseList: React.FC = () => {
             <VStack align="stretch" spacing={2}>
               <Text fontWeight="bold">{verse.reference}</Text>
               <Text>{renderVerseText(verse)}</Text>
-              <HStack spacing={2}>
+              <Flex gap={2} wrap="wrap">
+                {activeVerseId !== verse.reference ? (
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    onClick={() => handleStart(verse.reference)}
+                  >
+                    Start Memorizing
+                  </Button>
+                ) : (
+                  <>
+                    {revealedWords.length >= verse.text.split(' ').length ? (
+                      <Button
+                        size="sm"
+                        colorScheme="orange"
+                        onClick={() => handleReset(verse.reference)}
+                      >
+                        Reset
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          colorScheme="purple"
+                          onClick={() => handleShowHint(verse.reference)}
+                        >
+                          Show Hint
+                        </Button>
+                        <Button
+                          size="sm"
+                          colorScheme="teal"
+                          onClick={() => handleShowVerse(verse.reference)}
+                        >
+                          {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Verse'}
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
                 <Button
                   size="sm"
                   colorScheme={verse.status === ProgressStatus.NotStarted ? 'blue' : 'gray'}
@@ -227,7 +265,7 @@ export const VerseList: React.FC = () => {
                 >
                   Mastered
                 </Button>
-              </HStack>
+              </Flex>
             </VStack>
           </Box>
         ))}
