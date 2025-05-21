@@ -2,6 +2,7 @@ import { getAccessToken, resetClientState } from './token';
 import { canAccessTab, getUserTabs, rateLimiter, getAuthorizedUsers } from './auth';
 import { ProgressStatus } from './progress';
 import { debug, handleError } from './debug';
+import { sampleVerses } from './sampleVerses';
 
 const SPREADSHEET_ID = import.meta.env.VITE_GOOGLE_SHEET_ID;
 
@@ -60,6 +61,8 @@ export const ensureUserTab = async (email: string): Promise<void> => {
     const tabExists = sheets.some((sheet) => sheet.properties.title === tabName);
 
     if (!tabExists) {
+      debug.log('sheets', 'Creating new tab for user:', email);
+      
       // Create new tab
       const createResponse = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`,
@@ -105,6 +108,32 @@ export const ensureUserTab = async (email: string): Promise<void> => {
       if (!initResponse.ok) {
         throw new Error('Failed to initialize user tab');
       }
+
+      // Add sample verses
+      debug.log('sheets', 'Adding sample verses for new user:', email);
+      const sampleVersesResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A2:D:append?valueInputOption=USER_ENTERED`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            values: sampleVerses.map(verse => [
+              verse.reference,
+              verse.text,
+              verse.status,
+              new Date().toISOString()
+            ]),
+          }),
+        }
+      );
+
+      if (!sampleVersesResponse.ok) {
+        debug.error('sheets', 'Failed to add sample verses:', await sampleVersesResponse.text());
+        // Don't throw here - we still want the user to be able to use the app even if sample verses fail
+      }
     }
   } catch (error) {
     debug.error('sheets', 'Error ensuring user tab:', error);
@@ -128,6 +157,9 @@ export const getVerses = async (userEmail: string): Promise<Verse[]> => {
       throw new Error('User does not have permission to access this tab');
     }
 
+    // Ensure user's tab exists
+    await ensureUserTab(userEmail);
+
     const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A2:D`,
       {
@@ -142,12 +174,62 @@ export const getVerses = async (userEmail: string): Promise<Verse[]> => {
     }
 
     const data = await response.json() as ValuesResponse;
-    return (data.values || []).map((row) => ({
+    const verses = (data.values || []).map((row) => ({
       reference: row[0] || '',
       text: row[1] || '',
       status: (row[2] || 'Not Started') as ProgressStatus,
       dateAdded: row[3] || new Date().toISOString(),
     }));
+
+    // If no verses exist, add sample verses
+    if (verses.length === 0) {
+      debug.log('sheets', 'No verses found, adding sample verses for user:', userEmail);
+      const sampleVersesResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A2:D:append?valueInputOption=USER_ENTERED`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            values: sampleVerses.map(verse => [
+              verse.reference,
+              verse.text,
+              verse.status,
+              new Date().toISOString()
+            ]),
+          }),
+        }
+      );
+
+      if (!sampleVersesResponse.ok) {
+        debug.error('sheets', 'Failed to add sample verses:', await sampleVersesResponse.text());
+        // Don't throw here - we still want to return empty verses if sample verses fail
+      } else {
+        // If sample verses were added successfully, fetch them again
+        const updatedResponse = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A2:D`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (updatedResponse.ok) {
+          const updatedData = await updatedResponse.json() as ValuesResponse;
+          return (updatedData.values || []).map((row) => ({
+            reference: row[0] || '',
+            text: row[1] || '',
+            status: (row[2] || 'Not Started') as ProgressStatus,
+            dateAdded: row[3] || new Date().toISOString(),
+          }));
+        }
+      }
+    }
+
+    return verses;
   } catch (error) {
     debug.error('sheets', 'Error fetching verses:', error);
     throw error;
