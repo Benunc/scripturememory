@@ -1,4 +1,4 @@
-import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack } from '@chakra-ui/react'
+import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack, Flex } from '@chakra-ui/react'
 import { useState, useEffect } from 'react'
 import { Intro } from './components/Intro'
 import { AddVerse } from './components/AddVerse'
@@ -61,18 +61,21 @@ function App() {
   return (
     <Box>
       <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
-        <HStack justify="space-between" align="center">
-          <Heading as="h1" size="xl">Scripture Memory</Heading>
-          <HStack spacing={4}>
-            <HStack spacing={2}>
-              <Avatar size="sm" name={userEmail || undefined} />
-              <Text>{userEmail}</Text>
-            </HStack>
-            <Button onClick={signOut} colorScheme="red" size="sm">
+        <Flex justify="space-between" align="center">
+          <Flex align="center" gap={4}>
+            <img 
+              src="/assets/images/ScriptureMemory.svg" 
+              alt="Scripture Memory" 
+              style={{ height: '40px' }}
+            />
+            <Heading size="lg">Scripture Memory</Heading>
+          </Flex>
+          {isAuthenticated && (
+            <Button onClick={signOut} colorScheme="blue" variant="outline">
               Sign Out
             </Button>
-          </HStack>
-        </HStack>
+          )}
+        </Flex>
       </Box>
       <Box as="main">
         <VerseList />
