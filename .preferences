@@ -1,0 +1,39 @@
+# Scripture Memory Project Preferences
+# This file serves as a guide for LLMs working on this project.
+# Each section contains related principles that should be followed.
+
+[code_changes]
+# Principles for making code changes
+- Never modify code unrelated to the direct question being asked
+- Never make assumptions about functionality - always verify current behavior first
+- Prefer simple solutions over complex ones
+- Prefer boring, well-tested patterns over clever ones
+- Always explain tradeoffs when suggesting architectural changes
+- Test all changes locally before committing
+
+[git_workflow]
+# Principles for version control
+- Use single-purpose commits
+- Always use `git add .` to stage all changes
+- Never work on multiple features simultaneously
+- Test changes locally before committing
+- Write clear, descriptive commit messages
+
+[documentation]
+# Principles for documentation
+- Keep README.md focused on human-readable documentation
+- Use .preferences for machine/LLM-readable guidelines
+- Document all environment variables and their purposes
+- Keep documentation up to date with code changes
+
+[architecture]
+# Principles for architectural decisions
+- Prefer built-in browser features over external libraries
+- Use Google Sheets API for data storage
+- Implement offline-first functionality
+- Keep the application simple and maintainable
+
+# Add new sections and principles below this line
+# Format: [section_name]
+# - principle 1
+# - principle 2 

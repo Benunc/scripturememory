@@ -1,54 +1,95 @@
-# React + TypeScript + Vite
+# Scripture Memory
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A web application for memorizing Bible verses, built with React, TypeScript, and Vite. The app is deployed on GitHub Pages at [word.benandjacq.com](https://word.benandjacq.com).
 
-Currently, two official plugins are available:
+## Architecture
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Frontend
+- Built with React 18 and TypeScript
+- Uses Chakra UI for styling and components
+- Vite for build tooling and development server
+- Deployed via GitHub Pages with a custom domain
 
-## Expanding the ESLint configuration
+### Backend
+- Google Sheets API for data storage
+- IndexedDB for local caching and offline support
+- Implements a sync service for offline changes
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Development
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+### Prerequisites
+- Node.js 20 or later
+- npm
+- Google Cloud Project with Sheets API enabled
+- Service account credentials
+
+### Environment Variables
+Required environment variables:
+- `VITE_GOOGLE_SHEET_ID`: ID of the Google Sheet used for data storage
+- `VITE_GOOGLE_CLIENT_ID`: Google OAuth client ID
+- `VITE_AUTHORIZED_USERS`: Comma-separated list of authorized user emails
+
+### Local Development
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Create `.env` file with required variables
+4. Run development server: `npm run dev`
+
+### Debug Mode
+The application includes a comprehensive debug logging system that can be enabled in the browser console:
+
+```javascript
+// Enable debug mode
+window.debug.enable();
+
+// Configure specific modules
+window.debug.configure({
+  enabled: true,
+  modules: {
+    auth: true,
+    token: true,
+    sheets: true,
+    verses: true,
+    db: true
+  }
+});
+
+// View current configuration
+window.debug.getConfig();
+
+// Disable debug mode
+window.debug.disable();
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Debug logs are prefixed with module names (e.g., `[AUTH]`, `[SHEETS]`) for easy filtering.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Build and Deploy
+1. Build the app: `npm run build`
+2. The GitHub Actions workflow will automatically deploy to GitHub Pages
+3. Custom domain configuration is handled in the GitHub repository settings
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+## Project Structure
+- `/src`: Source code
+  - `/components`: React components
+  - `/utils`: Utility functions and services
+  - `/hooks`: Custom React hooks
+- `/public`: Static assets
+- `/.github/workflows`: GitHub Actions workflows
+
+## Features
+- Verse memorization with progressive word reveal
+- Offline support with local caching
+- Automatic sync when online
+- User authentication via Google
+- Progress tracking
+- Dark mode support
+- Mobile-responsive design
+
+## Contributing
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## Contact
+For support or questions, contact ben@benandjacq.com
