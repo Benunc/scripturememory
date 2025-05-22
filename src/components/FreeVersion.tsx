@@ -139,21 +139,21 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
                       <>
                         <Button
                           size="sm"
-                          colorScheme="blue"
+                          colorScheme="purple"
                           onClick={() => handleShowHint(verse.reference)}
                         >
                           Show Next Word
                         </Button>
                         <Button
                           size="sm"
-                          variant="outline"
+                          colorScheme="orange"
                           onClick={() => handleReset(verse.reference)}
                         >
                           Reset
                         </Button>
                         <Button
                           size="sm"
-                          variant="ghost"
+                          colorScheme="teal"
                           onClick={() => handleShowVerse(verse.reference)}
                         >
                           {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Verse'}
