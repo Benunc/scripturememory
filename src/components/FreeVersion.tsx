@@ -85,7 +85,7 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
               alt="Scripture Memory" 
               style={{ height: '40px' }}
             />
-            <Heading as="h1" size="xl">Scripture Memory</Heading>
+            <Heading size="lg">Scripture Memory</Heading>
           </Flex>
           {onSignOut ? (
             <Button onClick={onSignOut} colorScheme="red" size="sm">
@@ -98,71 +98,71 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
           )}
         </Flex>
       </Box>
-      <Box as="main" p={8} flex="1">
-        <VStack spacing={8} align="stretch" mb={8}>
-          <VStack spacing={4} align="center">
-            <Heading as="h2" size="lg">Welcome to Scripture Memory!</Heading>
-            <Text fontSize="lg" textAlign="center">
+      <Box as="main" flex="1" w="100%">
+        <VStack spacing={8} align="stretch" p={4}>
+          <VStack spacing={4} align="center" bg="chakra-subtle-bg" p={8} borderRadius="lg" shadow="md">
+            <Heading as="h2" size="lg" color="chakra-body-text">Welcome to Scripture Memory!</Heading>
+            <Text fontSize="lg" textAlign="center" color="chakra-body-text" opacity={0.8}>
               Start your journey of memorizing God's Word with these sample verses.
             </Text>
-            <Text fontSize="md" textAlign="center" color="gray.600">
+            <Text fontSize="md" textAlign="center" color="chakra-body-text" opacity={0.6}>
               Upgrade to a paid plan to save your progress and track your memorization journey!
             </Text>
           </VStack>
 
           <VStack spacing={4} align="stretch">
             {DEFAULT_VERSES.map((verse) => (
-              <Card 
+              <Box
                 key={verse.reference}
-                cursor="pointer"
-                _hover={{ transform: 'translateY(-2px)', shadow: 'md' }}
-                transition="all 0.2s"
+                p={4}
+                borderWidth="1px"
+                borderRadius="md"
+                borderColor="gray.200"
+                _hover={{ borderColor: 'blue.500' }}
               >
-                <CardBody>
-                  <VStack align="stretch" spacing={2}>
-                    <HStack justify="space-between">
-                      <Heading size="md">{verse.reference}</Heading>
-                      <Badge colorScheme="blue">Sample Verse</Badge>
-                    </HStack>
-                    <Text>{renderVerseText(verse)}</Text>
-                    <Flex gap={2} wrap="wrap">
-                      {activeVerseId !== verse.reference ? (
+                <VStack align="stretch" spacing={2}>
+                  <Flex justify="space-between" align="center">
+                    <Text fontWeight="bold">{verse.reference}</Text>
+                    <Badge colorScheme="blue">Sample Verse</Badge>
+                  </Flex>
+                  <Text>{renderVerseText(verse)}</Text>
+                  <Flex gap={2} wrap="wrap">
+                    {activeVerseId !== verse.reference ? (
+                      <Button
+                        size="sm"
+                        colorScheme="blue"
+                        onClick={() => handleStart(verse.reference)}
+                      >
+                        Start Memorizing
+                      </Button>
+                    ) : (
+                      <>
                         <Button
                           size="sm"
                           colorScheme="blue"
-                          onClick={() => handleStart(verse.reference)}
+                          onClick={() => handleShowHint(verse.reference)}
                         >
-                          Start Memorizing
+                          Show Next Word
                         </Button>
-                      ) : (
-                        <>
-                          <Button
-                            size="sm"
-                            colorScheme="blue"
-                            onClick={() => handleShowHint(verse.reference)}
-                          >
-                            Show Next Word
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleReset(verse.reference)}
-                          >
-                            Reset
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleShowVerse(verse.reference)}
-                          >
-                            {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Verse'}
-                          </Button>
-                        </>
-                      )}
-                    </Flex>
-                  </VStack>
-                </CardBody>
-              </Card>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReset(verse.reference)}
+                        >
+                          Reset
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleShowVerse(verse.reference)}
+                        >
+                          {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Verse'}
+                        </Button>
+                      </>
+                    )}
+                  </Flex>
+                </VStack>
+              </Box>
             ))}
           </VStack>
 
@@ -190,7 +190,7 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
           </VStack>
         </VStack>
       </Box>
-      <Box mt="auto">
+      <Box w="100%">
         <Footer />
       </Box>
     </Box>
