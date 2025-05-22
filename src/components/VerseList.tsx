@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import {
   Box,
   Text,
@@ -16,233 +16,59 @@ import {
   Badge,
 } from '@chakra-ui/react';
 import { ProgressStatus } from '../utils/progress';
-import { getVerses, updateVerseStatus, deleteVerse } from '../utils/sheets';
-import { fetchUserEmail, sanitizeVerseText } from '../utils/auth';
 import { useAuth } from '../hooks/useAuth';
 import { debug, handleError } from '../utils/debug';
-import { db } from '../utils/db';
-import { syncService } from '../utils/sync';
-import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useVerses } from '../hooks/useVerses';
 import { Footer } from './Footer';
 
 interface Verse {
   reference: string;
   text: string;
   status: ProgressStatus;
-  dateAdded: string;
+  lastReviewed: string;
+  reviewCount: number;
 }
 
-const DEFAULT_VERSE: Verse = {
-  reference: 'John 3:16',
-  text: 'For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life.',
-  status: ProgressStatus.NotStarted,
-  dateAdded: new Date().toISOString(),
-};
+export interface VerseListRef {
+  scrollToVerse: (reference: string) => void;
+}
 
-export const VerseList: React.FC = () => {
-  const [verses, setVerses] = useState<Verse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface VerseListProps {
+  verses: Verse[];
+  loading: boolean;
+  error: string | null;
+  onStatusChange: (reference: string, newStatus: ProgressStatus) => Promise<void>;
+  onDelete: (reference: string) => Promise<void>;
+}
+
+export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) => {
+  const { verses, loading, error, onStatusChange, onDelete } = props;
   const [activeVerseId, setActiveVerseId] = useState<string | null>(null);
   const [revealedWords, setRevealedWords] = useState<number[]>([]);
   const [showFullVerse, setShowFullVerse] = useState<Record<string, boolean>>({});
   const toast = useToast();
   const { userEmail, isAuthenticated } = useAuth();
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [verseToDelete, setVerseToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const cancelRef = React.useRef<HTMLButtonElement>(null);
-  const hasUnsavedChanges = useUnsavedChanges();
-  const [pendingChanges, setPendingChanges] = useState(0);
-  const [isSaving, setIsSaving] = useState(false);
+  const verseRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const fetchVerses = async () => {
-    if (!userEmail || !isAuthenticated) {
-      setVerses([]);
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      // Initialize database if needed
-      await db.init();
-      
-      // Set user email in sync service
-      syncService.setUserEmail(userEmail);
-
-      // Try to get verses from local database first
-      let localVerses = await db.getVerses();
-
-      // If no local verses, fetch from server and store locally
-      if (localVerses.length === 0) {
-        const serverVerses = await getVerses(userEmail);
-        for (const verse of serverVerses) {
-          await db.addVerse(verse);
-        }
-        localVerses = serverVerses;
+  // Expose scrollToVerse through ref
+  useImperativeHandle(ref, () => ({
+    scrollToVerse: (reference: string) => {
+      const verseElement = verseRefs.current[reference];
+      if (verseElement) {
+        verseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Highlight the verse briefly
+        verseElement.style.transition = 'background-color 0.5s';
+        verseElement.style.backgroundColor = 'rgba(66, 153, 225, 0.1)';
+        setTimeout(() => {
+          verseElement.style.backgroundColor = '';
+        }, 2000);
       }
-
-      setVerses(localVerses);
-      setLastRefreshTime(new Date());
-    } catch (error) {
-      debug.error('verses', 'Error fetching verses:', error);
-      toast({
-        title: handleError.verses.fetchFailed().title,
-        description: handleError.verses.fetchFailed().description,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    } finally {
-      setIsLoading(false);
-      setIsInitialLoad(false);
     }
-  };
-
-  // Fetch verses when user email is available and authenticated
-  useEffect(() => {
-    fetchVerses();
-  }, [userEmail, isAuthenticated]);
-
-  // Subscribe to sync status changes
-  useEffect(() => {
-    const unsubscribe = syncService.onStatusChange((status) => {
-      if (status === 'syncing') {
-        toast({
-          title: 'Syncing changes...',
-          description: 'Your changes are being saved to the cloud.',
-          duration: 2000,
-        });
-      } else if (status === 'error') {
-        toast({
-          title: 'Sync failed',
-          description: 'Your changes are saved locally and will sync when possible.',
-          variant: 'destructive',
-          duration: 4000,
-        });
-      } else if (status === 'rate_limited') {
-        toast({
-          title: 'Rate limited',
-          description: 'Taking a short break to avoid overwhelming the server. Your changes are safe.',
-          duration: 3000,
-        });
-      }
-    });
-
-    return () => unsubscribe();
-  }, [toast]);
-
-  // Check for pending changes periodically
-  useEffect(() => {
-    const checkPendingChanges = async () => {
-      const count = await syncService.getPendingChangesCount();
-      setPendingChanges(count);
-    };
-
-    const interval = setInterval(checkPendingChanges, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Show save toast when there are pending changes
-  useEffect(() => {
-    const TOAST_ID = 'save-changes-toast';
-    
-    if (pendingChanges > 0 && !isSaving) {
-      // Update existing toast or create new one
-      if (toast.isActive(TOAST_ID)) {
-        toast.update(TOAST_ID, {
-          title: 'Changes Pending',
-          description: (
-            <Flex alignItems="center" gap={4}>
-              <Text>Keep memorizing, and when you're ready, save all the status changes you made above</Text>
-              <Button
-                onClick={handleSave}
-                isLoading={isSaving}
-                loadingText="Saving..."
-                colorScheme="blue"
-                size="md"
-              >
-                Save Changes
-              </Button>
-            </Flex>
-          ),
-        });
-      } else {
-        toast({
-          id: TOAST_ID,
-          title: 'Changes Pending',
-          description: (
-            <Flex alignItems="center" gap={4}>
-              <Text>Keep memorizing, and when you're ready, save all the status changes you made above</Text>
-              <Button
-                onClick={handleSave}
-                isLoading={isSaving}
-                loadingText="Saving..."
-                colorScheme="blue"
-                size="md"
-              >
-                Save Changes
-              </Button>
-            </Flex>
-          ),
-          status: 'info',
-          duration: null, // Make it persistent
-          isClosable: false,
-          position: 'bottom',
-          containerStyle: {
-            width: '100%',
-            maxWidth: '100%',
-            margin: '0',
-            padding: '1rem',
-          },
-        });
-      }
-    } else if (pendingChanges === 0) {
-      // Remove the toast if there are no pending changes
-      toast.close(TOAST_ID);
-    }
-  }, [pendingChanges, isSaving]);
-
-  // Handle manual save
-  const handleSave = async () => {
-    try {
-      setIsSaving(true);
-      await syncService.manualSync();
-      const count = await syncService.getPendingChangesCount();
-      setPendingChanges(count);
-      
-      // Close the persistent toast
-      toast.close('save-changes-toast');
-      
-      // Show success toast
-      toast({
-        title: 'Success',
-        description: 'Changes saved successfully',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-        position: 'bottom',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to save changes. Please try again.',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-        position: 'bottom',
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  }));
 
   const handleStatusChange = async (reference: string, newStatus: ProgressStatus) => {
     if (!userEmail) {
@@ -251,45 +77,7 @@ export const VerseList: React.FC = () => {
     }
 
     try {
-      // Update local state immediately
-      setVerses(prevVerses =>
-        prevVerses.map(verse =>
-          verse.reference === reference
-            ? { ...verse, status: newStatus }
-            : verse
-        )
-      );
-
-      // Get existing pending changes
-      const pendingChanges = await db.getPendingChanges();
-      
-      // Check if there's already a status update for this verse
-      const existingStatusUpdate = pendingChanges.find(
-        change => change.type === 'STATUS_UPDATE' && change.verseReference === reference
-      );
-
-      if (existingStatusUpdate && existingStatusUpdate.id) {
-        // Update the existing status change instead of creating a new one
-        await db.updatePendingChange(existingStatusUpdate.id, {
-          type: 'STATUS_UPDATE',
-          verseReference: reference,
-          newStatus,
-          timestamp: Date.now(),
-          synced: false,
-        });
-      } else {
-        // Add new status change if none exists
-        await db.addPendingChange({
-          type: 'STATUS_UPDATE',
-          verseReference: reference,
-          newStatus,
-          timestamp: Date.now(),
-        });
-      }
-
-      // Update pending changes count
-      const count = await syncService.getPendingChangesCount();
-      setPendingChanges(count);
+      await onStatusChange(reference, newStatus);
     } catch (error) {
       console.error('Error updating verse status:', error);
       toast({
@@ -361,31 +149,7 @@ export const VerseList: React.FC = () => {
 
     try {
       setIsDeleting(true);
-
-      // Delete from local database first
-      await db.deleteVerse(verseToDelete);
-      
-      // Add to pending changes
-      await db.addPendingChange({
-        type: 'DELETE_VERSE',
-        verseReference: verseToDelete,
-        timestamp: Date.now(),
-      });
-
-      // Update UI immediately
-      setVerses(prev => prev.filter(v => v.reference !== verseToDelete));
-
-      // Update pending changes count
-      const count = await syncService.getPendingChangesCount();
-      setPendingChanges(count);
-
-      toast({
-        title: 'Verse deleted',
-        description: 'The verse has been permanently deleted.',
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
+      await onDelete(verseToDelete);
     } catch (error) {
       debug.error('verses', 'Error deleting verse:', error);
       toast({
@@ -399,40 +163,6 @@ export const VerseList: React.FC = () => {
       setIsDeleting(false);
       setIsDeleteDialogOpen(false);
       setVerseToDelete(null);
-    }
-  };
-
-  const handleAddVerse = async (verseData: Omit<Verse, 'dateAdded'>) => {
-    try {
-      // Add to local database first
-      const verseWithDate = {
-        ...verseData,
-        dateAdded: new Date().toISOString(),
-      };
-      await db.addVerse(verseWithDate);
-
-      // Add to pending changes
-      await db.addPendingChange({
-        type: 'ADD_VERSE',
-        verseReference: verseData.reference,
-        timestamp: Date.now(),
-      });
-
-      // Update pending changes count
-      const count = await syncService.getPendingChangesCount();
-      setPendingChanges(count);
-
-      // Refresh verses list
-      await fetchVerses();
-    } catch (error) {
-      console.error('Error adding verse:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to add verse. Please try again.',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
     }
   };
 
@@ -483,6 +213,7 @@ export const VerseList: React.FC = () => {
         {verses.map((verse) => (
           <Box
             key={verse.reference}
+            ref={el => verseRefs.current[verse.reference] = el}
             p={4}
             borderWidth="1px"
             borderRadius="md"
@@ -630,4 +361,4 @@ export const VerseList: React.FC = () => {
       </AlertDialog>
     </Box>
   );
-}; 
+}); 

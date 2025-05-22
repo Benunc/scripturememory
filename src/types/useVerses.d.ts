@@ -5,12 +5,14 @@ declare module '../hooks/useVerses' {
     verses: Verse[];
     loading: boolean;
     error: string | null;
-    refreshVerses: () => Promise<void>;
+    addVerse: (verse: Omit<Verse, 'lastReviewed' | 'reviewCount'>) => Promise<void>;
+    updateVerse: (reference: string, updates: Partial<Verse>) => Promise<void>;
+    deleteVerse: (reference: string) => Promise<void>;
   }
 
   /**
    * Hook for managing verses
-   * @returns Object containing verses, loading state, error state, and refresh function
+   * @returns Object containing verses, loading state, error state, and verse management functions
    */
   export function useVerses(): UseVersesReturn;
 } 

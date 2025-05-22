@@ -10,15 +10,16 @@ import {
   VStack,
   FormHelperText,
 } from '@chakra-ui/react';
-import { addVerse } from '../utils/sheets';
 import { useAuth } from '../hooks/useAuth';
 import { debug, handleError } from '../utils/debug';
+import { Verse } from '../types';
 
 interface AddVerseProps {
-  onVerseAdded: () => void;
+  onVerseAdded: (reference: string) => void;
+  addVerse: (verse: Omit<Verse, 'lastReviewed' | 'reviewCount'>) => Promise<void>;
 }
 
-export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
+export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded, addVerse }) => {
   const [reference, setReference] = useState('');
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,8 +27,12 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
   const { userEmail } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
+    debug.log('verses', 'Form submission started');
     e.preventDefault();
+    debug.log('verses', 'Default form submission prevented');
+    
     if (!userEmail) {
+      debug.log('verses', 'No user email found');
       toast({
         title: 'Error',
         description: 'You must be signed in to add verses',
@@ -40,12 +45,14 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
 
     setIsSubmitting(true);
     try {
-      await addVerse(userEmail, { reference, text, status: 'not_started' });
+      debug.log('verses', 'Attempting to add verse:', { reference, text });
+      await addVerse({ reference, text, status: 'not_started' });
+      debug.log('verses', 'Verse added successfully');
       setReference('');
       setText('');
-      onVerseAdded();
+      onVerseAdded(reference);
       toast({
-        title: 'Verse added',
+        title: 'Success',
         description: 'Your verse has been added successfully',
         status: 'success',
         duration: 3000,
@@ -66,7 +73,14 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
   };
 
   return (
-    <Box as="form" onSubmit={handleSubmit} p={4} borderWidth={1} borderRadius="lg">
+    <Box 
+      as="form" 
+      onSubmit={handleSubmit} 
+      p={4} 
+      borderWidth={1} 
+      borderRadius="lg"
+      noValidate
+    >
       <VStack spacing={4} align="stretch" role="form" aria-label="Add new verse form">
         <FormControl isRequired>
           <FormLabel htmlFor="reference">Verse Reference</FormLabel>
@@ -77,6 +91,7 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
             placeholder="e.g., John 3:16"
             aria-required="true"
             aria-describedby="reference-helper"
+            required
           />
           <FormHelperText id="reference-helper">
             Enter the verse reference in the format "Book Chapter:Verse"
@@ -92,6 +107,7 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
             placeholder="Enter the verse text..."
             aria-required="true"
             aria-describedby="text-helper"
+            required
           />
           <FormHelperText id="text-helper">
             Enter the complete verse text
@@ -100,7 +116,7 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
 
         <Button
           colorScheme="blue"
-          onClick={handleSubmit}
+          type="submit"
           isLoading={isSubmitting}
           loadingText="Adding..."
           isDisabled={!reference || !text}

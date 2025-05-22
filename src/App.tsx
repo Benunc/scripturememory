@@ -1,5 +1,5 @@
 import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack, Flex } from '@chakra-ui/react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AddVerse } from './components/AddVerse'
 import { VerseList } from './components/VerseList'
 import { FreeVersion } from './components/FreeVersion'
@@ -7,6 +7,7 @@ import { validateEnvVariables } from './utils/auth'
 import { useAuth } from './hooks/useAuth'
 import { Footer } from './components/Footer'
 import logo from '/assets/images/ScriptureMemory.svg'
+import { useVerses } from './hooks/useVerses'
 
 // Add type for Google client
 declare global {
@@ -17,8 +18,10 @@ declare global {
 
 function App() {
   const { isAuthenticated, isAuthorized, userEmail, signOut, signIn } = useAuth();
+  const { verses, loading, error, updateVerse, deleteVerse, addVerse } = useVerses();
   const toast = useToast();
   const [isLoading, setIsLoading] = useState(true);
+  const verseListRef = useRef<{ scrollToVerse: (reference: string) => void }>(null);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -42,9 +45,9 @@ function App() {
     initializeApp();
   }, [toast]);
 
-  const handleVerseAdded = () => {
-    // Refresh verses list
-    window.location.reload();
+  const handleVerseAdded = (reference: string) => {
+    // Scroll to the newly added verse
+    verseListRef.current?.scrollToVerse(reference);
   };
 
   if (isLoading) {
@@ -60,33 +63,31 @@ function App() {
   }
 
   return (
-    <Box minH="100vh" display="flex" flexDirection="column">
-      <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
+    <Box p={4}>
+      <VStack spacing={8} align="stretch">
         <Flex justify="space-between" align="center">
-          <Flex align="center" gap={4}>
-            <img 
-              src={logo}
-              alt="Scripture Memory" 
-              style={{ height: '40px' }}
-            />
+          <HStack spacing={4}>
+            <img src={logo} alt="Scripture Memory Logo" style={{ height: '40px' }} />
             <Heading size="lg">Scripture Memory</Heading>
-          </Flex>
-          {isAuthenticated && (
-            <Button onClick={signOut} colorScheme="blue" variant="outline">
-              Sign Out
-            </Button>
-          )}
+          </HStack>
+          <HStack spacing={4}>
+            <Text>{userEmail}</Text>
+            <Avatar size="sm" name={userEmail || undefined} />
+            <Button onClick={signOut}>Sign Out</Button>
+          </HStack>
         </Flex>
-      </Box>
-      <Box as="main" flex="1" w="100%">
-        <VStack spacing={8} align="stretch" p={4}>
-          <VerseList />
-          <AddVerse onVerseAdded={handleVerseAdded} />
-        </VStack>
-      </Box>
-      <Box w="100%">
-        <Footer />
-      </Box>
+
+        <VerseList 
+          ref={verseListRef}
+          verses={verses}
+          loading={loading}
+          error={error}
+          onStatusChange={(ref, status) => updateVerse(ref, { status })}
+          onDelete={deleteVerse}
+        />
+        <AddVerse onVerseAdded={handleVerseAdded} addVerse={addVerse} />
+      </VStack>
+      <Footer />
     </Box>
   );
 }

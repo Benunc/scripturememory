@@ -160,6 +160,7 @@ export const getVerses = async (userEmail: string): Promise<Verse[]> => {
     // Ensure user's tab exists
     await ensureUserTab(userEmail);
 
+    debug.log('sheets', 'Fetching verses from tab:', tabName);
     const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A2:D`,
       {
@@ -170,65 +171,22 @@ export const getVerses = async (userEmail: string): Promise<Verse[]> => {
     );
 
     if (!response.ok) {
+      const errorText = await response.text();
+      debug.error('sheets', 'Failed to fetch verses:', { status: response.status, error: errorText });
       throw new Error('Failed to fetch verses');
     }
 
     const data = await response.json() as ValuesResponse;
+    debug.log('sheets', 'Raw response from sheets API:', data);
+
     const verses = (data.values || []).map((row) => ({
       reference: row[0] || '',
       text: row[1] || '',
-      status: (row[2] || 'Not Started') as ProgressStatus,
+      status: (row[2] || 'not_started') as ProgressStatus,
       dateAdded: row[3] || new Date().toISOString(),
     }));
 
-    // If no verses exist, add sample verses
-    if (verses.length === 0) {
-      debug.log('sheets', 'No verses found, adding sample verses for user:', userEmail);
-      const sampleVersesResponse = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A2:D:append?valueInputOption=USER_ENTERED`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            values: sampleVerses.map(verse => [
-              verse.reference,
-              verse.text,
-              verse.status,
-              new Date().toISOString()
-            ]),
-          }),
-        }
-      );
-
-      if (!sampleVersesResponse.ok) {
-        debug.error('sheets', 'Failed to add sample verses:', await sampleVersesResponse.text());
-        // Don't throw here - we still want to return empty verses if sample verses fail
-      } else {
-        // If sample verses were added successfully, fetch them again
-        const updatedResponse = await fetch(
-          `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A2:D`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (updatedResponse.ok) {
-          const updatedData = await updatedResponse.json() as ValuesResponse;
-          return (updatedData.values || []).map((row) => ({
-            reference: row[0] || '',
-            text: row[1] || '',
-            status: (row[2] || 'Not Started') as ProgressStatus,
-            dateAdded: row[3] || new Date().toISOString(),
-          }));
-        }
-      }
-    }
-
+    debug.log('sheets', 'Processed verses:', verses);
     return verses;
   } catch (error) {
     debug.error('sheets', 'Error fetching verses:', error);
@@ -243,6 +201,7 @@ export const addVerse = async (userEmail: string, verseData: Omit<Verse, 'dateAd
   }
   
   try {
+    debug.log('sheets', 'Adding verse:', { userEmail, verseData });
     rateLimiter.recordRequest(userEmail);
     const token = await getAccessToken();
     const tabName = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
@@ -259,14 +218,18 @@ export const addVerse = async (userEmail: string, verseData: Omit<Verse, 'dateAd
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          values: [[verseData.reference, verseData.text, 'New', new Date().toISOString()]],
+          values: [[verseData.reference, verseData.text, verseData.status, new Date().toISOString()]],
         }),
       }
     );
 
     if (!response.ok) {
+      const errorText = await response.text();
+      debug.error('sheets', 'Failed to add verse:', { status: response.status, error: errorText });
       throw new Error('Failed to add verse');
     }
+
+    debug.log('sheets', 'Successfully added verse');
   } catch (error) {
     debug.error('sheets', 'Error adding verse:', error);
     throw error;
