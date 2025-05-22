@@ -125,7 +125,14 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
                     <Text fontWeight="bold">{verse.reference}</Text>
                     <Badge colorScheme="blue">Sample Verse</Badge>
                   </Flex>
-                  <Text>{renderVerseText(verse)}</Text>
+                  <Box 
+                    minH={{ base: "6em", md: "4em" }}
+                    display="flex" 
+                    alignItems="center"
+                    lineHeight="1.5"
+                  >
+                    <Text>{renderVerseText(verse)}</Text>
+                  </Box>
                   <Flex gap={2} wrap="wrap">
                     {activeVerseId !== verse.reference ? (
                       <Button

@@ -503,7 +503,14 @@ export const VerseList: React.FC = () => {
                   Delete
                 </Text>
               </Flex>
-              <Text>{renderVerseText(verse)}</Text>
+              <Box 
+                minH={{ base: "6em", md: "4em" }}
+                display="flex" 
+                alignItems="center"
+                lineHeight="1.5"
+              >
+                <Text>{renderVerseText(verse)}</Text>
+              </Box>
               <Flex gap={2} wrap="wrap">
                 {activeVerseId !== verse.reference ? (
                   <Button
