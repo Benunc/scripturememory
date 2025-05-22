@@ -1,12 +1,12 @@
 import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack, Flex } from '@chakra-ui/react'
 import { useState, useEffect } from 'react'
-import { Intro } from './components/Intro'
 import { AddVerse } from './components/AddVerse'
 import { VerseList } from './components/VerseList'
 import { FreeVersion } from './components/FreeVersion'
 import { validateEnvVariables } from './utils/auth'
 import { useAuth } from './hooks/useAuth'
 import { Footer } from './components/Footer'
+import logo from '/assets/images/ScriptureMemory.svg'
 
 // Add type for Google client
 declare global {
@@ -65,7 +65,7 @@ function App() {
         <Flex justify="space-between" align="center">
           <Flex align="center" gap={4}>
             <img 
-              src="/assets/images/ScriptureMemory.svg" 
+              src={logo}
               alt="Scripture Memory" 
               style={{ height: '40px' }}
             />

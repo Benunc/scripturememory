@@ -31,5 +31,6 @@ export default defineConfig({
     // Ensure public assets are copied
     copyPublicDir: true,
   },
-  publicDir: 'public' // Explicitly set public directory
+  publicDir: 'public', // Explicitly set public directory
+  assetsInclude: ['**/*.svg'] // Explicitly include SVG files
 })

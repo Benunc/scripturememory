@@ -39,6 +39,8 @@ jobs:
           cp -r public/* dist/
           # Build the app
           npm run build
+          # Ensure assets are in the correct location
+          ls -la dist/assets/images/
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact

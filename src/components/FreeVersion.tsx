@@ -2,6 +2,7 @@ import { Box, Button, Heading, Text, VStack, useToast, Card, CardBody, Badge, HS
 import { useState } from 'react';
 import { sampleVerses } from '../utils/sampleVerses';
 import { Footer } from './Footer';
+import logo from '/assets/images/ScriptureMemory.svg';
 
 const DEFAULT_VERSES = sampleVerses;
 
@@ -77,8 +78,15 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
   return (
     <Box minH="100vh" display="flex" flexDirection="column">
       <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
-        <HStack justify="space-between" align="center">
-          <Heading as="h1" size="xl">Scripture Memory</Heading>
+        <Flex justify="space-between" align="center">
+          <Flex align="center" gap={4}>
+            <img 
+              src={logo}
+              alt="Scripture Memory" 
+              style={{ height: '40px' }}
+            />
+            <Heading as="h1" size="xl">Scripture Memory</Heading>
+          </Flex>
           {onSignOut ? (
             <Button onClick={onSignOut} colorScheme="red" size="sm">
               Sign Out
@@ -88,7 +96,7 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
               Sign In
             </Button>
           )}
-        </HStack>
+        </Flex>
       </Box>
       <Box as="main" p={8} flex="1">
         <VStack spacing={8} align="stretch" mb={8}>
