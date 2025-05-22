@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { sampleVerses } from '../utils/sampleVerses';
 import { Footer } from './Footer';
 import logo from '/assets/images/ScriptureMemory.svg';
+import { createMailtoLink } from '../utils/auth';
 
 const DEFAULT_VERSES = sampleVerses;
 
@@ -105,9 +106,26 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
             <Text fontSize="lg" textAlign="center" color="chakra-body-text" opacity={0.8}>
               Start your journey of memorizing God's Word with these sample verses.
             </Text>
-            <Text fontSize="md" textAlign="center" color="chakra-body-text" opacity={0.6}>
-              Upgrade to a paid plan to save your progress and track your memorization journey!
-            </Text>
+            {userEmail ? (
+              <VStack spacing={2}>
+                <Text fontSize="md" textAlign="center" color="chakra-body-text" opacity={0.6}>
+                  You're signed in as {userEmail}
+                </Text>
+                <Text fontSize="md" textAlign="center" color="orange.500">
+                  Your account is pending approval. You can still practice with these sample verses while you wait.
+                </Text>
+                <Text fontSize="sm" textAlign="center" color="chakra-body-text" opacity={0.6}>
+                  Once approved, you'll be able to add your own verses and track your progress.
+                </Text>
+                <Text fontSize="sm" textAlign="center" color="chakra-body-text" opacity={0.6}>
+                  Contact {createMailtoLink('ben@benandjacq.com')} to request approval.
+                </Text>
+              </VStack>
+            ) : (
+              <Text fontSize="md" textAlign="center" color="chakra-body-text" opacity={0.6}>
+                Sign in to save your progress, add your own verses, and track your memorization journey!
+              </Text>
+            )}
           </VStack>
 
           <VStack spacing={4} align="stretch">
@@ -187,25 +205,31 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
           </VStack>
 
           <VStack spacing={4} align="center" pt={4}>
-            <Button 
-              colorScheme="blue" 
-              size="lg"
-              onClick={() => {
-                toast({
-                  title: "Upgrade to Premium",
-                  description: "Contact ben@benandjacq.com to get started with your premium plan!",
-                  status: "info",
-                  duration: 5000,
-                  isClosable: true,
-                });
-              }}
-            >
-              Upgrade to Premium
-            </Button>
-            {userEmail && (
-              <Text fontSize="sm" color="gray.500">
-                Your email: {userEmail}
-              </Text>
+            {userEmail ? (
+              <Button 
+                colorScheme="red" 
+                size="lg"
+                onClick={onSignOut}
+              >
+                Sign Out
+              </Button>
+            ) : (
+              <Button 
+                colorScheme="blue" 
+                size="lg"
+                onClick={() => {
+                  toast({
+                    title: "Sign In",
+                    description: "Sign in to save your progress, add your own verses, and track your memorization journey!",
+                    status: "info",
+                    duration: 5000,
+                    isClosable: true,
+                  });
+                  onSignIn?.();
+                }}
+              >
+                Sign In
+              </Button>
             )}
           </VStack>
         </VStack>

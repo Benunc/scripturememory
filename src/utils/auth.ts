@@ -1,5 +1,6 @@
 import { getAccessToken as getGoogleToken } from './token';
 import { debug, handleError } from './debug';
+import React from 'react';
 
 // Constants
 const SHEET_ID = import.meta.env.VITE_GOOGLE_SHEET_ID;
@@ -158,4 +159,17 @@ export const revokeToken = async (): Promise<void> => {
     debug.error('auth', 'Error revoking token:', error);
     throw new Error(handleError.auth.notSignedIn().description);
   }
+};
+
+// Create an accessible mailto link
+export const createMailtoLink = (email: string): React.ReactElement => {
+  return React.createElement('a', {
+    href: `mailto:${email}`,
+    'aria-label': `Send email to ${email}`,
+    style: { 
+      textDecoration: 'none',
+      color: 'inherit',
+      borderBottom: '1px dotted currentColor'
+    }
+  }, email);
 }; 
