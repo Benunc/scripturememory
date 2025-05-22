@@ -119,10 +119,12 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
                 borderRadius="md"
                 borderColor="gray.200"
                 _hover={{ borderColor: 'blue.500' }}
+                role="article"
+                aria-labelledby={`free-verse-${verse.reference}`}
               >
                 <VStack align="stretch" spacing={2}>
                   <Flex justify="space-between" align="center">
-                    <Text fontWeight="bold">{verse.reference}</Text>
+                    <Text fontWeight="bold" id={`free-verse-${verse.reference}`}>{verse.reference}</Text>
                     <Badge colorScheme="blue">Sample Verse</Badge>
                   </Flex>
                   <Box 
@@ -130,41 +132,52 @@ export function FreeVersion({ userEmail, onSignOut, onSignIn }: FreeVersionProps
                     display="flex" 
                     alignItems="center"
                     lineHeight="1.5"
+                    role="region"
+                    aria-label={`Verse text for ${verse.reference}`}
                   >
                     <Text>{renderVerseText(verse)}</Text>
                   </Box>
-                  <Flex gap={2} wrap="wrap">
+                  <Flex gap={2} wrap="wrap" role="toolbar" aria-label={`Controls for ${verse.reference}`}>
                     {activeVerseId !== verse.reference ? (
                       <Button
                         size="sm"
                         colorScheme="blue"
                         onClick={() => handleStart(verse.reference)}
+                        aria-label={`Start memorizing ${verse.reference}`}
                       >
                         Start Memorizing
                       </Button>
                     ) : (
                       <>
-                        <Button
-                          size="sm"
-                          colorScheme="purple"
-                          onClick={() => handleShowHint(verse.reference)}
-                        >
-                          Show Next Word
-                        </Button>
-                        <Button
-                          size="sm"
-                          colorScheme="orange"
-                          onClick={() => handleReset(verse.reference)}
-                        >
-                          Reset
-                        </Button>
-                        <Button
-                          size="sm"
-                          colorScheme="teal"
-                          onClick={() => handleShowVerse(verse.reference)}
-                        >
-                          {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Verse'}
-                        </Button>
+                        {revealedWords.length >= verse.text.split(' ').length ? (
+                          <Button
+                            size="sm"
+                            colorScheme="orange"
+                            onClick={() => handleReset(verse.reference)}
+                            aria-label={`Reset memorization for ${verse.reference}`}
+                          >
+                            Reset
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              colorScheme="purple"
+                              onClick={() => handleShowHint(verse.reference)}
+                              aria-label={`Show next word for ${verse.reference}`}
+                            >
+                              Show Hint
+                            </Button>
+                            <Button
+                              size="sm"
+                              colorScheme="teal"
+                              onClick={() => handleShowVerse(verse.reference)}
+                              aria-label={`${showFullVerse[verse.reference] ? 'Hide' : 'Show'} full verse for ${verse.reference}`}
+                            >
+                              {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Verse'}
+                            </Button>
+                          </>
+                        )}
                       </>
                     )}
                   </Flex>

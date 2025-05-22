@@ -8,6 +8,7 @@ import {
   Textarea,
   useToast,
   VStack,
+  FormHelperText,
 } from '@chakra-ui/react';
 import { addVerse } from '../utils/sheets';
 import { useAuth } from '../hooks/useAuth';
@@ -66,30 +67,44 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded }) => {
 
   return (
     <Box as="form" onSubmit={handleSubmit} p={4} borderWidth={1} borderRadius="lg">
-      <VStack spacing={4}>
+      <VStack spacing={4} align="stretch" role="form" aria-label="Add new verse form">
         <FormControl isRequired>
-          <FormLabel>Reference</FormLabel>
+          <FormLabel htmlFor="reference">Verse Reference</FormLabel>
           <Input
+            id="reference"
             value={reference}
             onChange={(e) => setReference(e.target.value)}
             placeholder="e.g., John 3:16"
+            aria-required="true"
+            aria-describedby="reference-helper"
           />
+          <FormHelperText id="reference-helper">
+            Enter the verse reference in the format "Book Chapter:Verse"
+          </FormHelperText>
         </FormControl>
+
         <FormControl isRequired>
-          <FormLabel>Verse Text</FormLabel>
+          <FormLabel htmlFor="text">Verse Text</FormLabel>
           <Textarea
+            id="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Enter the verse text..."
-            rows={4}
+            aria-required="true"
+            aria-describedby="text-helper"
           />
+          <FormHelperText id="text-helper">
+            Enter the complete verse text
+          </FormHelperText>
         </FormControl>
+
         <Button
-          type="submit"
           colorScheme="blue"
+          onClick={handleSubmit}
           isLoading={isSubmitting}
           loadingText="Adding..."
-          width="full"
+          isDisabled={!reference || !text}
+          aria-label="Add new verse"
         >
           Add Verse
         </Button>

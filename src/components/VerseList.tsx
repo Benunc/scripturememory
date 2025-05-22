@@ -488,10 +488,12 @@ export const VerseList: React.FC = () => {
             borderRadius="md"
             borderColor="gray.200"
             _hover={{ borderColor: 'blue.500' }}
+            role="article"
+            aria-labelledby={`verse-${verse.reference}`}
           >
             <VStack align="stretch" spacing={2}>
               <Flex justify="space-between" align="center">
-                <Text fontWeight="bold">{verse.reference}</Text>
+                <Text fontWeight="bold" id={`verse-${verse.reference}`}>{verse.reference}</Text>
                 <Text
                   as="button"
                   color="red.500"
@@ -499,6 +501,7 @@ export const VerseList: React.FC = () => {
                   onClick={() => handleDeleteClick(verse.reference)}
                   _hover={{ color: 'red.600' }}
                   cursor="pointer"
+                  aria-label={`Delete verse ${verse.reference}`}
                 >
                   Delete
                 </Text>
@@ -508,15 +511,18 @@ export const VerseList: React.FC = () => {
                 display="flex" 
                 alignItems="center"
                 lineHeight="1.5"
+                role="region"
+                aria-label={`Verse text for ${verse.reference}`}
               >
                 <Text>{renderVerseText(verse)}</Text>
               </Box>
-              <Flex gap={2} wrap="wrap">
+              <Flex gap={2} wrap="wrap" role="toolbar" aria-label={`Controls for ${verse.reference}`}>
                 {activeVerseId !== verse.reference ? (
                   <Button
                     size="sm"
                     colorScheme="blue"
                     onClick={() => handleStart(verse.reference)}
+                    aria-label={`Start memorizing ${verse.reference}`}
                   >
                     Start Memorizing
                   </Button>
@@ -527,6 +533,7 @@ export const VerseList: React.FC = () => {
                         size="sm"
                         colorScheme="orange"
                         onClick={() => handleReset(verse.reference)}
+                        aria-label={`Reset memorization for ${verse.reference}`}
                       >
                         Reset
                       </Button>
@@ -536,6 +543,7 @@ export const VerseList: React.FC = () => {
                           size="sm"
                           colorScheme="purple"
                           onClick={() => handleShowHint(verse.reference)}
+                          aria-label={`Show next word for ${verse.reference}`}
                         >
                           Show Hint
                         </Button>
@@ -543,6 +551,7 @@ export const VerseList: React.FC = () => {
                           size="sm"
                           colorScheme="teal"
                           onClick={() => handleShowVerse(verse.reference)}
+                          aria-label={`${showFullVerse[verse.reference] ? 'Hide' : 'Show'} full verse for ${verse.reference}`}
                         >
                           {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Verse'}
                         </Button>
@@ -554,6 +563,8 @@ export const VerseList: React.FC = () => {
                   size="sm"
                   colorScheme={verse.status === ProgressStatus.NotStarted ? 'blue' : 'gray'}
                   onClick={() => handleStatusChange(verse.reference, ProgressStatus.NotStarted)}
+                  aria-label={`Mark ${verse.reference} as not started`}
+                  aria-pressed={verse.status === ProgressStatus.NotStarted}
                 >
                   Not Started
                 </Button>
@@ -561,6 +572,8 @@ export const VerseList: React.FC = () => {
                   size="sm"
                   colorScheme={verse.status === ProgressStatus.InProgress ? 'orange' : 'gray'}
                   onClick={() => handleStatusChange(verse.reference, ProgressStatus.InProgress)}
+                  aria-label={`Mark ${verse.reference} as in progress`}
+                  aria-pressed={verse.status === ProgressStatus.InProgress}
                 >
                   In Progress
                 </Button>
@@ -568,6 +581,8 @@ export const VerseList: React.FC = () => {
                   size="sm"
                   colorScheme={verse.status === ProgressStatus.Mastered ? 'green' : 'gray'}
                   onClick={() => handleStatusChange(verse.reference, ProgressStatus.Mastered)}
+                  aria-label={`Mark ${verse.reference} as mastered`}
+                  aria-pressed={verse.status === ProgressStatus.Mastered}
                 >
                   Mastered
                 </Button>
