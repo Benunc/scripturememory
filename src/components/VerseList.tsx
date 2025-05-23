@@ -36,7 +36,7 @@ export interface VerseListRef {
 interface VerseListProps {
   verses: Verse[];
   loading: boolean;
-  error: string | null;
+  error: Error | string | null;
   onStatusChange: (reference: string, newStatus: ProgressStatus) => Promise<void>;
   onDelete: (reference: string) => Promise<void>;
 }
@@ -81,9 +81,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     } catch (error) {
       console.error('Error updating verse status:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to update verse status. Please try again.',
-        status: 'error',
+        title: "Error",
+        description: "Failed to update verse status",
+        status: "error",
         duration: 5000,
         isClosable: true,
       });
@@ -142,10 +142,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
   };
 
   const handleDeleteConfirm = async () => {
-    if (!verseToDelete || !userEmail || isDeleting) {
-      debug.error('verses', 'Cannot delete verse: missing reference, user email, or already deleting');
-      return;
-    }
+    if (!verseToDelete) return;
 
     try {
       setIsDeleting(true);
@@ -153,9 +150,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     } catch (error) {
       debug.error('verses', 'Error deleting verse:', error);
       toast({
-        title: handleError.verses.deleteFailed().title,
-        description: handleError.verses.deleteFailed().description,
-        status: 'error',
+        title: "Error",
+        description: "Failed to delete verse",
+        status: "error",
         duration: 5000,
         isClosable: true,
       });
@@ -194,7 +191,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
   if (error) {
     return (
       <Box p={4}>
-        <Text color="red.500">Error: {error}</Text>
+        <Text color="red.500">Error: {error instanceof Error ? error.message : String(error)}</Text>
       </Box>
     );
   }
@@ -212,15 +209,12 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       <VStack spacing={4} align="stretch" mb={8}>
         {verses.map((verse) => (
           <Box
-            key={verse.reference}
+            key={`${verse.reference}-${verse.lastReviewed}`}
             ref={el => verseRefs.current[verse.reference] = el}
             p={4}
             borderWidth="1px"
-            borderRadius="md"
-            borderColor="gray.200"
-            _hover={{ borderColor: 'blue.500' }}
-            role="article"
-            aria-labelledby={`verse-${verse.reference}`}
+            borderRadius="lg"
+            position="relative"
           >
             <VStack align="stretch" spacing={2}>
               <Flex justify="space-between" align="center">
@@ -326,7 +320,10 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       <AlertDialog
         isOpen={isDeleteDialogOpen}
         leastDestructiveRef={cancelRef}
-        onClose={() => !isDeleting && setIsDeleteDialogOpen(false)}
+        onClose={() => {
+          setIsDeleteDialogOpen(false);
+          setVerseToDelete(null);
+        }}
       >
         <AlertDialogOverlay>
           <AlertDialogContent>
@@ -335,23 +332,31 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
             </AlertDialogHeader>
 
             <AlertDialogBody>
-              Are you sure you want to delete this verse? This action cannot be undone.
+              {verseToDelete && (
+                <>
+                  <Text>Are you sure you want to delete this verse? This action cannot be undone.</Text>
+                  <Box mt={4} p={3} bg="gray.50" borderRadius="md">
+                    <Text fontWeight="bold">Reference:</Text>
+                    <Text>{verseToDelete}</Text>
+                    <Text fontWeight="bold" mt={2}>Text:</Text>
+                    <Text>{verses.find(v => v.reference === verseToDelete)?.text}</Text>
+                  </Box>
+                </>
+              )}
             </AlertDialogBody>
 
             <AlertDialogFooter>
-              <Button 
-                ref={cancelRef} 
-                onClick={() => setIsDeleteDialogOpen(false)}
-                isDisabled={isDeleting}
-              >
+              <Button ref={cancelRef} onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setVerseToDelete(null);
+              }}>
                 Cancel
               </Button>
-              <Button 
-                colorScheme="red" 
-                onClick={handleDeleteConfirm} 
+              <Button
+                colorScheme="red"
+                onClick={handleDeleteConfirm}
                 ml={3}
                 isLoading={isDeleting}
-                loadingText="Deleting..."
               >
                 Delete
               </Button>

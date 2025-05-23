@@ -7,8 +7,8 @@ export interface Verse {
   text: string;
   status: ProgressStatus;
   dateAdded: string;
-  lastReviewed?: string;
-  reviewCount?: number;
+  lastReviewed: string;  // Make this required
+  reviewCount: number;   // Make this required
 }
 
 // Pending change interface
@@ -22,7 +22,7 @@ export interface PendingChange {
 }
 
 const DB_NAME = 'scripture-memory-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // Store names
 const STORES = {
@@ -35,37 +35,75 @@ class Database {
 
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-      request.onerror = () => {
-        debug.error('db', 'Error opening database:', request.error);
-        reject(request.error);
+      // First check the current version
+      const checkRequest = indexedDB.open(DB_NAME);
+      
+      checkRequest.onerror = () => {
+        debug.error('db', 'Error checking database version:', checkRequest.error);
+        // Continue with normal initialization
+        this.initializeDatabase(resolve, reject);
       };
 
-      request.onsuccess = () => {
-        this.db = request.result;
-        debug.log('db', 'Database opened successfully');
-        resolve();
-      };
+      checkRequest.onsuccess = () => {
+        const db = checkRequest.result;
+        const currentVersion = db.version;
+        db.close();
 
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
+        if (currentVersion < DB_VERSION) {
+          debug.log('db', `Upgrading database from version ${currentVersion} to ${DB_VERSION}`);
+          // Delete old database
+          const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
+          
+          deleteRequest.onerror = () => {
+            debug.error('db', 'Error deleting old database:', deleteRequest.error);
+            // Continue anyway - we'll try to open the new version
+          };
 
-        // Create verses store
-        if (!db.objectStoreNames.contains(STORES.VERSES)) {
-          const verseStore = db.createObjectStore(STORES.VERSES, { keyPath: 'reference' });
-          verseStore.createIndex('status', 'status', { unique: false });
-          verseStore.createIndex('dateAdded', 'dateAdded', { unique: false });
-        }
-
-        // Create pending changes store
-        if (!db.objectStoreNames.contains(STORES.PENDING_CHANGES)) {
-          const changesStore = db.createObjectStore(STORES.PENDING_CHANGES, { keyPath: 'id', autoIncrement: true });
-          changesStore.createIndex('synced', 'synced', { unique: false });
-          changesStore.createIndex('timestamp', 'timestamp', { unique: false });
+          deleteRequest.onsuccess = () => {
+            debug.log('db', 'Old database deleted successfully');
+            this.initializeDatabase(resolve, reject);
+          };
+        } else {
+          // No upgrade needed, proceed with normal initialization
+          this.initializeDatabase(resolve, reject);
         }
       };
     });
+  }
+
+  private initializeDatabase(resolve: () => void, reject: (error: Error) => void): void {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onerror = () => {
+      debug.error('db', 'Error opening database:', request.error);
+      reject(new Error(`Failed to open database: ${request.error?.message || 'Unknown error'}`));
+    };
+
+    request.onsuccess = () => {
+      this.db = request.result;
+      debug.log('db', 'Database opened successfully');
+      resolve();
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+
+      // Create verses store with reference as key
+      const verseStore = db.createObjectStore(STORES.VERSES, { 
+        keyPath: 'reference'
+      });
+      verseStore.createIndex('status', 'status', { unique: false });
+      verseStore.createIndex('dateAdded', 'dateAdded', { unique: false });
+      verseStore.createIndex('lastReviewed', 'lastReviewed', { unique: false });
+      verseStore.createIndex('reference', 'reference', { unique: true }); // Make reference unique
+
+      // Create pending changes store
+      if (!db.objectStoreNames.contains(STORES.PENDING_CHANGES)) {
+        const changesStore = db.createObjectStore(STORES.PENDING_CHANGES, { keyPath: 'id', autoIncrement: true });
+        changesStore.createIndex('synced', 'synced', { unique: false });
+        changesStore.createIndex('timestamp', 'timestamp', { unique: false });
+      }
+    };
   }
 
   // Verse operations
@@ -86,7 +124,7 @@ class Database {
 
       request.onerror = () => {
         debug.error('db', 'Error getting verses:', request.error);
-        reject(request.error);
+        reject(new Error(`Failed to get verses: ${request.error?.message || 'Unknown error'}`));
       };
     });
   }
@@ -100,15 +138,21 @@ class Database {
 
       const transaction = this.db.transaction(STORES.VERSES, 'readwrite');
       const store = transaction.objectStore(STORES.VERSES);
-      const request = store.add(verse);
 
+      // Try to add the verse - this will fail if the reference already exists
+      const request = store.add(verse);
+      
       request.onsuccess = () => {
         resolve();
       };
 
       request.onerror = () => {
-        debug.error('db', 'Error adding verse:', request.error);
-        reject(request.error);
+        if (request.error?.name === 'ConstraintError') {
+          reject(new Error('A verse with this reference already exists. Please delete it first.'));
+        } else {
+          debug.error('db', 'Error adding verse:', request.error);
+          reject(new Error(`Failed to add verse: ${request.error?.message || 'Unknown error'}`));
+        }
       };
     });
   }
@@ -120,18 +164,31 @@ class Database {
         return;
       }
 
+      if (!updates || Object.keys(updates).length === 0) {
+        reject(new Error('No updates provided'));
+        return;
+      }
+
       const transaction = this.db.transaction(STORES.VERSES, 'readwrite');
       const store = transaction.objectStore(STORES.VERSES);
-      const getRequest = store.get(reference);
+      
+      // Get the verse by reference
+      const request = store.get(reference);
 
-      getRequest.onsuccess = () => {
-        const verse = getRequest.result;
+      request.onsuccess = () => {
+        const verse = request.result;
         if (!verse) {
+          debug.error('db', 'No verse found with reference:', reference);
           reject(new Error('Verse not found'));
           return;
         }
 
-        const updatedVerse = { ...verse, ...updates };
+        // When updating status, also update lastReviewed to now
+        const updatedVerse = { 
+          ...verse, 
+          ...updates,
+          lastReviewed: new Date().toISOString()
+        };
         const updateRequest = store.put(updatedVerse);
 
         updateRequest.onsuccess = () => {
@@ -140,13 +197,13 @@ class Database {
 
         updateRequest.onerror = () => {
           debug.error('db', 'Error updating verse:', updateRequest.error);
-          reject(updateRequest.error);
+          reject(new Error(`Failed to update verse: ${updateRequest.error?.message || 'Unknown error'}`));
         };
       };
 
-      getRequest.onerror = () => {
-        debug.error('db', 'Error getting verse for update:', getRequest.error);
-        reject(getRequest.error);
+      request.onerror = () => {
+        debug.error('db', 'Error getting verse for update:', request.error);
+        reject(new Error(`Failed to get verse for update: ${request.error?.message || 'Unknown error'}`));
       };
     });
   }
@@ -168,7 +225,7 @@ class Database {
 
       request.onerror = () => {
         debug.error('db', 'Error deleting verse:', request.error);
-        reject(request.error);
+        reject(new Error(`Failed to delete verse: ${request.error?.message || 'Unknown error'}`));
       };
     });
   }

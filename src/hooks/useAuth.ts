@@ -3,6 +3,11 @@ import { getAccessToken, fetchUserEmail, isUserAuthorized } from '../utils/auth'
 import { getStoredToken, storeToken, clearStoredToken, isTokenValid, startTokenValidation, stopTokenValidation } from '../utils/token';
 import { debug, handleError } from '../utils/debug';
 
+interface GoogleCredentialResponse {
+  credential: string;
+  select_by: string;
+}
+
 export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -57,7 +62,13 @@ export const useAuth = () => {
 
     try {
       debug.log('auth', 'Checking authentication status...');
+      
+      // Initialize Google Identity Services
+      await initializeGoogleClient();
+      
+      // Check if user is already signed in with Google
       const token = getStoredToken();
+      let email: string | null = null;
       
       if (token) {
         debug.log('auth', 'Found stored token, validating...');
@@ -65,31 +76,64 @@ export const useAuth = () => {
         
         if (isValid) {
           debug.log('auth', 'Token is valid, fetching user email...');
-          const email = await fetchUserEmail();
-          
-          // Check if user is authorized before updating state
-          const authorized = await isUserAuthorized(email);
-          
-          // Update all state at once to prevent race conditions
-          setUserEmail(email);
-          setIsAuthenticated(true);
-          setIsAuthorized(authorized);
-          
-          if (authorized) {
-            startTokenValidation();
-          } else {
-            setError(handleError.auth.unauthorized(email).description);
-          }
+          email = await fetchUserEmail();
         } else {
           debug.log('auth', 'Token is invalid, clearing state...');
           clearStoredToken();
-          setIsAuthenticated(false);
-          setIsAuthorized(false);
-          setUserEmail(null);
-          setError(handleError.auth.tokenExpired().description);
+        }
+      }
+
+      // If no valid token, try to get one from Google
+      if (!email) {
+        debug.log('auth', 'No valid token, checking Google sign-in status...');
+        try {
+          const response = await new Promise<GoogleCredentialResponse>((resolve, reject) => {
+            window.google.accounts.id.initialize({
+              client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+              callback: (response: GoogleCredentialResponse) => {
+                if (response.credential) {
+                  resolve(response);
+                } else {
+                  reject(new Error('No credential received'));
+                }
+              },
+              auto_select: true,
+              cancel_on_tap_outside: false
+            });
+            
+            window.google.accounts.id.prompt((notification: any) => {
+              if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                reject(new Error('Sign-in prompt not displayed or skipped'));
+              }
+            });
+          });
+
+          if (response.credential) {
+            const token = response.credential;
+            storeToken(token, Date.now() + 3600000);
+            email = await fetchUserEmail();
+          }
+        } catch (error) {
+          debug.log('auth', 'No active Google sign-in found');
+        }
+      }
+
+      if (email) {
+        // Check if user is authorized before updating state
+        const authorized = await isUserAuthorized(email);
+        
+        // Update all state at once to prevent race conditions
+        setUserEmail(email);
+        setIsAuthenticated(true);
+        setIsAuthorized(authorized);
+        
+        if (authorized) {
+          startTokenValidation();
+        } else {
+          setError(handleError.auth.unauthorized(email).description);
         }
       } else {
-        debug.log('auth', 'No stored token found');
+        debug.log('auth', 'No stored token or Google sign-in found');
         setIsAuthenticated(false);
         setIsAuthorized(false);
         setUserEmail(null);
@@ -137,6 +181,9 @@ export const useAuth = () => {
       
       if (authorized) {
         startTokenValidation();
+        // Force a re-render to trigger verse loading
+        hasCheckedToken.current = false;
+        await checkAuth();
       } else {
         setError(handleError.auth.unauthorized(email).description);
       }

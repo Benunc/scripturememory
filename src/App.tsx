@@ -77,7 +77,7 @@ function App() {
           </HStack>
         </Flex>
 
-        <VerseList 
+        <VerseList
           ref={verseListRef}
           verses={verses}
           loading={loading}

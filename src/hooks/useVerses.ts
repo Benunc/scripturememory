@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useToast, Button, Box, Flex, Text } from '@chakra-ui/react';
 import { Verse } from '../types';
 import { getVerses, addVerse as apiAddVerse, updateVerseStatus, deleteVerse as apiDeleteVerse } from '../utils/sheets';
 import { useAuth } from './useAuth';
@@ -64,7 +64,7 @@ export function useVerses() {
       for (const [ref, localVerse] of localVerseMap) {
         if (!serverVerseMap.has(ref)) {
           debug.log('verses', 'Deleting verse from local database:', ref);
-          await db.deleteVerse(ref);
+          await db.deleteVerse(ref, localVerse.lastReviewed);
         }
       }
 
@@ -94,11 +94,16 @@ export function useVerses() {
       debug.error('verses', 'Error loading verses:', err);
       setError(err instanceof Error ? err : new Error('Failed to load verses'));
       toast({
-        title: "Error",
-        description: "Failed to load verses",
-        status: "error",
-        duration: 5000,
+        title: "Trouble Loading Verses",
+        description: "We're having trouble loading your verses. This is usually temporary and can be fixed by clicking 'Retry'.",
+        status: "warning",
+        duration: null, // Keep it open until user dismisses
         isClosable: true,
+        position: "top",
+        onCloseComplete: () => {
+          // If user dismisses without retrying, try again automatically
+          loadVerses();
+        }
       });
     } finally {
       setLoading(false);
@@ -163,7 +168,11 @@ export function useVerses() {
       await db.updateVerse(reference, updates);
 
       // Update UI immediately
-      setVerses(prev => prev.map(v => v.reference === reference ? { ...v, ...updates } : v));
+      setVerses(prev => prev.map(v => 
+        v.reference === reference
+          ? { ...v, ...updates } 
+          : v
+      ));
 
       // Then sync to server if status is being updated
       if (updates.status) {
