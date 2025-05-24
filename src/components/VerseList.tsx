@@ -26,7 +26,6 @@ interface Verse {
   text: string;
   status: ProgressStatus;
   lastReviewed: string;
-  reviewCount: number;
 }
 
 export interface VerseListRef {

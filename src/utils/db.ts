@@ -1,15 +1,9 @@
 import { ProgressStatus } from './progress';
 import { debug } from './debug';
+import { Verse as MainVerse } from '../types';
 
-// Unified Verse interface for local storage
-export interface Verse {
-  reference: string;
-  text: string;
-  status: ProgressStatus;
-  dateAdded: string;
-  lastReviewed: string;  // Make this required
-  reviewCount: number;   // Make this required
-}
+// Use the main Verse type from types.ts
+export type Verse = MainVerse;
 
 // Pending change interface
 export interface PendingChange {
@@ -375,6 +369,39 @@ class Database {
         debug.error('db', 'Error updating pending change:', request.error);
         reject(request.error);
       };
+    });
+  }
+
+  async clearDatabase(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      const transaction = this.db.transaction([STORES.VERSES, STORES.PENDING_CHANGES], 'readwrite');
+      const verseStore = transaction.objectStore(STORES.VERSES);
+      const changesStore = transaction.objectStore(STORES.PENDING_CHANGES);
+
+      const verseRequest = verseStore.clear();
+      const changesRequest = changesStore.clear();
+
+      Promise.all([
+        new Promise<void>((resolve, reject) => {
+          verseRequest.onsuccess = () => resolve();
+          verseRequest.onerror = () => reject(verseRequest.error);
+        }),
+        new Promise<void>((resolve, reject) => {
+          changesRequest.onsuccess = () => resolve();
+          changesRequest.onerror = () => reject(changesRequest.error);
+        })
+      ]).then(() => {
+        debug.log('db', 'Database cleared successfully');
+        resolve();
+      }).catch(error => {
+        debug.error('db', 'Error clearing database:', error);
+        reject(error);
+      });
     });
   }
 }

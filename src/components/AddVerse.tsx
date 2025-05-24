@@ -16,7 +16,7 @@ import { Verse } from '../types';
 
 interface AddVerseProps {
   onVerseAdded: (reference: string) => void;
-  addVerse: (verse: Omit<Verse, 'lastReviewed' | 'reviewCount'>) => Promise<void>;
+  addVerse: (verse: Omit<Verse, 'lastReviewed'>) => Promise<void>;
 }
 
 export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded, addVerse }) => {

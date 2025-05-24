@@ -11,8 +11,7 @@ const convertToMainVerse = (verse: any): Verse => ({
   reference: verse.reference,
   text: verse.text,
   status: verse.status,
-  lastReviewed: verse.lastReviewed || verse.dateAdded || new Date().toISOString(),
-  reviewCount: verse.reviewCount || 0
+  lastReviewed: verse.lastReviewed || verse.dateAdded || new Date().toISOString()
 });
 
 export function useVerses() {
@@ -20,10 +19,10 @@ export function useVerses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const toast = useToast();
-  const { isAuthenticated, userEmail } = useAuth();
+  const { isAuthenticated, isAuthorized, userEmail } = useAuth();
 
   useEffect(() => {
-    if (!isAuthenticated || !userEmail) {
+    if (!isAuthenticated || !isAuthorized || !userEmail) {
       setVerses([]);
       setLoading(false);
       setError(null);
@@ -31,10 +30,10 @@ export function useVerses() {
     }
 
     loadVerses();
-  }, [isAuthenticated, userEmail]);
+  }, [isAuthenticated, isAuthorized, userEmail]);
 
   const loadVerses = async () => {
-    if (!isAuthenticated || !userEmail) {
+    if (!isAuthenticated || !isAuthorized || !userEmail) {
       setVerses([]);
       setLoading(false);
       setError(null);
@@ -64,7 +63,7 @@ export function useVerses() {
       for (const [ref, localVerse] of localVerseMap) {
         if (!serverVerseMap.has(ref)) {
           debug.log('verses', 'Deleting verse from local database:', ref);
-          await db.deleteVerse(ref, localVerse.lastReviewed);
+          await db.deleteVerse(ref);
         }
       }
 
@@ -75,15 +74,11 @@ export function useVerses() {
             localVerse.text !== serverVerse.text || 
             localVerse.status !== serverVerse.status) {
           debug.log('verses', 'Updating verse in local database:', ref);
-          await db.addVerse({
-            ...serverVerse,
-            lastReviewed: serverVerse.dateAdded || new Date().toISOString(),
-            reviewCount: localVerse?.reviewCount || 0
-          });
+          await db.addVerse(convertToMainVerse(serverVerse));
         }
       }
 
-      // Convert all verses to the main Verse type and update UI
+      // Update UI with server verses immediately
       const convertedVerses = serverVerses
         .map(convertToMainVerse)
         .sort((a, b) => new Date(a.lastReviewed).getTime() - new Date(b.lastReviewed).getTime());
@@ -110,20 +105,18 @@ export function useVerses() {
     }
   };
 
-  const addVerse = async (verse: Omit<Verse, 'lastReviewed' | 'reviewCount'>) => {
-    if (!isAuthenticated || !userEmail) {
-      throw new Error('Must be authenticated to add verses');
+  const addVerse = async (verse: Omit<Verse, 'lastReviewed'>) => {
+    if (!isAuthenticated || !isAuthorized || !userEmail) {
+      throw new Error('Must be authenticated and authorized to add verses');
     }
 
     try {
       debug.log('verses', 'Starting verse addition:', { verse });
       
       // Add to local database first
-      const verseWithDefaults = {
+      const verseWithDefaults: Verse = {
         ...verse,
-        dateAdded: new Date().toISOString(),
-        lastReviewed: new Date().toISOString(),
-        reviewCount: 0
+        lastReviewed: new Date().toISOString()
       };
       debug.log('verses', 'Adding to local database:', verseWithDefaults);
       await db.addVerse(verseWithDefaults);
@@ -159,8 +152,8 @@ export function useVerses() {
   };
 
   const updateVerse = async (reference: string, updates: Partial<Verse>) => {
-    if (!isAuthenticated || !userEmail) {
-      throw new Error('Must be authenticated to update verses');
+    if (!isAuthenticated || !isAuthorized || !userEmail) {
+      throw new Error('Must be authenticated and authorized to update verses');
     }
 
     try {
@@ -200,8 +193,8 @@ export function useVerses() {
   };
 
   const deleteVerse = async (reference: string) => {
-    if (!isAuthenticated || !userEmail) {
-      throw new Error('Must be authenticated to delete verses');
+    if (!isAuthenticated || !isAuthorized || !userEmail) {
+      throw new Error('Must be authenticated and authorized to delete verses');
     }
 
     try {

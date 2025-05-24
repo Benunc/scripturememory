@@ -5,7 +5,7 @@ declare module '../hooks/useVerses' {
     verses: Verse[];
     loading: boolean;
     error: string | null;
-    addVerse: (verse: Omit<Verse, 'lastReviewed' | 'reviewCount'>) => Promise<void>;
+    addVerse: (verse: Omit<Verse, 'lastReviewed'>) => Promise<void>;
     updateVerse: (reference: string, updates: Partial<Verse>) => Promise<void>;
     deleteVerse: (reference: string) => Promise<void>;
   }

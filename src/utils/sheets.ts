@@ -3,6 +3,7 @@ import { canAccessTab, getUserTabs, rateLimiter, getAuthorizedUsers } from './au
 import { ProgressStatus } from './progress';
 import { debug, handleError } from './debug';
 import { sampleVerses } from './sampleVerses';
+import { db } from './db';
 
 const SPREADSHEET_ID = import.meta.env.VITE_GOOGLE_SHEET_ID;
 
@@ -32,17 +33,22 @@ interface ValuesResponse {
 // Ensure user's tab exists in the spreadsheet
 export const ensureUserTab = async (email: string): Promise<void> => {
   try {
+    debug.log('sheets', 'Starting ensureUserTab for:', email);
     const token = await getAccessToken();
     const tabName = email.replace(/[^a-zA-Z0-9]/g, '_');
+    debug.log('sheets', 'Generated tab name:', tabName);
 
     // First check if user is authorized at all
     const authorizedUsers = getAuthorizedUsers();
     const user = authorizedUsers.find(u => u.email === email);
     if (!user) {
+      debug.error('sheets', 'User not found in authorized users:', email);
       throw new Error('User is not authorized');
     }
+    debug.log('sheets', 'User is authorized');
 
     // Check if tab exists
+    debug.log('sheets', 'Checking if tab exists:', tabName);
     const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`,
       {
@@ -53,12 +59,14 @@ export const ensureUserTab = async (email: string): Promise<void> => {
     );
 
     if (!response.ok) {
+      debug.error('sheets', 'Failed to fetch spreadsheet:', await response.text());
       throw new Error('Failed to fetch spreadsheet');
     }
 
     const data = await response.json() as SpreadsheetResponse;
     const sheets = data.sheets || [];
     const tabExists = sheets.some((sheet) => sheet.properties.title === tabName);
+    debug.log('sheets', 'Tab exists check result:', tabExists);
 
     if (!tabExists) {
       debug.log('sheets', 'Creating new tab for user:', email);
@@ -87,10 +95,14 @@ export const ensureUserTab = async (email: string): Promise<void> => {
       );
 
       if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        debug.error('sheets', 'Failed to create user tab:', errorText);
         throw new Error('Failed to create user tab');
       }
+      debug.log('sheets', 'Successfully created new tab');
 
       // Initialize tab with headers
+      debug.log('sheets', 'Initializing tab with headers');
       const initResponse = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A1:D1:append?valueInputOption=USER_ENTERED`,
         {
@@ -106,8 +118,11 @@ export const ensureUserTab = async (email: string): Promise<void> => {
       );
 
       if (!initResponse.ok) {
+        const errorText = await initResponse.text();
+        debug.error('sheets', 'Failed to initialize user tab:', errorText);
         throw new Error('Failed to initialize user tab');
       }
+      debug.log('sheets', 'Successfully initialized tab headers');
 
       // Add sample verses
       debug.log('sheets', 'Adding sample verses for new user:', email);
@@ -131,9 +146,14 @@ export const ensureUserTab = async (email: string): Promise<void> => {
       );
 
       if (!sampleVersesResponse.ok) {
-        debug.error('sheets', 'Failed to add sample verses:', await sampleVersesResponse.text());
+        const errorText = await sampleVersesResponse.text();
+        debug.error('sheets', 'Failed to add sample verses:', errorText);
         // Don't throw here - we still want the user to be able to use the app even if sample verses fail
+      } else {
+        debug.log('sheets', 'Successfully added sample verses');
       }
+    } else {
+      debug.log('sheets', 'Tab already exists, skipping creation');
     }
   } catch (error) {
     debug.error('sheets', 'Error ensuring user tab:', error);
@@ -148,17 +168,23 @@ export const getVerses = async (userEmail: string): Promise<Verse[]> => {
   }
   
   try {
+    debug.log('sheets', 'Starting getVerses for user:', userEmail);
     rateLimiter.recordRequest(userEmail);
     const token = await getAccessToken();
     const tabName = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
+    debug.log('sheets', 'Generated tab name:', tabName);
 
     // Check if user has permission to access this tab
     if (!canAccessTab(userEmail, tabName)) {
+      debug.error('sheets', 'User does not have permission to access tab:', { userEmail, tabName });
       throw new Error('User does not have permission to access this tab');
     }
+    debug.log('sheets', 'User has permission to access tab');
 
     // Ensure user's tab exists
+    debug.log('sheets', 'Ensuring user tab exists');
     await ensureUserTab(userEmail);
+    debug.log('sheets', 'User tab ensured');
 
     debug.log('sheets', 'Fetching verses from tab:', tabName);
     const response = await fetch(
@@ -179,7 +205,13 @@ export const getVerses = async (userEmail: string): Promise<Verse[]> => {
     const data = await response.json() as ValuesResponse;
     debug.log('sheets', 'Raw response from sheets API:', data);
 
-    const verses = (data.values || []).map((row) => ({
+    // Check if we have any values
+    if (!data.values || data.values.length === 0) {
+      debug.log('sheets', 'No verses found in sheet, returning empty array');
+      return [];
+    }
+
+    const verses = data.values.map((row) => ({
       reference: row[0] || '',
       text: row[1] || '',
       status: (row[2] || 'not_started') as ProgressStatus,

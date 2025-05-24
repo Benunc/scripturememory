@@ -8,7 +8,7 @@ export async function fetchVerses(): Promise<Verse[]> {
   const token = await getAccessToken();
   if (!token) throw new Error('No access token available');
 
-  const response = await fetch(`${API_BASE}/${SHEET_ID}/values/Verses!A2:E`, {
+  const response = await fetch(`${API_BASE}/${SHEET_ID}/values/Verses!A2:D`, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -25,11 +25,10 @@ export async function fetchVerses(): Promise<Verse[]> {
     text: row[1],
     status: row[2],
     lastReviewed: row[3],
-    reviewCount: parseInt(row[4], 10),
   }));
 }
 
-export async function addVerse(verse: Omit<Verse, 'lastReviewed' | 'reviewCount'>): Promise<Verse> {
+export async function addVerse(verse: Omit<Verse, 'lastReviewed'>): Promise<Verse> {
   const token = await getAccessToken();
   if (!token) throw new Error('No access token available');
 
@@ -37,10 +36,9 @@ export async function addVerse(verse: Omit<Verse, 'lastReviewed' | 'reviewCount'
   const newVerse = {
     ...verse,
     lastReviewed: now,
-    reviewCount: 0,
   };
 
-  const response = await fetch(`${API_BASE}/${SHEET_ID}/values/Verses!A:E:append?valueInputOption=USER_ENTERED`, {
+  const response = await fetch(`${API_BASE}/${SHEET_ID}/values/Verses!A:D:append?valueInputOption=USER_ENTERED`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -52,7 +50,6 @@ export async function addVerse(verse: Omit<Verse, 'lastReviewed' | 'reviewCount'
         newVerse.text,
         newVerse.status,
         newVerse.lastReviewed,
-        newVerse.reviewCount,
       ]],
     }),
   });
@@ -88,7 +85,7 @@ export async function updateVerse(reference: string, updates: Partial<Verse>): P
 
   // Now update the specific cells
   const row = rowIndex + 1; // Convert to 1-based index
-  const range = `Verses!A${row}:E${row}`;
+  const range = `Verses!A${row}:D${row}`;
   
   const updateResponse = await fetch(`${API_BASE}/${SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',
@@ -102,7 +99,6 @@ export async function updateVerse(reference: string, updates: Partial<Verse>): P
         updates.text,
         updates.status,
         updates.lastReviewed,
-        updates.reviewCount,
       ]],
     }),
   });
@@ -116,7 +112,6 @@ export async function updateVerse(reference: string, updates: Partial<Verse>): P
     text: updates.text || '',
     status: updates.status || 'not_started',
     lastReviewed: updates.lastReviewed || new Date().toISOString(),
-    reviewCount: updates.reviewCount || 0,
   };
 }
 
@@ -144,17 +139,6 @@ export async function deleteVerse(reference: string): Promise<void> {
 
   // Now delete the row
   const row = rowIndex + 1; // Convert to 1-based index
-  const range = `Verses!A${row}:E${row}`;
+  const range = `Verses!A${row}:D${row}`;
   
-  const deleteResponse = await fetch(`${API_BASE}/${SHEET_ID}/values/${range}`, {
-    method: 'DELETE',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!deleteResponse.ok) {
-    throw new Error('Failed to delete verse');
-  }
-} 
+  const deleteResponse = await fetch(`
