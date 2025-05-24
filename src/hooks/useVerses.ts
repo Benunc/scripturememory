@@ -59,6 +59,9 @@ export function useVerses() {
       const serverVerseMap = new Map(serverVerses.map(v => [v.reference, v]));
       const localVerseMap = new Map(localVerses.map(v => [v.reference, v]));
 
+      debug.log('verses', 'Server verse references:', Array.from(serverVerseMap.keys()));
+      debug.log('verses', 'Local verse references:', Array.from(localVerseMap.keys()));
+
       // Delete verses that are no longer in the server
       for (const [ref, localVerse] of localVerseMap) {
         if (!serverVerseMap.has(ref)) {
@@ -70,6 +73,15 @@ export function useVerses() {
       // Add or update only changed verses
       for (const [ref, serverVerse] of serverVerseMap) {
         const localVerse = localVerseMap.get(ref);
+        debug.log('verses', 'Comparing verses:', { 
+          reference: ref,
+          serverVerse: serverVerse,
+          localVerse: localVerse,
+          needsUpdate: !localVerse || 
+            localVerse.text !== serverVerse.text || 
+            localVerse.status !== serverVerse.status
+        });
+        
         if (!localVerse || 
             localVerse.text !== serverVerse.text || 
             localVerse.status !== serverVerse.status) {
