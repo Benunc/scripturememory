@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import react from '@vitejs/plugin-react-swc'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -40,9 +40,9 @@ export default defineConfig({
     },
     // Ensure public assets are copied
     copyPublicDir: true,
-    // Use esbuild for everything
+    // Use SWC for everything
     target: 'esnext',
-    minify: 'esbuild',
+    minify: 'esbuild', // SWC plugin handles the minification internally
     sourcemap: false,
   },
   publicDir: 'public', // Explicitly set public directory
