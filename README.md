@@ -1,6 +1,6 @@
 # Scripture Memory
 
-A web application for memorizing Bible verses, built with React, TypeScript, and Vite. The app is deployed on GitHub Pages at [word.benandjacq.com](https://word.benandjacq.com).
+A web application for memorizing Bible verses, built with React, TypeScript, and Vite. The app is deployed on Cloudflare Pages and Workers.
 
 ## Architecture
 
@@ -8,10 +8,10 @@ A web application for memorizing Bible verses, built with React, TypeScript, and
 - Built with React 18 and TypeScript
 - Uses Chakra UI for styling and components
 - Vite for build tooling and development server
-- Deployed via GitHub Pages with a custom domain
+- Deployed via Cloudflare Pages
 
 ### Backend
-- Google Sheets API for data storage
+- Cloudflare D1 Database for data storage
 - IndexedDB for local caching and offline support
 - Implements a sync service for offline changes
 
@@ -65,8 +65,8 @@ Debug logs are prefixed with module names (e.g., `[AUTH]`, `[SHEETS]`) for easy 
 
 ### Build and Deploy
 1. Build the app: `npm run build`
-2. The GitHub Actions workflow will automatically deploy to GitHub Pages
-3. Custom domain configuration is handled in the GitHub repository settings
+2. Deploy to Cloudflare: `npm run deploy`
+3. Custom domain configuration is handled in the Cloudflare dashboard
 
 ## Project Structure
 - `/src`: Source code
@@ -74,7 +74,7 @@ Debug logs are prefixed with module names (e.g., `[AUTH]`, `[SHEETS]`) for easy 
   - `/utils`: Utility functions and services
   - `/hooks`: Custom React hooks
 - `/public`: Static assets
-- `/.github/workflows`: GitHub Actions workflows
+- `/workers`: Cloudflare Workers backend
 
 ## Features
 - Verse memorization with progressive word reveal

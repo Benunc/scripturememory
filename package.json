@@ -1,6 +1,9 @@
 {
   "name": "scripture-memory",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "workspaces": [
     "frontend",
     "workers",
@@ -9,9 +12,7 @@
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
     "dev:workers": "cd workers && npm run dev",
-    "build": "npm run build:frontend && npm run build:workers",
-    "build:frontend": "cd frontend && npm run build",
-    "build:workers": "cd workers && npm run build",
+    "build": "cd frontend && npm run build",
     "deploy": "npm run build && cd workers && npm run deploy"
   },
   "dependencies": {
