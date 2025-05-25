@@ -12,31 +12,9 @@
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
     "dev:workers": "cd workers && npm run dev",
-    "build": "cd frontend && rm -rf node_modules && npm install && npm run build",
-    "deploy": "npm run build && cd workers && npm run deploy",
+    "build": "cd frontend && npm run build",
+    "deploy": "cd workers && npx wrangler deploy",
     "dev": "cd frontend && npm run dev",
     "start": "cd frontend && npm run preview"
-  },
-  "dependencies": {
-    "@chakra-ui/react": "2.8.2",
-    "@chakra-ui/system": "2.6.2",
-    "@emotion/react": "11.11.3",
-    "@emotion/styled": "11.11.0",
-    "@types/node": "20.11.19",
-    "@vercel/node": "^5.1.16",
-    "framer-motion": "11.0.5",
-    "googleapis": "^133.0.0",
-    "react": "18.2.0",
-    "react-dom": "18.2.0"
-  },
-  "devDependencies": {
-    "@types/react": "18.2.55",
-    "@types/react-dom": "18.2.19",
-    "@vitejs/plugin-react": "4.2.1",
-    "eslint": "8.56.0",
-    "eslint-plugin-react-hooks": "4.6.0",
-    "eslint-plugin-react-refresh": "0.4.5",
-    "typescript": "5.3.3",
-    "vite": "5.1.3"
   }
 }
