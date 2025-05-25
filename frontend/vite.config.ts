@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react-swc'
+import react from '@vitejs/plugin-react'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -40,22 +40,11 @@ export default defineConfig({
     },
     // Ensure public assets are copied
     copyPublicDir: true,
-    // Use SWC for everything
+    // Use esbuild for everything
     target: 'esnext',
-    minify: 'esbuild', // SWC plugin handles the minification internally
+    minify: 'esbuild',
     sourcemap: false,
   },
   publicDir: 'public', // Explicitly set public directory
   assetsInclude: ['**/*.svg'], // Explicitly include SVG files
-  optimizeDeps: {
-    esbuildOptions: {
-      target: 'esnext',
-      platform: 'node',
-    },
-  },
-  // Force Vite to use esbuild for everything
-  esbuild: {
-    target: 'esnext',
-    platform: 'node',
-  },
 })
