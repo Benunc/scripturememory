@@ -40,7 +40,17 @@ export default defineConfig({
     },
     // Ensure public assets are copied
     copyPublicDir: true,
+    // Add platform-specific optimizations
+    target: 'esnext',
+    minify: 'esbuild',
+    sourcemap: false,
   },
   publicDir: 'public', // Explicitly set public directory
-  assetsInclude: ['**/*.svg'] // Explicitly include SVG files
+  assetsInclude: ['**/*.svg'], // Explicitly include SVG files
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'esnext',
+      platform: 'node',
+    },
+  },
 })
