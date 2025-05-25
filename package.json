@@ -1,13 +1,18 @@
 {
   "name": "scripture-memory",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "workspaces": [
+    "frontend",
+    "workers",
+    "shared"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build && node scripts/update-index.js",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:workers": "cd workers && npm run dev",
+    "build": "npm run build:frontend && npm run build:workers",
+    "build:frontend": "cd frontend && npm run build",
+    "build:workers": "cd workers && npm run build",
+    "deploy": "npm run build && cd workers && npm run deploy"
   },
   "dependencies": {
     "@chakra-ui/react": "2.8.2",
