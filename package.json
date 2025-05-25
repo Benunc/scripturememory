@@ -12,8 +12,10 @@
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
     "dev:workers": "cd workers && npm run dev",
-    "build": "cd frontend && npm run build",
-    "deploy": "npm run build && cd workers && npm run deploy"
+    "build": "cd frontend && rm -rf node_modules && npm install && npm run build",
+    "deploy": "npm run build && cd workers && npm run deploy",
+    "dev": "cd frontend && npm run dev",
+    "start": "cd frontend && npm run preview"
   },
   "dependencies": {
     "@chakra-ui/react": "2.8.2",

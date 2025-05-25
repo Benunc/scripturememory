@@ -40,7 +40,7 @@ export default defineConfig({
     },
     // Ensure public assets are copied
     copyPublicDir: true,
-    // Add platform-specific optimizations
+    // Use esbuild for everything
     target: 'esnext',
     minify: 'esbuild',
     sourcemap: false,
@@ -52,5 +52,10 @@ export default defineConfig({
       target: 'esnext',
       platform: 'node',
     },
+  },
+  // Force Vite to use esbuild for everything
+  esbuild: {
+    target: 'esnext',
+    platform: 'node',
   },
 })
