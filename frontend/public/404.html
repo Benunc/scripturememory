@@ -4,8 +4,10 @@
     <meta charset="utf-8">
     <title>Redirecting...</title>
     <script>
-      // Redirect to index.html with the current path
-      window.location.href = '/index.html' + window.location.pathname + window.location.search;
+      // Only redirect if we're not already at index.html
+      if (!window.location.pathname.includes('index.html')) {
+        window.location.href = '/index.html' + window.location.pathname + window.location.search;
+      }
     </script>
   </head>
   <body>

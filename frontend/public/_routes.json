@@ -4,16 +4,24 @@
   "exclude": ["/assets/*", "/images/*"],
   "routes": [
     {
+      "src": "/auth/verify",
+      "dest": "/index.html",
+      "status": 200
+    },
+    {
       "src": "/auth/.*",
-      "dest": "/index.html"
+      "dest": "/index.html",
+      "status": 200
     },
     {
       "src": "/verses/.*",
-      "dest": "/index.html"
+      "dest": "/index.html",
+      "status": 200
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/index.html",
+      "status": 200
     }
   ]
 } 
