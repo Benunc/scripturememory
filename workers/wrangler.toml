@@ -13,4 +13,4 @@ database_name = "scripture-memory"
 database_id = "ef894297-d95a-4df9-bccf-3ac6be4c1cc7"
 
 [vars]
-ENVIRONMENT = "development" 
+ENVIRONMENT = "production" 
