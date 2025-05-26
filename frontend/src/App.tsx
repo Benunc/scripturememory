@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack, Flex } from '@chakra-ui/react'
 import { useState, useEffect, useRef } from 'react'
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AddVerse } from './components/AddVerse'
 import { VerseList } from './components/VerseList'
 import { FreeVersion } from './components/FreeVersion'
