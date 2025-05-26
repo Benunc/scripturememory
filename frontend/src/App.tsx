@@ -120,14 +120,6 @@ function App() {
           } 
         />
         <Route 
-          path="/verify" 
-          element={
-            <React.Suspense fallback={<div>Loading...</div>}>
-              <SimpleVerify />
-            </React.Suspense>
-          } 
-        />
-        <Route 
           path="/auth/verify" 
           element={
             <React.Suspense fallback={<div>Loading...</div>}>
