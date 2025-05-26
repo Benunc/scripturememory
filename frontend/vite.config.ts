@@ -9,13 +9,10 @@ export default defineConfig({
     {
       name: 'copy-cloudflare-files',
       closeBundle() {
-        // Copy _headers and _routes.json to dist
-        const files = ['_headers', '_routes.json']
-        files.forEach(file => {
-          const src = resolve(__dirname, 'public', file)
-          const dest = resolve(__dirname, 'dist', file)
-          require('fs').copyFileSync(src, dest)
-        })
+        // Copy _headers to dist
+        const src = resolve(__dirname, 'public', '_headers')
+        const dest = resolve(__dirname, 'dist', '_headers')
+        require('fs').copyFileSync(src, dest)
       }
     }
   ],

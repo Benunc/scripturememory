@@ -1,8 +1,9 @@
 import { Verse } from '../types';
 
-// Use relative URLs by default, which will automatically use the same host/port as the frontend
-// This makes it work seamlessly in development without port configuration
-const API_URL = import.meta.env.VITE_API_URL || '';
+// Use worker URL in production, relative URL in development
+const API_URL = import.meta.env.PROD 
+  ? 'https://scripture-memory.ben-2e6.workers.dev'
+  : (import.meta.env.VITE_API_URL || '');
 
 interface ApiResponse<T> {
   data?: T;
