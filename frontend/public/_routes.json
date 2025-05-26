@@ -1,25 +1,8 @@
 {
   "version": 1,
   "include": ["/*"],
+  "exclude": ["/assets/*", "/images/*"],
   "routes": [
-    {
-      "src": "/assets/.*\\.css$",
-      "headers": {
-        "Content-Type": "text/css"
-      }
-    },
-    {
-      "src": "/assets/.*\\.js$",
-      "headers": {
-        "Content-Type": "application/javascript"
-      }
-    },
-    {
-      "src": "/assets/.*\\.svg$",
-      "headers": {
-        "Content-Type": "image/svg+xml"
-      }
-    },
     {
       "src": "/(.*)",
       "dest": "/index.html"
