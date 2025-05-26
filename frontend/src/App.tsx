@@ -102,8 +102,24 @@ function SimpleVerify() {
 }
 
 function CatchAll() {
-  console.log('Catch-all route rendered');
-  return <div>Catch-all route</div>;
+  const toast = useToast();
+  const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    // Only show the toast if we're not authenticated and the URL contains a token
+    if (!isAuthenticated && window.location.pathname.includes('/auth/verify')) {
+      toast({
+        title: "Invalid Magic Link",
+        description: "This magic link is no longer valid. Please sign in again to continue.",
+        status: "warning",
+        duration: 8000,
+        isClosable: true,
+        position: "top",
+      });
+    }
+  }, [isAuthenticated, toast]);
+
+  return <FreeVersion />;
 }
 
 function App() {

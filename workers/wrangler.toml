@@ -2,6 +2,9 @@ name = "scripture-memory"
 main = "src/index.ts"
 compatibility_date = "2024-02-20"
 
+[vars]
+ENVIRONMENT = "production"
+
 [[d1_databases]]
 binding = "DB_DEV"
 database_name = "scripture-memory-dev"
@@ -12,5 +15,15 @@ binding = "DB_PROD"
 database_name = "scripture-memory"
 database_id = "ef894297-d95a-4df9-bccf-3ac6be4c1cc7"
 
-[vars]
-ENVIRONMENT = "production" 
+[env.development]
+ENVIRONMENT = "development"
+
+[[env.development.d1_databases]]
+binding = "DB_DEV"
+database_name = "scripture-memory-dev"
+database_id = "d2e6214f-b924-47ee-a138-025dcf9c8256"
+
+[[env.development.d1_databases]]
+binding = "DB_PROD"
+database_name = "scripture-memory"
+database_id = "ef894297-d95a-4df9-bccf-3ac6be4c1cc7" 

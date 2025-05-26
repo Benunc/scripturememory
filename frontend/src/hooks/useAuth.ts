@@ -55,6 +55,7 @@ export const useAuth = () => {
   const verifyToken = async (magicToken: string) => {
     try {
       console.log('Starting token verification in useAuth');
+      console.log('Current window location:', window.location.href);
       setIsLoading(true);
       setError(null);
       
@@ -69,6 +70,8 @@ export const useAuth = () => {
       if (response.data) {
         console.log('Verification successful, setting session');
         const { token: sessionToken, email } = response.data;
+        console.log('Session token:', sessionToken);
+        console.log('Email:', email);
         
         // Store session
         localStorage.setItem('session_token', sessionToken);

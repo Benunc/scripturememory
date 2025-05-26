@@ -23,6 +23,10 @@ const recordRequest = (email: string) => {
 
 // Helper to get the correct database binding
 const getDB = (env: Env) => {
+  // In local development, always use DB_DEV
+  if (env.ENVIRONMENT === 'development' || !env.ENVIRONMENT) {
+    return env.DB_DEV;
+  }
   return env.ENVIRONMENT === 'production' ? env.DB_PROD : env.DB_DEV;
 };
 
@@ -51,7 +55,7 @@ export const handleAuth = {
       ).bind(token, email, expiresAt).run();
 
       // Create magic link URL
-      const magicLink = `${request.headers.get('origin')}/verify?token=${token}`;
+      const magicLink = `${request.headers.get('origin')}/auth/verify?token=${token}`;
 
       // Send email using Cloudflare Email Workers
       const emailResponse = await fetch('https://api.mailchannels.net/tx/v1/send', {
@@ -150,11 +154,24 @@ export const handleAuth = {
         token: sessionToken,
         email: result.email
       }), {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        }
       });
     } catch (error) {
       console.error('Error in verifyMagicLink:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      return new Response('Internal Server Error', { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        }
+      });
     }
   }
 }; 

@@ -6,15 +6,20 @@ import { handleVerses } from './verses/index';
 // Create a new router
 const router = Router();
 
-// Add CORS headers
+// Add CORS headers to all responses
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
 };
 
-// Handle CORS preflight
-router.options('*', () => new Response(null, { headers: corsHeaders }));
+// Handle CORS preflight requests
+router.options('*', () => {
+  return new Response(null, {
+    headers: corsHeaders
+  });
+});
 
 // Auth routes
 router.post('/auth/magic-link', handleAuth.sendMagicLink);
@@ -28,6 +33,28 @@ router.delete('/verses/:reference', handleVerses.deleteVerse);
 
 // 404 handler
 router.all('*', () => new Response('Not Found', { status: 404 }));
+
+// Add CORS headers to all responses
+router.all('*', async (request: Request, env: Env) => {
+  try {
+    const response = await router.handle(request, env);
+    const newHeaders = new Headers(response.headers);
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      newHeaders.set(key, value);
+    });
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders
+    });
+  } catch (error) {
+    console.error('Error handling request:', error);
+    return new Response('Internal Server Error', {
+      status: 500,
+      headers: corsHeaders
+    });
+  }
+});
 
 // Export the fetch handler
 export default {

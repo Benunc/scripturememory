@@ -3,7 +3,7 @@ import { Verse } from '../types';
 // Use worker URL in production, relative URL in development
 const API_URL = import.meta.env.PROD 
   ? 'https://scripture-memory.ben-2e6.workers.dev'
-  : 'http://localhost:8787';
+  : '/api';  // Use /api prefix in development
 
 interface ApiResponse<T> {
   data?: T;
@@ -29,10 +29,9 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     const data = await response.json();
     console.log('Response data:', data);
     return { data: data as T };
-  } catch {
-    // If JSON parsing fails but response was successful, return undefined
-    console.log('Response is not JSON but was successful');
-    return { data: undefined as unknown as T };
+  } catch (error) {
+    console.error('Failed to parse JSON response:', error);
+    return { error: 'Invalid response format' };
   }
 }
 
@@ -48,11 +47,17 @@ export async function getMagicLink(email: string): Promise<ApiResponse<{ token: 
 
 export async function verifyMagicLink(token: string): Promise<ApiResponse<{ token: string; email: string }>> {
   console.log('Making verification request to:', `${API_URL}/auth/verify?token=${token}`);
-  const response = await fetch(`${API_URL}/auth/verify?token=${token}`);
-  console.log('Verification response:', response);
-  const result = await handleResponse<{ token: string; email: string }>(response);
-  console.log('Verification result:', result);
-  return result;
+  try {
+    const response = await fetch(`${API_URL}/auth/verify?token=${token}`);
+    console.log('Verification response status:', response.status);
+    console.log('Verification response headers:', Object.fromEntries(response.headers.entries()));
+    const result = await handleResponse<{ token: string; email: string }>(response);
+    console.log('Verification result:', result);
+    return result;
+  } catch (error) {
+    console.error('Error making verification request:', error);
+    throw error;
+  }
 }
 
 export async function getVerses(token: string): Promise<ApiResponse<Verse[]>> {

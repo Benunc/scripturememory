@@ -19,6 +19,7 @@ export function VerifyToken() {
   useEffect(() => {
     console.log('=== VerifyToken useEffect running ===');
     console.log('Token from URL:', token);
+    console.log('Current window location:', window.location.href);
     
     const verify = async () => {
       if (!token || hasVerified.current) {
@@ -37,9 +38,11 @@ export function VerifyToken() {
         
         if (success) {
           console.log('Verification successful, will redirect in 1 second');
+          // Replace the current URL with the home page to prevent back navigation
+          window.history.replaceState({}, '', '/');
           setTimeout(() => {
             console.log('Navigating to home page');
-            navigate('/');
+            navigate('/', { replace: true });
           }, 1000);
         } else {
           console.log('Verification returned false');
