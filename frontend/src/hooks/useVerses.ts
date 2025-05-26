@@ -102,8 +102,14 @@ export function useVerses() {
         throw new Error(response.error);
       }
 
-      // Refresh verses after successful update
-      await loadVerses();
+      // Update local state instead of refetching
+      setVerses(prevVerses => 
+        prevVerses.map(verse => 
+          verse.reference === reference 
+            ? { ...verse, ...updates }
+            : verse
+        )
+      );
 
       toast({
         title: "Success",
