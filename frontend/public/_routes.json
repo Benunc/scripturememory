@@ -4,6 +4,14 @@
   "exclude": ["/assets/*", "/images/*"],
   "routes": [
     {
+      "src": "/auth/.*",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/verses/.*",
+      "dest": "/index.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
