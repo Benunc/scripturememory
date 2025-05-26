@@ -60,11 +60,12 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded, addVerse }) =>
       });
     } catch (error) {
       debug.error('verses', 'Error adding verse:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add verse. Please try again.';
       toast({
         title: 'Cannot Add Verse',
-        description: error instanceof Error && error.message.includes('already exists') 
+        description: errorMessage.includes('already exists') 
           ? 'This verse reference already exists. Please delete the existing verse first, then try adding it again.'
-          : 'Failed to add verse. Please try again.',
+          : errorMessage,
         status: 'warning',
         duration: 8000,
         isClosable: true,

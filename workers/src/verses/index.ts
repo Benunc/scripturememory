@@ -107,10 +107,6 @@ export const handleVerses = {
 
       const verse: Verse = await request.json();
       
-      if (!verse.text) {
-        return new Response('Text is required', { status: 400 });
-      }
-
       // Verify ownership
       const existing = await getDB(env).prepare(
         'SELECT * FROM verses WHERE reference = ? AND email = ?'
@@ -120,15 +116,35 @@ export const handleVerses = {
         return new Response('Verse not found or unauthorized', { status: 404 });
       }
 
+      // Only update fields that are provided
+      const updates: string[] = [];
+      const bindings: any[] = [];
+
+      if (verse.text !== undefined) {
+        updates.push('text = ?');
+        bindings.push(verse.text);
+      }
+
+      if (verse.translation !== undefined) {
+        updates.push('translation = ?');
+        bindings.push(verse.translation);
+      }
+
+      if (verse.status !== undefined) {
+        updates.push('status = ?');
+        bindings.push(verse.status);
+      }
+
+      if (updates.length === 0) {
+        return new Response('No updates provided', { status: 400 });
+      }
+
+      // Add reference and email to bindings
+      bindings.push(reference, email);
+
       await getDB(env).prepare(
-        'UPDATE verses SET text = ?, translation = ?, status = ? WHERE reference = ? AND email = ?'
-      ).bind(
-        verse.text,
-        verse.translation || 'NIV',
-        verse.status || 'not_started',
-        reference,
-        email
-      ).run();
+        `UPDATE verses SET ${updates.join(', ')} WHERE reference = ? AND email = ?`
+      ).bind(...bindings).run();
 
       return new Response(null, { status: 204 });
     } catch (error) {

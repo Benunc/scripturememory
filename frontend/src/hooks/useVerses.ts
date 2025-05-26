@@ -84,7 +84,10 @@ export function useVerses() {
       debug.log('verses', 'Verse addition completed successfully');
     } catch (err) {
       debug.error('verses', 'Error adding verse:', err);
-      throw err;
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Failed to add verse');
     }
   };
 
