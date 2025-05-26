@@ -31,25 +31,11 @@ export function VerifyToken() {
         setIsVerifying(true);
         hasVerified.current = true;
         
-        // Use the worker URL directly
-        const apiUrl = `https://scripture-memory.ben-2e6.workers.dev/auth/verify?token=${token}`;
-        console.log('Making API call to:', apiUrl);
+        // Use the verifyToken function from useAuth
+        const success = await verifyToken(token);
+        console.log('Verification result:', success);
         
-        const response = await fetch(apiUrl, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Verification failed: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        console.log('Verification result:', result);
-        
-        if (result) {
+        if (success) {
           console.log('Verification successful, will redirect in 1 second');
           setTimeout(() => {
             console.log('Navigating to home page');
@@ -68,7 +54,7 @@ export function VerifyToken() {
     };
 
     verify();
-  }, [token, navigate]);
+  }, [token, navigate, verifyToken]);
 
   console.log('Current state:', { token, verificationError, isVerifying });
 
