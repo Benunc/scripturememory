@@ -1,7 +1,8 @@
 import { D1Database } from '@cloudflare/workers-types';
 
 export interface Env {
-  DB: D1Database;
+  DB_DEV: D1Database;
+  DB_PROD: D1Database;
   ENVIRONMENT: string;
 }
 

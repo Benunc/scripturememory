@@ -1,8 +1,13 @@
 import { Env, Verse } from '../types';
 
+// Helper to get the correct database binding
+const getDB = (env: Env) => {
+  return env.ENVIRONMENT === 'production' ? env.DB_PROD : env.DB_DEV;
+};
+
 // Helper to get user email from session token
 const getUserEmail = async (token: string, env: Env): Promise<string | null> => {
-  const result = await env.DB.prepare(
+  const result = await getDB(env).prepare(
     'SELECT email FROM sessions WHERE token = ? AND expires_at > ?'
   ).bind(token, Date.now()).first<{ email: string }>();
   return result?.email || null;
@@ -24,7 +29,7 @@ export const handleVerses = {
         return new Response('Invalid or expired session', { status: 401 });
       }
 
-      const verses = await env.DB.prepare(
+      const verses = await getDB(env).prepare(
         'SELECT * FROM verses WHERE email = ? ORDER BY created_at DESC'
       ).bind(email).all();
 
@@ -52,25 +57,26 @@ export const handleVerses = {
         return new Response('Invalid or expired session', { status: 401 });
       }
 
-      const verse: Verse = await request.json();
-      
+      const verse = await request.json() as Verse;
       if (!verse.reference || !verse.text) {
         return new Response('Reference and text are required', { status: 400 });
       }
 
-      await env.DB.prepare(
-        'INSERT INTO verses (email, reference, text, translation, created_at) VALUES (?, ?, ?, ?, ?)'
-      ).bind(
-        email,
-        verse.reference,
-        verse.text,
-        verse.translation || 'NIV',
-        Date.now()
-      ).run();
+      // Check if verse already exists
+      const existing = await getDB(env).prepare(
+        'SELECT * FROM verses WHERE email = ? AND reference = ?'
+      ).bind(email, verse.reference).first();
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      if (existing) {
+        return new Response('Verse already exists', { status: 409 });
+      }
+
+      // Insert new verse
+      await getDB(env).prepare(
+        'INSERT INTO verses (email, reference, text, created_at) VALUES (?, ?, ?, ?)'
+      ).bind(email, verse.reference, verse.text, Date.now()).run();
+
+      return new Response('Verse added successfully', { status: 201 });
     } catch (error) {
       console.error('Error adding verse:', error);
       return new Response('Internal Server Error', { status: 500 });
@@ -106,7 +112,7 @@ export const handleVerses = {
       }
 
       // Verify ownership
-      const existing = await env.DB.prepare(
+      const existing = await getDB(env).prepare(
         'SELECT * FROM verses WHERE reference = ? AND email = ?'
       ).bind(reference, email).first();
 
@@ -114,7 +120,7 @@ export const handleVerses = {
         return new Response('Verse not found or unauthorized', { status: 404 });
       }
 
-      await env.DB.prepare(
+      await getDB(env).prepare(
         'UPDATE verses SET text = ?, translation = ? WHERE reference = ? AND email = ?'
       ).bind(
         verse.text,
@@ -145,27 +151,26 @@ export const handleVerses = {
         return new Response('Invalid or expired session', { status: 401 });
       }
 
-      const url = new URL(request.url);
-      const reference = decodeURIComponent(url.pathname.split('/').pop() || '');
-
+      const { reference } = await request.json() as { reference: string };
       if (!reference) {
-        return new Response('Verse reference is required', { status: 400 });
+        return new Response('Reference is required', { status: 400 });
       }
 
-      // Verify ownership
-      const existing = await env.DB.prepare(
-        'SELECT * FROM verses WHERE reference = ? AND email = ?'
-      ).bind(reference, email).first();
+      // Check if verse exists
+      const existing = await getDB(env).prepare(
+        'SELECT * FROM verses WHERE email = ? AND reference = ?'
+      ).bind(email, reference).first();
 
       if (!existing) {
-        return new Response('Verse not found or unauthorized', { status: 404 });
+        return new Response('Verse not found', { status: 404 });
       }
 
-      await env.DB.prepare(
-        'DELETE FROM verses WHERE reference = ? AND email = ?'
-      ).bind(reference, email).run();
+      // Delete verse
+      await getDB(env).prepare(
+        'DELETE FROM verses WHERE email = ? AND reference = ?'
+      ).bind(email, reference).run();
 
-      return new Response(null, { status: 204 });
+      return new Response('Verse deleted successfully', { status: 200 });
     } catch (error) {
       console.error('Error deleting verse:', error);
       return new Response('Internal Server Error', { status: 500 });

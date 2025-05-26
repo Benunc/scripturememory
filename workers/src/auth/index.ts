@@ -21,12 +21,16 @@ const recordRequest = (email: string) => {
   rateLimits.set(email, userRequests);
 };
 
+// Helper to get the correct database binding
+const getDB = (env: Env) => {
+  return env.ENVIRONMENT === 'production' ? env.DB_PROD : env.DB_DEV;
+};
+
 export const handleAuth = {
   // Send magic link
   sendMagicLink: async (request: Request, env: Env): Promise<Response> => {
     try {
-      const { email } = await request.json();
-      
+      const { email } = await request.json() as { email: string };
       if (!email) {
         return new Response('Email is required', { status: 400 });
       }
@@ -37,18 +41,60 @@ export const handleAuth = {
 
       recordRequest(email);
 
-      // Generate magic link token
+      // Generate token
       const token = await generateToken();
       const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
 
-      // Store token in D1
-      await env.DB.prepare(
+      // Store in D1
+      await getDB(env).prepare(
         'INSERT INTO magic_links (token, email, expires_at) VALUES (?, ?, ?)'
       ).bind(token, email, expiresAt).run();
 
-      // In production, you would send an email here
-      // For development, we'll just return the token
-      return new Response(JSON.stringify({ token }), {
+      // Create magic link URL
+      const magicLink = `${request.headers.get('origin')}/verify?token=${token}`;
+
+      // Send email using Cloudflare Email Workers
+      const emailResponse = await fetch('https://api.mailchannels.net/tx/v1/send', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          personalizations: [
+            {
+              to: [{ email }],
+            },
+          ],
+          from: {
+            email: 'noreply@scripturememory.pages.dev',
+            name: 'Scripture Memory',
+          },
+          subject: 'Your Magic Link for Scripture Memory',
+          content: [
+            {
+              type: 'text/plain',
+              value: `Click the link below to sign in to Scripture Memory:\n\n${magicLink}\n\nThis link will expire in 15 minutes.`,
+            },
+            {
+              type: 'text/html',
+              value: `
+                <h1>Welcome to Scripture Memory</h1>
+                <p>Click the link below to sign in:</p>
+                <p><a href="${magicLink}">Sign in to Scripture Memory</a></p>
+                <p>This link will expire in 15 minutes.</p>
+                <p>If you didn't request this link, you can safely ignore this email.</p>
+              `,
+            },
+          ],
+        }),
+      });
+
+      if (!emailResponse.ok) {
+        console.error('Email sending error:', await emailResponse.text());
+        throw new Error('Failed to send magic link email');
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
         headers: { 'Content-Type': 'application/json' }
       });
     } catch (error) {
@@ -73,7 +119,7 @@ export const handleAuth = {
 
       // Verify token in D1
       console.log('Querying database for token...');
-      const result = await env.DB.prepare(
+      const result = await getDB(env).prepare(
         'SELECT * FROM magic_links WHERE token = ? AND expires_at > ?'
       ).bind(token, Date.now()).first();
       
@@ -86,7 +132,7 @@ export const handleAuth = {
 
       console.log('Token found, generating session...');
       // Delete used token
-      await env.DB.prepare(
+      await getDB(env).prepare(
         'DELETE FROM magic_links WHERE token = ?'
       ).bind(token).run();
 
@@ -95,7 +141,7 @@ export const handleAuth = {
       const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
       // Store session in D1
-      await env.DB.prepare(
+      await getDB(env).prepare(
         'INSERT INTO sessions (token, email, expires_at) VALUES (?, ?, ?)'
       ).bind(sessionToken, result.email, expiresAt).run();
 
