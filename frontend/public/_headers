@@ -3,7 +3,19 @@
   X-Content-Type-Options: nosniff
 
 /assets/*
-  Content-Type: text/javascript
+  Content-Type: application/javascript
+  X-Content-Type-Options: nosniff
+
+/assets/*.css
+  Content-Type: text/css
+  X-Content-Type-Options: nosniff
+
+/assets/*.js
+  Content-Type: application/javascript
+  X-Content-Type-Options: nosniff
+
+/assets/*.svg
+  Content-Type: image/svg+xml
   X-Content-Type-Options: nosniff
 
 /*.js
@@ -12,8 +24,4 @@
 
 /*.mjs
   Content-Type: text/javascript
-  X-Content-Type-Options: nosniff
-
-/*.svg
-  Content-Type: image/svg+xml
   X-Content-Type-Options: nosniff 
