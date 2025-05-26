@@ -110,23 +110,8 @@ export function useVerses() {
             : verse
         )
       );
-
-      toast({
-        title: "Success",
-        description: "Verse updated successfully",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
     } catch (err) {
       debug.error('verses', 'Error updating verse:', err);
-      toast({
-        title: "Error",
-        description: "Failed to update verse",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
       throw err;
     }
   };

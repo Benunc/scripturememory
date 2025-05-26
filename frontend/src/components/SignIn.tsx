@@ -15,19 +15,22 @@ import {
   ModalBody,
   ModalCloseButton,
   useDisclosure,
+  Link
 } from '@chakra-ui/react';
-import { useAuth } from '../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+import { useAuthContext } from '../contexts/AuthContext';
 
 interface SignInProps {
-  onClose?: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export function SignIn({ onClose }: SignInProps) {
+export function SignIn({ isOpen, onClose }: SignInProps) {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { isOpen, onOpen, onClose: onModalClose } = useDisclosure();
-  const { signIn } = useAuth();
+  const { signIn } = useAuthContext();
   const toast = useToast();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,11 +38,19 @@ export function SignIn({ onClose }: SignInProps) {
 
     try {
       await signIn(email, false);
-      onOpen();
+      toast({
+        title: "Magic Link Sent",
+        description: "Check your email for a sign-in link",
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
+      onClose();
     } catch (error) {
+      console.error('Error sending magic link:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to send magic link",
+        description: error instanceof Error ? error.message : 'Failed to send magic link',
         status: "error",
         duration: 5000,
         isClosable: true,
@@ -50,49 +61,44 @@ export function SignIn({ onClose }: SignInProps) {
   };
 
   return (
-    <>
-      <Box as="form" onSubmit={handleSubmit}>
-        <VStack spacing={4}>
-          <FormControl isRequired>
-            <FormLabel>Email</FormLabel>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-            />
-          </FormControl>
-          <Button
-            type="submit"
-            colorScheme="blue"
-            width="full"
-            isLoading={isLoading}
-          >
-            Sign In
-          </Button>
-        </VStack>
-      </Box>
-
-      <Modal isOpen={isOpen} onClose={onModalClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Check Your Email</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>Sign In</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody pb={6}>
+          <form onSubmit={handleSubmit}>
             <VStack spacing={4}>
-              <Text>
-                If an account exists with this email, you will receive a magic link shortly.
-              </Text>
-              <Text fontSize="sm" color="gray.500">
-                Check your spam folder if you don't see it.
-              </Text>
-              <Text fontSize="sm" color="gray.500">
-                Click the link in your email to sign in. You can close this window once you've clicked the link.
+              <FormControl isRequired>
+                <FormLabel>Email</FormLabel>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                />
+              </FormControl>
+              <Button
+                type="submit"
+                colorScheme="blue"
+                width="full"
+                isLoading={isLoading}
+              >
+                Send Magic Link
+              </Button>
+              <Text fontSize="sm" color="gray.600">
+                Don't have an account?{' '}
+                <Link color="blue.500" onClick={() => {
+                  onClose();
+                  navigate('/register');
+                }}>
+                  Create one
+                </Link>
               </Text>
             </VStack>
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-    </>
+          </form>
+        </ModalBody>
+      </ModalContent>
+    </Modal>
   );
 } 

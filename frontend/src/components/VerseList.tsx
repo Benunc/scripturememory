@@ -69,7 +69,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     }
   }));
 
-  const handleStatusChange = async (reference: string, newStatus: ProgressStatus) => {
+  const handleStatusChange = async (reference: string, newStatus: ProgressStatus, showToast = true) => {
     if (!userEmail) {
       debug.error('verses', 'Cannot update status: user email is null');
       return;
@@ -77,15 +77,26 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
 
     try {
       await onStatusChange(reference, newStatus);
+      if (showToast) {
+        toast({
+          title: "Success",
+          description: "Verse status updated",
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
     } catch (error) {
       console.error('Error updating verse status:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update verse status",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
+      if (showToast) {
+        toast({
+          title: "Error",
+          description: "Failed to update verse status",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+      }
     }
   };
 
@@ -103,6 +114,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     const nextWordIndex = revealedWords.length;
     if (nextWordIndex < words.length) {
       setRevealedWords(prev => [...prev, nextWordIndex]);
+      
+      // Update status to In Progress on first word reveal if Not Started
+      if (nextWordIndex === 0 && verse.status === ProgressStatus.NotStarted) {
+        void handleStatusChange(reference, ProgressStatus.InProgress, false);
+      }
     }
   };
 
@@ -127,12 +143,16 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
         // If this is the first time showing the verse after clicking Start Memorizing
         const verse = verses.find(v => v.reference === reference);
         if (verse && verse.status === ProgressStatus.NotStarted) {
-          handleStatusChange(reference, ProgressStatus.InProgress);
+          void handleStatusChange(reference, ProgressStatus.InProgress, false);
         }
       }
       
       return newState;
     });
+  };
+
+  const handleManualStatusChange = (reference: string, newStatus: ProgressStatus) => {
+    void handleStatusChange(reference, newStatus, true);
   };
 
   const handleDeleteClick = (reference: string) => {
@@ -240,76 +260,80 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
               >
                 <Text>{renderVerseText(verse)}</Text>
               </Box>
-              <Flex gap={2} wrap="wrap" role="toolbar" aria-label={`Controls for ${verse.reference}`}>
-                {activeVerseId !== verse.reference ? (
-                  <Button
-                    size="sm"
-                    colorScheme="blue"
-                    onClick={() => handleStart(verse.reference)}
-                    aria-label={`Start memorizing ${verse.reference}`}
-                  >
-                    Start Memorizing
-                  </Button>
-                ) : (
-                  <>
-                    {revealedWords.length >= verse.text.split(' ').length ? (
-                      <Button
-                        size="sm"
-                        colorScheme="orange"
-                        onClick={() => handleReset(verse.reference)}
-                        aria-label={`Reset memorization for ${verse.reference}`}
-                      >
-                        Reset
-                      </Button>
-                    ) : (
-                      <>
+              <Flex gap={2} wrap="wrap" role="toolbar" aria-label={`Controls for ${verse.reference}`} justify="space-between">
+                <Flex gap={2} wrap="wrap">
+                  {activeVerseId !== verse.reference ? (
+                    <Button
+                      size="sm"
+                      variant="solid"
+                      onClick={() => handleStart(verse.reference)}
+                      aria-label={`Start memorizing ${verse.reference}`}
+                    >
+                      Start Memorizing
+                    </Button>
+                  ) : (
+                    <>
+                      {!showFullVerse[verse.reference] && revealedWords.length < verse.text.split(' ').length && (
                         <Button
                           size="sm"
-                          colorScheme="purple"
+                          variant="solid"
                           onClick={() => handleShowHint(verse.reference)}
                           aria-label={`Show next word for ${verse.reference}`}
                         >
-                          Show Hint
+                          Show Next Word
                         </Button>
-                        <Button
-                          size="sm"
-                          colorScheme="teal"
-                          onClick={() => handleShowVerse(verse.reference)}
-                          aria-label={`${showFullVerse[verse.reference] ? 'Hide' : 'Show'} full verse for ${verse.reference}`}
-                        >
-                          {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Verse'}
-                        </Button>
-                      </>
-                    )}
-                  </>
-                )}
-                <Button
-                  size="sm"
-                  colorScheme={verse.status === ProgressStatus.NotStarted ? 'blue' : 'gray'}
-                  onClick={() => handleStatusChange(verse.reference, ProgressStatus.NotStarted)}
-                  aria-label={`Mark ${verse.reference} as not started`}
-                  aria-pressed={verse.status === ProgressStatus.NotStarted}
-                >
-                  Not Started
-                </Button>
-                <Button
-                  size="sm"
-                  colorScheme={verse.status === ProgressStatus.InProgress ? 'orange' : 'gray'}
-                  onClick={() => handleStatusChange(verse.reference, ProgressStatus.InProgress)}
-                  aria-label={`Mark ${verse.reference} as in progress`}
-                  aria-pressed={verse.status === ProgressStatus.InProgress}
-                >
-                  In Progress
-                </Button>
-                <Button
-                  size="sm"
-                  colorScheme={verse.status === ProgressStatus.Mastered ? 'green' : 'gray'}
-                  onClick={() => handleStatusChange(verse.reference, ProgressStatus.Mastered)}
-                  aria-label={`Mark ${verse.reference} as mastered`}
-                  aria-pressed={verse.status === ProgressStatus.Mastered}
-                >
-                  Mastered
-                </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          handleReset(verse.reference);
+                          setActiveVerseId(null);
+                        }}
+                        aria-label={`Reset ${verse.reference}`}
+                      >
+                        Reset
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleShowVerse(verse.reference)}
+                        aria-label={`Show full verse for ${verse.reference}`}
+                      >
+                        {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Full Verse'}
+                      </Button>
+                    </>
+                  )}
+                </Flex>
+                <Flex gap={2} wrap="wrap">
+                  <Button
+                    size="sm"
+                    variant="not-started"
+                    onClick={() => handleManualStatusChange(verse.reference, ProgressStatus.NotStarted)}
+                    aria-label={`Mark ${verse.reference} as not started`}
+                    aria-pressed={verse.status === ProgressStatus.NotStarted}
+                  >
+                    Not Started
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="in-progress"
+                    onClick={() => handleManualStatusChange(verse.reference, ProgressStatus.InProgress)}
+                    aria-label={`Mark ${verse.reference} as in progress`}
+                    aria-pressed={verse.status === ProgressStatus.InProgress}
+                  >
+                    In Progress
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="mastered"
+                    onClick={() => handleManualStatusChange(verse.reference, ProgressStatus.Mastered)}
+                    aria-label={`Mark ${verse.reference} as mastered`}
+                    aria-pressed={verse.status === ProgressStatus.Mastered}
+                  >
+                    Mastered
+                  </Button>
+                </Flex>
               </Flex>
             </VStack>
           </Box>

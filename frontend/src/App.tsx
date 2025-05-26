@@ -11,84 +11,19 @@ import { useAuth } from './hooks/useAuth'
 import { Footer } from './components/Footer'
 import logo from '/assets/images/ScriptureMemory.svg'
 import { useVerses } from './hooks/useVerses'
+import { ChakraProvider, ColorModeScript, useColorMode } from '@chakra-ui/react';
+import { AuthProvider } from './contexts/AuthContext';
+import { Register } from './pages/Register';
+import { Donate } from './pages/Donate';
+import { SignIn } from './components/SignIn';
+import { MainApp } from './components/App';
+import { theme } from './theme';
 
 // Add type for Google client
 declare global {
   interface Window {
     google: any;
   }
-}
-
-function MainApp() {
-  const { isAuthenticated, userEmail, signOut, token } = useAuth();
-  const { verses, loading, error, updateVerse, deleteVerse, addVerse } = useVerses();
-  const toast = useToast();
-  const [isLoading, setIsLoading] = useState(true);
-  const verseListRef = useRef<{ scrollToVerse: (reference: string) => void }>(null);
-
-  useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        // Validate environment variables first
-        validateEnvVariables();
-      } catch (error) {
-        console.error('Initialization error:', error);
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : 'Failed to initialize app',
-          status: "error",
-          duration: 5000,
-          isClosable: true,
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeApp();
-  }, [toast]);
-
-  const handleVerseAdded = (reference: string) => {
-    // Scroll to the newly added verse
-    verseListRef.current?.scrollToVerse(reference);
-  };
-
-  if (isLoading) {
-    return null; // Or a loading spinner
-  }
-
-  if (!isAuthenticated) {
-    return <FreeVersion />;
-  }
-
-  return (
-    <Box p={4}>
-      <VStack spacing={8} align="stretch">
-        <Flex justify="space-between" align="center">
-          <HStack spacing={4}>
-            <img src={logo} alt="Scripture Memory Logo" style={{ height: '40px' }} />
-            <Heading size="lg">Scripture Memory</Heading>
-          </HStack>
-          <HStack spacing={4}>
-            <Text>{userEmail}</Text>
-            <Avatar size="sm" name={userEmail || undefined} />
-            <Button onClick={signOut}>Sign Out</Button>
-          </HStack>
-        </Flex>
-
-        <VerseList
-          ref={verseListRef}
-          verses={verses}
-          loading={loading}
-          error={error}
-          onStatusChange={(ref, status) => updateVerse(ref, { status })}
-          onDelete={deleteVerse}
-        />
-        <AddVerse onVerseAdded={handleVerseAdded} addVerse={addVerse} />
-      </VStack>
-      <Footer />
-    </Box>
-  );
 }
 
 function TestRoute() {
@@ -122,45 +57,45 @@ function CatchAll() {
   return <FreeVersion />;
 }
 
-function App() {
-  console.log('App component rendered');
+function ColorModeManager() {
+  const { setColorMode } = useColorMode();
+
+  useEffect(() => {
+    // Check if user prefers dark mode
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    // Set initial color mode
+    setColorMode(mediaQuery.matches ? 'dark' : 'light');
+
+    // Listen for changes
+    const handleChange = (e: MediaQueryListEvent) => {
+      setColorMode(e.matches ? 'dark' : 'light');
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [setColorMode]);
+
+  return null;
+}
+
+export function App() {
   return (
-    <Router>
-      <Routes>
-        <Route 
-          path="/test" 
-          element={
-            <React.Suspense fallback={<div>Loading...</div>}>
-              <TestRoute />
-            </React.Suspense>
-          } 
-        />
-        <Route 
-          path="/auth/verify" 
-          element={
-            <React.Suspense fallback={<div>Loading...</div>}>
-              <VerifyToken />
-            </React.Suspense>
-          } 
-        />
-        <Route 
-          path="/" 
-          element={
-            <React.Suspense fallback={<div>Loading...</div>}>
-              <MainApp />
-            </React.Suspense>
-          } 
-        />
-        <Route 
-          path="*" 
-          element={
-            <React.Suspense fallback={<div>Loading...</div>}>
-              <CatchAll />
-            </React.Suspense>
-          } 
-        />
-      </Routes>
-    </Router>
+    <>
+      <ColorModeScript initialColorMode={theme.config.initialColorMode} />
+      <ChakraProvider theme={theme}>
+        <ColorModeManager />
+        <AuthProvider>
+          <Router>
+            <Routes>
+              <Route path="/" element={<MainApp />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/donate" element={<Donate />} />
+            </Routes>
+          </Router>
+        </AuthProvider>
+      </ChakraProvider>
+    </>
   );
 }
 
