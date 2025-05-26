@@ -31,8 +31,11 @@ export function VerifyToken() {
         setIsVerifying(true);
         hasVerified.current = true;
         
-        // Make direct API call to backend
-        const response = await fetch(`http://localhost:8787/auth/verify?token=${token}`, {
+        // Use the current origin for the API call
+        const apiUrl = `${window.location.origin}/auth/verify?token=${token}`;
+        console.log('Making API call to:', apiUrl);
+        
+        const response = await fetch(apiUrl, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
