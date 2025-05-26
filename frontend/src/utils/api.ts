@@ -3,7 +3,7 @@ import { Verse } from '../types';
 // Use worker URL in production, relative URL in development
 const API_URL = import.meta.env.PROD 
   ? 'https://scripture-memory.ben-2e6.workers.dev'
-  : (import.meta.env.VITE_API_URL || '');
+  : 'http://localhost:8787';
 
 interface ApiResponse<T> {
   data?: T;
