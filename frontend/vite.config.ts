@@ -1,9 +1,24 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'copy-cloudflare-files',
+      closeBundle() {
+        // Copy _headers and _routes.json to dist
+        const files = ['_headers', '_routes.json']
+        files.forEach(file => {
+          const src = resolve(__dirname, 'public', file)
+          const dest = resolve(__dirname, 'dist', file)
+          require('fs').copyFileSync(src, dest)
+        })
+      }
+    }
+  ],
   base: '/', // Use root path for custom domain
   server: {
     proxy: {
