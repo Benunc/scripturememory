@@ -18,11 +18,11 @@ import {
 } from '@chakra-ui/react';
 import { useAuth } from '../hooks/useAuth';
 
-interface SignInProps {
+interface SignUpProps {
   onClose?: () => void;
 }
 
-export function SignIn({ onClose }: SignInProps) {
+export function SignUp({ onClose }: SignUpProps) {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { isOpen, onOpen, onClose: onModalClose } = useDisclosure();
@@ -34,7 +34,7 @@ export function SignIn({ onClose }: SignInProps) {
     setIsLoading(true);
 
     try {
-      await signIn(email, false);
+      await signIn(email, true);
       onOpen();
     } catch (error) {
       toast({
@@ -68,7 +68,7 @@ export function SignIn({ onClose }: SignInProps) {
             width="full"
             isLoading={isLoading}
           >
-            Sign In
+            Sign Up
           </Button>
         </VStack>
       </Box>
@@ -87,7 +87,7 @@ export function SignIn({ onClose }: SignInProps) {
                 Check your spam folder if you don't see it.
               </Text>
               <Text fontSize="sm" color="gray.500">
-                Click the link in your email to sign in. You can close this window once you've clicked the link.
+                Click the link in your email to create your account. You can close this window once you've clicked the link.
               </Text>
             </VStack>
           </ModalBody>

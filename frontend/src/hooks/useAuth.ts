@@ -27,13 +27,29 @@ export const useAuth = () => {
     }
   }, []);
 
+  // Check for magic link token in URL
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get('token');
+    if (token) {
+      // If we have a token in the URL, verify it immediately
+      verifyToken(token).then(() => {
+        // If verification succeeds, redirect to the main page
+        window.location.href = '/';
+      }).catch((error) => {
+        console.error('Error verifying token:', error);
+        // If verification fails, show error and stay on the page
+      });
+    }
+  }, []);
+
   // Sign in with magic link
-  const signIn = async (email: string) => {
+  const signIn = async (email: string, isRegistration: boolean) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const response = await getMagicLink(email);
+      const response = await getMagicLink(email, isRegistration);
       if (response.error) {
         throw new Error(response.error);
       }
@@ -101,6 +117,7 @@ export const useAuth = () => {
     localStorage.removeItem('session_token');
     localStorage.removeItem('user_email');
     localStorage.removeItem('pending_email');
+    localStorage.removeItem('pending_token');
     setToken(null);
     setUserEmail(null);
     setIsAuthenticated(false);

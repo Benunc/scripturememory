@@ -6,14 +6,38 @@ export interface Env {
   ENVIRONMENT: string;
 }
 
+export interface D1Result {
+  meta: {
+    last_row_id: string | number;
+    changes: number;
+    duration: number;
+  };
+  results: any[];
+  success: boolean;
+}
+
+export interface User {
+  id: number;
+  email: string;
+  created_at: number;
+  last_login_at?: number;
+  has_donated: boolean;
+  total_donations: number;
+  donation_count: number;
+  last_donation_date?: number;
+  last_donation_amount?: number;
+  preferred_translation: string;
+  notification_preferences?: Record<string, any>;
+}
+
 export interface Verse {
   id?: number;
-  email?: string;
+  user_id: number;
   reference: string;
   text: string;
-  translation?: string;
-  status?: string;
-  created_at?: number;
+  translation: string;
+  status: string;
+  created_at: number;
 }
 
 export interface MagicLink {

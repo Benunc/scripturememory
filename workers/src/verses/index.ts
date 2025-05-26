@@ -5,12 +5,12 @@ const getDB = (env: Env) => {
   return env.ENVIRONMENT === 'production' ? env.DB_PROD : env.DB_DEV;
 };
 
-// Helper to get user email from session token
-const getUserEmail = async (token: string, env: Env): Promise<string | null> => {
+// Helper to get user ID from session token
+const getUserId = async (token: string, env: Env): Promise<number | null> => {
   const result = await getDB(env).prepare(
-    'SELECT email FROM sessions WHERE token = ? AND expires_at > ?'
-  ).bind(token, Date.now()).first<{ email: string }>();
-  return result?.email || null;
+    'SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?'
+  ).bind(token, Date.now()).first<{ user_id: number }>();
+  return result?.user_id || null;
 };
 
 export const handleVerses = {
@@ -23,15 +23,15 @@ export const handleVerses = {
       }
 
       const token = authHeader.split(' ')[1];
-      const email = await getUserEmail(token, env);
+      const userId = await getUserId(token, env);
       
-      if (!email) {
+      if (!userId) {
         return new Response('Invalid or expired session', { status: 401 });
       }
 
       const verses = await getDB(env).prepare(
-        'SELECT * FROM verses WHERE email = ? ORDER BY created_at DESC'
-      ).bind(email).all();
+        'SELECT * FROM verses WHERE user_id = ? ORDER BY created_at DESC'
+      ).bind(userId).all();
 
       return new Response(JSON.stringify(verses.results), {
         headers: { 'Content-Type': 'application/json' }
@@ -51,9 +51,9 @@ export const handleVerses = {
       }
 
       const token = authHeader.split(' ')[1];
-      const email = await getUserEmail(token, env);
+      const userId = await getUserId(token, env);
       
-      if (!email) {
+      if (!userId) {
         return new Response('Invalid or expired session', { status: 401 });
       }
 
@@ -64,8 +64,8 @@ export const handleVerses = {
 
       // Check if verse already exists
       const existing = await getDB(env).prepare(
-        'SELECT * FROM verses WHERE email = ? AND reference = ?'
-      ).bind(email, verse.reference).first();
+        'SELECT * FROM verses WHERE user_id = ? AND reference = ?'
+      ).bind(userId, verse.reference).first();
 
       if (existing) {
         return new Response('Verse already exists', { status: 409 });
@@ -73,8 +73,8 @@ export const handleVerses = {
 
       // Insert new verse
       await getDB(env).prepare(
-        'INSERT INTO verses (email, reference, text, created_at) VALUES (?, ?, ?, ?)'
-      ).bind(email, verse.reference, verse.text, Date.now()).run();
+        'INSERT INTO verses (user_id, reference, text, translation, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).bind(userId, verse.reference, verse.text, verse.translation || 'NIV', Date.now()).run();
 
       return new Response('Verse added successfully', { status: 201 });
     } catch (error) {
@@ -92,9 +92,9 @@ export const handleVerses = {
       }
 
       const token = authHeader.split(' ')[1];
-      const email = await getUserEmail(token, env);
+      const userId = await getUserId(token, env);
       
-      if (!email) {
+      if (!userId) {
         return new Response('Invalid or expired session', { status: 401 });
       }
 
@@ -109,8 +109,8 @@ export const handleVerses = {
       
       // Verify ownership
       const existing = await getDB(env).prepare(
-        'SELECT * FROM verses WHERE reference = ? AND email = ?'
-      ).bind(reference, email).first();
+        'SELECT * FROM verses WHERE reference = ? AND user_id = ?'
+      ).bind(reference, userId).first();
 
       if (!existing) {
         return new Response('Verse not found or unauthorized', { status: 404 });
@@ -139,11 +139,11 @@ export const handleVerses = {
         return new Response('No updates provided', { status: 400 });
       }
 
-      // Add reference and email to bindings
-      bindings.push(reference, email);
+      // Add reference and user_id to bindings
+      bindings.push(reference, userId);
 
       await getDB(env).prepare(
-        `UPDATE verses SET ${updates.join(', ')} WHERE reference = ? AND email = ?`
+        `UPDATE verses SET ${updates.join(', ')} WHERE reference = ? AND user_id = ?`
       ).bind(...bindings).run();
 
       return new Response(null, { status: 204 });
@@ -162,21 +162,23 @@ export const handleVerses = {
       }
 
       const token = authHeader.split(' ')[1];
-      const email = await getUserEmail(token, env);
+      const userId = await getUserId(token, env);
       
-      if (!email) {
+      if (!userId) {
         return new Response('Invalid or expired session', { status: 401 });
       }
 
-      const { reference } = await request.json() as { reference: string };
+      const url = new URL(request.url);
+      const reference = decodeURIComponent(url.pathname.split('/').pop() || '');
+      
       if (!reference) {
-        return new Response('Reference is required', { status: 400 });
+        return new Response('Verse reference is required', { status: 400 });
       }
 
       // Check if verse exists
       const existing = await getDB(env).prepare(
-        'SELECT * FROM verses WHERE email = ? AND reference = ?'
-      ).bind(email, reference).first();
+        'SELECT * FROM verses WHERE user_id = ? AND reference = ?'
+      ).bind(userId, reference).first();
 
       if (!existing) {
         return new Response('Verse not found', { status: 404 });
@@ -184,10 +186,10 @@ export const handleVerses = {
 
       // Delete verse
       await getDB(env).prepare(
-        'DELETE FROM verses WHERE email = ? AND reference = ?'
-      ).bind(email, reference).run();
+        'DELETE FROM verses WHERE user_id = ? AND reference = ?'
+      ).bind(userId, reference).run();
 
-      return new Response('Verse deleted successfully', { status: 200 });
+      return new Response(null, { status: 204 });
     } catch (error) {
       console.error('Error deleting verse:', error);
       return new Response('Internal Server Error', { status: 500 });

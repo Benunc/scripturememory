@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "ts-node tests/api.test.ts"
+    "test": "jest",
+    "wipe-dev-db": "wrangler d1 execute DB_DEV --command=\"DELETE FROM verses; DELETE FROM sessions; DELETE FROM magic_links; DELETE FROM users;\"",
+    "reinit-dev-db": "wrangler d1 execute DB_DEV --file=./schema.sql"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^4.20240208.0",

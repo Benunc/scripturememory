@@ -3,7 +3,7 @@ import { Verse } from '../types';
 // Use worker URL in production, relative URL in development
 const API_URL = import.meta.env.PROD 
   ? 'https://scripture-memory.ben-2e6.workers.dev'
-  : '/api';  // Use /api prefix in development
+  : import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 
 interface ApiResponse<T> {
   data?: T;
@@ -35,14 +35,27 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   }
 }
 
-export async function getMagicLink(email: string): Promise<ApiResponse<{ token: string }>> {
+export async function getMagicLink(email: string, isRegistration: boolean): Promise<ApiResponse<{ token: string }>> {
   const response = await fetch(`${API_URL}/auth/magic-link`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email })
+    body: JSON.stringify({ email, isRegistration })
   });
   
-  return handleResponse<{ token: string }>(response);
+  const result = await handleResponse<{ success: boolean; message: string }>(response);
+  if (result.error) {
+    return { error: result.error };
+  }
+  
+  // Extract token from the magic link URL in the response
+  if (result.data?.message) {
+    const tokenMatch = result.data.message.match(/token=([^&]+)/);
+    if (tokenMatch) {
+      return { data: { token: tokenMatch[1] } };
+    }
+  }
+  
+  return { error: 'No token found in response' };
 }
 
 export async function verifyMagicLink(token: string): Promise<ApiResponse<{ token: string; email: string }>> {
@@ -51,9 +64,27 @@ export async function verifyMagicLink(token: string): Promise<ApiResponse<{ toke
     const response = await fetch(`${API_URL}/auth/verify?token=${token}`);
     console.log('Verification response status:', response.status);
     console.log('Verification response headers:', Object.fromEntries(response.headers.entries()));
-    const result = await handleResponse<{ token: string; email: string }>(response);
-    console.log('Verification result:', result);
-    return result;
+    
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Verification failed:', error);
+      return { error };
+    }
+    
+    const data = await response.json();
+    console.log('Verification response data:', data);
+    
+    if (!data.success || !data.token || !data.email) {
+      console.error('Invalid verification response:', data);
+      return { error: 'Invalid verification response' };
+    }
+    
+    return { 
+      data: {
+        token: data.token,
+        email: data.email
+      }
+    };
   } catch (error) {
     console.error('Error making verification request:', error);
     throw error;
