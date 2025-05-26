@@ -18,27 +18,22 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     return { error };
   }
   
-  if (response.status === 204) {
-    console.log('Response is 204 No Content');
+  // For 204 No Content or empty 201 Created responses
+  if (response.status === 204 || (response.status === 201 && response.headers.get('content-length') === '0')) {
+    console.log('Response is empty success');
     return { data: undefined as unknown as T };
   }
   
-  // For 201 status, try to parse as JSON first, fall back to text
-  if (response.status === 201) {
-    try {
-      const data = await response.json();
-      console.log('Response data:', data);
-      return { data: data as T };
-    } catch {
-      const text = await response.text();
-      console.log('Response text:', text);
-      return { data: undefined as unknown as T };
-    }
+  // Try to parse as JSON for all other successful responses
+  try {
+    const data = await response.json();
+    console.log('Response data:', data);
+    return { data: data as T };
+  } catch {
+    // If JSON parsing fails but response was successful, return undefined
+    console.log('Response is not JSON but was successful');
+    return { data: undefined as unknown as T };
   }
-  
-  const data = await response.json();
-  console.log('Response data:', data);
-  return { data: data as T };
 }
 
 export async function getMagicLink(email: string): Promise<ApiResponse<{ token: string }>> {
