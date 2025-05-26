@@ -31,8 +31,8 @@ export function VerifyToken() {
         setIsVerifying(true);
         hasVerified.current = true;
         
-        // Use the current origin for the API call
-        const apiUrl = `${window.location.origin}/auth/verify?token=${token}`;
+        // Use the worker URL directly
+        const apiUrl = `https://scripture-memory.ben-2e6.workers.dev/auth/verify?token=${token}`;
         console.log('Making API call to:', apiUrl);
         
         const response = await fetch(apiUrl, {
