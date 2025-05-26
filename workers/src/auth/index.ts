@@ -57,51 +57,62 @@ const getDB = (env: Env) => {
 
 // Helper to send magic link email
 const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) => {
-  // In development, just log the magic link
+  // In development or if email sending fails, just log the magic link
   if (env.ENVIRONMENT === 'development') {
     console.log('Development mode - Magic link:', magicLink);
     return;
   }
 
-  // Send email using Cloudflare Email Workers
-  const emailResponse = await fetch('https://api.mailchannels.net/tx/v1/send', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      personalizations: [
-        {
-          to: [{ email }],
-        },
-      ],
-      from: {
-        email: 'noreply@scripturememory.pages.dev',
-        name: 'Scripture Memory',
+  try {
+    // Send email using Cloudflare Email Workers
+    const emailResponse = await fetch('https://api.mailchannels.net/tx/v1/send', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
       },
-      subject: 'Your Magic Link for Scripture Memory',
-      content: [
-        {
-          type: 'text/plain',
-          value: `Click the link below to sign in to Scripture Memory:\n\n${magicLink}\n\nThis link will expire in 15 minutes.`,
+      body: JSON.stringify({
+        personalizations: [
+          {
+            to: [{ email }],
+          },
+        ],
+        from: {
+          email: 'noreply@scripturememory.pages.dev',
+          name: 'Scripture Memory',
         },
-        {
-          type: 'text/html',
-          value: `
-            <h1>Welcome to Scripture Memory</h1>
-            <p>Click the link below to sign in:</p>
-            <p><a href="${magicLink}">Sign in to Scripture Memory</a></p>
-            <p>This link will expire in 15 minutes.</p>
-            <p>If you didn't request this link, you can safely ignore this email.</p>
-          `,
-        },
-      ],
-    }),
-  });
+        subject: 'Your Magic Link for Scripture Memory',
+        content: [
+          {
+            type: 'text/plain',
+            value: `Click the link below to sign in to Scripture Memory:\n\n${magicLink}\n\nThis link will expire in 15 minutes.`,
+          },
+          {
+            type: 'text/html',
+            value: `
+              <h1>Welcome to Scripture Memory</h1>
+              <p>Click the link below to sign in:</p>
+              <p><a href="${magicLink}">Sign in to Scripture Memory</a></p>
+              <p>This link will expire in 15 minutes.</p>
+              <p>If you didn't request this link, you can safely ignore this email.</p>
+            `,
+          },
+        ],
+      }),
+    });
 
-  if (!emailResponse.ok) {
-    console.error('Email sending error:', await emailResponse.text());
-    throw new Error('Failed to send magic link email');
+    if (!emailResponse.ok) {
+      console.error('Email sending error:', await emailResponse.text());
+      // Log the magic link for testing if email sending fails
+      console.log('=== Magic Link for Testing (Email Failed) ===');
+      console.log(magicLink);
+      console.log('===========================================');
+    }
+  } catch (error) {
+    console.error('Error sending email:', error);
+    // Log the magic link for testing if email sending fails
+    console.log('=== Magic Link for Testing (Email Error) ===');
+    console.log(magicLink);
+    console.log('===========================================');
   }
 };
 
@@ -144,19 +155,24 @@ export const handleAuth = {
       }
 
       // Generate token and create magic link
-      const token = await generateToken();
-      const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
+      const token = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
 
       // Store in D1
       await db.prepare(
         'INSERT INTO magic_links (token, email, expires_at) VALUES (?, ?, ?)'
-      ).bind(token, email, expiresAt).run();
+      ).bind(token, email, expiresAt.toISOString()).run();
 
-      // Create magic link URL
-      const magicLink = `${request.headers.get('origin')}/auth/verify?token=${token}`;
+      // In production, log the magic link for testing
+      if (env.ENVIRONMENT === 'production') {
+        const magicLink = `${request.headers.get('origin')}/auth/verify?token=${token}`;
+        console.log('=== Magic Link for Testing ===');
+        console.log(magicLink);
+        console.log('=============================');
+      }
 
       // Send email
-      await sendMagicLinkEmail(email, magicLink, env);
+      await sendMagicLinkEmail(email, `${request.headers.get('origin')}/auth/verify?token=${token}`, env);
 
       return new Response(
         JSON.stringify({
