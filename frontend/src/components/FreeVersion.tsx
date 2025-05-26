@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Box, Button, Heading, Text, VStack, useToast, Card, CardBody, Badge, HStack, Flex, Modal, ModalOverlay, ModalContent, ModalBody, useDisclosure } from '@chakra-ui/react';
+import { Box, Button, Heading, Text, VStack, useToast, Card, CardBody, Badge, HStack, Flex, Modal, ModalOverlay, ModalContent, ModalBody, useDisclosure, Link } from '@chakra-ui/react';
 import { sampleVerses } from '../utils/sampleVerses';
 import { Footer } from './Footer';
 import { SignIn } from './SignIn';
+import { SignUp } from './SignUp';
 import logo from '/assets/images/ScriptureMemory.svg';
 
 const DEFAULT_VERSES = sampleVerses;
@@ -18,6 +19,7 @@ export function FreeVersion({ userEmail, onSignOut }: FreeVersionProps) {
   const [showFullVerse, setShowFullVerse] = useState<Record<string, boolean>>({});
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [isSignUp, setIsSignUp] = useState(false);
 
   const handleStart = (reference: string) => {
     setActiveVerseId(reference);
@@ -93,9 +95,24 @@ export function FreeVersion({ userEmail, onSignOut }: FreeVersionProps) {
               Sign Out
             </Button>
           ) : (
-            <Button onClick={onOpen} colorScheme="blue" size="sm">
-              Sign In
-            </Button>
+            <HStack spacing={4}>
+              <Link 
+                onClick={() => {
+                  setIsSignUp(true);
+                  onOpen();
+                }}
+                color="blue.500"
+                _hover={{ textDecoration: 'underline' }}
+              >
+                Register a New Account
+              </Link>
+              <Button onClick={() => {
+                setIsSignUp(false);
+                onOpen();
+              }} colorScheme="blue" size="sm">
+                Sign In
+              </Button>
+            </HStack>
           )}
         </Flex>
       </Box>
@@ -205,13 +222,28 @@ export function FreeVersion({ userEmail, onSignOut }: FreeVersionProps) {
                 Sign Out
               </Button>
             ) : (
-              <Button 
-                colorScheme="blue" 
-                size="lg"
-                onClick={onOpen}
-              >
-                Sign In
-              </Button>
+              <VStack spacing={2}>
+                <Button 
+                  colorScheme="blue" 
+                  size="lg"
+                  onClick={() => {
+                    setIsSignUp(false);
+                    onOpen();
+                  }}
+                >
+                  Sign In
+                </Button>
+                <Link 
+                  onClick={() => {
+                    setIsSignUp(true);
+                    onOpen();
+                  }}
+                  color="blue.500"
+                  _hover={{ textDecoration: 'underline' }}
+                >
+                  Register a New Account
+                </Link>
+              </VStack>
             )}
           </VStack>
         </VStack>
@@ -224,7 +256,7 @@ export function FreeVersion({ userEmail, onSignOut }: FreeVersionProps) {
         <ModalOverlay />
         <ModalContent>
           <ModalBody p={6}>
-            <SignIn onClose={onClose} />
+            {isSignUp ? <SignUp onClose={onClose} /> : <SignIn onClose={onClose} />}
           </ModalBody>
         </ModalContent>
       </Modal>
