@@ -23,6 +23,19 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     return { data: undefined as unknown as T };
   }
   
+  // For 201 status, try to parse as JSON first, fall back to text
+  if (response.status === 201) {
+    try {
+      const data = await response.json();
+      console.log('Response data:', data);
+      return { data: data as T };
+    } catch {
+      const text = await response.text();
+      console.log('Response text:', text);
+      return { data: undefined as unknown as T };
+    }
+  }
+  
   const data = await response.json();
   console.log('Response data:', data);
   return { data: data as T };

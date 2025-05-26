@@ -121,10 +121,11 @@ export const handleVerses = {
       }
 
       await getDB(env).prepare(
-        'UPDATE verses SET text = ?, translation = ? WHERE reference = ? AND email = ?'
+        'UPDATE verses SET text = ?, translation = ?, status = ? WHERE reference = ? AND email = ?'
       ).bind(
         verse.text,
         verse.translation || 'NIV',
+        verse.status || 'not_started',
         reference,
         email
       ).run();

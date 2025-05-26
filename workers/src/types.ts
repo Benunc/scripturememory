@@ -12,6 +12,7 @@ export interface Verse {
   reference: string;
   text: string;
   translation?: string;
+  status?: string;
   created_at?: number;
 }
 
