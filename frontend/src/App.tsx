@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AddVerse } from './components/AddVerse'
 import { VerseList } from './components/VerseList'
-import { FreeVersion } from './components/FreeVersion'
 import { VerifyToken } from './components/VerifyToken'
 import { validateEnvVariables } from './utils/auth'
 import { useAuth } from './hooks/useAuth'
@@ -35,27 +34,6 @@ function TestRoute() {
 function SimpleVerify() {
   console.log('Simple verify route rendered');
   return <div>Simple Verify Route</div>;
-}
-
-function CatchAll() {
-  const toast = useToast();
-  const { isAuthenticated } = useAuth();
-
-  useEffect(() => {
-    // Only show the toast if we're not authenticated and the URL contains a token
-    if (!isAuthenticated && window.location.pathname.includes('/auth/verify')) {
-      toast({
-        title: "Invalid Magic Link",
-        description: "This magic link is no longer valid. Please sign in again to continue.",
-        status: "warning",
-        duration: 8000,
-        isClosable: true,
-        position: "top",
-      });
-    }
-  }, [isAuthenticated, toast]);
-
-  return <FreeVersion />;
 }
 
 function ColorModeManager() {

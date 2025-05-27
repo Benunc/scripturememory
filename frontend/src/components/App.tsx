@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack, Flex, Divider } from '@chakra-ui/react';
+import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack, Flex, Divider, Link } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { AddVerse } from './AddVerse';
 import { VerseList } from './VerseList';
@@ -85,6 +85,30 @@ export function MainApp() {
   if (!isAuthenticated) {
     return (
       <Box minH="100vh" display="flex" flexDirection="column">
+        <Link
+          href="#main-content"
+          position="absolute"
+          left="-9999px"
+          top="auto"
+          width="1px"
+          height="1px"
+          overflow="hidden"
+          zIndex="9999"
+          _focus={{
+            left: "10px",
+            top: "10px",
+            width: "auto",
+            height: "auto",
+            padding: "10px",
+            backgroundColor: "white",
+            border: "1px solid",
+            borderColor: "blue.500",
+            borderRadius: "md",
+          }}
+        >
+          Skip to main content
+        </Link>
+
         <Box p={8}>
           <VStack spacing={8} align="center">
             <img src={logo} alt="Scripture Memory" style={{ maxWidth: '300px' }} />
@@ -136,6 +160,7 @@ export function MainApp() {
               error={null}
               onStatusChange={async () => {}}
               onDelete={async () => {}}
+              showStatusButtons={false}
             />
           </VStack>
         </Box>
@@ -148,6 +173,30 @@ export function MainApp() {
 
   return (
     <Box minH="100vh" display="flex" flexDirection="column">
+      <Link
+        href="#main-content"
+        position="absolute"
+        left="-9999px"
+        top="auto"
+        width="1px"
+        height="1px"
+        overflow="hidden"
+        zIndex="9999"
+        _focus={{
+          left: "10px",
+          top: "10px",
+          width: "auto",
+          height: "auto",
+          padding: "10px",
+          backgroundColor: "white",
+          border: "1px solid",
+          borderColor: "blue.500",
+          borderRadius: "md",
+        }}
+      >
+        Skip to main content
+      </Link>
+
       <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
         <Flex justify="space-between" align="center">
           <HStack spacing={4}>
@@ -171,7 +220,7 @@ export function MainApp() {
         </Flex>
       </Box>
 
-      <Box flex="1" p={8}>
+      <Box id="main-content" flex="1" p={8} tabIndex={-1}>
         <VStack spacing={8} align="stretch">
           <VerseList
             ref={verseListRef}
