@@ -14,6 +14,9 @@ export interface Env {
   TURNSTILE_SECRET_KEY: string;
   TURNSTILE_SITE_KEY: string;
   API_URL?: string;
+  ASSETS: {
+    fetch: (request: Request) => Promise<Response>;
+  };
 }
 
 export interface D1Result {

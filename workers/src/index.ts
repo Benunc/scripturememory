@@ -44,8 +44,29 @@ router.post('/verses', handleVerses.addVerse);
 router.put('/verses/:reference', handleVerses.updateVerse);
 router.delete('/verses/:reference', handleVerses.deleteVerse);
 
-// 404 handler
-router.all('*', () => new Response('Not Found', { status: 404 }));
+// Serve static files from the frontend
+router.get('*', async (request: Request, env: Env) => {
+  const url = new URL(request.url);
+  let path = url.pathname;
+  
+  // If the path is '/', serve index.html
+  if (path === '/') {
+    path = '/index.html';
+  }
+  
+  // Try to fetch the static file from the frontend
+  try {
+    const response = await env.ASSETS.fetch(request);
+    if (response.status === 404) {
+      // If the file is not found, serve index.html for client-side routing
+      return env.ASSETS.fetch(new Request(`${url.origin}/index.html`));
+    }
+    return response;
+  } catch (error) {
+    console.error('Error serving static file:', error);
+    return new Response('Not Found', { status: 404 });
+  }
+});
 
 // Export the fetch handler
 export default {
