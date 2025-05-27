@@ -201,24 +201,54 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       try {
         const result = await getMagicLink(email, false, turnstileToken);
         if (result.data?.token) {
+          toast({
+            title: "Success",
+            description: "Magic link sent! Please check your email.",
+            status: "success",
+            duration: 5000,
+            isClosable: true,
+          });
           setMessage('Magic link sent! Please check your email.');
           setEmail('');
           setTurnstileToken(''); // Reset token after successful use
           if (widgetIdRef.current) {
             window.turnstile.reset(widgetIdRef.current);
+            widgetIdRef.current = null;
           }
+          onClose(); // Close the modal after successful submission
         } else {
           setError(result.error || 'Failed to send magic link');
+          toast({
+            title: "Error",
+            description: result.error || 'Failed to send magic link',
+            status: "error",
+            duration: 5000,
+            isClosable: true,
+          });
         }
       } catch (error) {
         debug.error('auth', 'Error sending magic link', error);
         setError('Failed to send magic link. Please try again.');
+        toast({
+          title: "Error",
+          description: "Failed to send magic link. Please try again.",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
       } finally {
         setIsLoading(false);
       }
     } catch (error) {
       debug.error('auth', 'Error sending magic link', error);
       setError('Failed to send magic link. Please try again.');
+      toast({
+        title: "Error",
+        description: "Failed to send magic link. Please try again.",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
       setIsLoading(false);
     }
   };
