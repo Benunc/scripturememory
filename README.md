@@ -17,7 +17,7 @@ A modern web application for memorizing Bible verses, built with React, Cloudfla
 - TypeScript
 - Chakra UI for styling
 - Vite for building
-- React Router for navigation
+- React Router for navigation.
 
 ### Backend
 - Cloudflare Workers
