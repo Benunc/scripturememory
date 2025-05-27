@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       assetsDir: 'assets',
       rollupOptions: {
-        input: './index.html',
+        input: mode === 'production' ? './index.prod.html' : './index.html',
         output: {
           manualChunks: undefined,
           assetFileNames: 'assets/[name].[hash][extname]',

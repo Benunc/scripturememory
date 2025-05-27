@@ -1,95 +1,97 @@
 # Scripture Memory
 
-A web application for memorizing Bible verses, built with React, TypeScript, and Vite. The app is deployed on Cloudflare Pages and Workers.
+A modern web application for memorizing Bible verses, built with React, Cloudflare Workers, and D1 database.
 
-## Architecture
+## Features
+
+- **Magic Link Authentication**: Secure, passwordless authentication via email
+- **Verse Management**: Add, edit, and delete scripture verses
+- **Progress Tracking**: Track your memorization progress
+- **Responsive Design**: Works on desktop and mobile devices
+- **Dark/Light Mode**: Automatic theme switching based on system preferences
+
+## Tech Stack
 
 ### Frontend
-- Built with React 18 and TypeScript
-- Uses Chakra UI for styling and components
-- Vite for build tooling and development server
-- Deployed via Cloudflare Pages
+- React 18
+- TypeScript
+- Chakra UI for styling
+- Vite for building
+- React Router for navigation
 
 ### Backend
-- Cloudflare D1 Database for data storage
-- IndexedDB for local caching and offline support
-- Implements a sync service for offline changes
+- Cloudflare Workers
+- D1 Database
+- Cloudflare Turnstile for bot protection
 
 ## Development
 
 ### Prerequisites
-- Node.js 20 or later
+- Node.js >= 20.0.0
 - npm
-- Google Cloud Project with Sheets API enabled
-- Service account credentials
+- Cloudflare account with Workers and D1 enabled
 
-### Environment Variables
-Required environment variables:
-- `VITE_GOOGLE_SHEET_ID`: ID of the Google Sheet used for data storage
-- `VITE_GOOGLE_CLIENT_ID`: Google OAuth client ID
-- `VITE_AUTHORIZED_USERS`: Comma-separated list of authorized user emails
+### Setup
 
-### Local Development
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Create `.env` file with required variables
-4. Run development server: `npm run dev`
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Benunc/scripturememory.git
+   cd scripturememory
+   ```
 
-### Debug Mode
-The application includes a comprehensive debug logging system that can be enabled in the browser console:
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-```javascript
-// Enable debug mode
-window.debug.enable();
+3. Set up environment variables:
+   - Create `.env` files in both `frontend` and `workers` directories
+   - See `.env.example` files for required variables
 
-// Configure specific modules
-window.debug.configure({
-  enabled: true,
-  modules: {
-    auth: true,
-    token: true,
-    sheets: true,
-    verses: true,
-    db: true
-  }
-});
+4. Start development servers:
+   ```bash
+   # Start frontend
+   npm run dev:frontend
 
-// View current configuration
-window.debug.getConfig();
+   # Start worker
+   npm run dev:workers
+   ```
 
-// Disable debug mode
-window.debug.disable();
+### Building
+
+```bash
+# Build frontend
+npm run build
+
+# Deploy worker
+cd workers && npx wrangler deploy
 ```
 
-Debug logs are prefixed with module names (e.g., `[AUTH]`, `[SHEETS]`) for easy filtering.
-
-### Build and Deploy
-1. Build the app: `npm run build`
-2. Deploy to Cloudflare: `npm run deploy`
-3. Custom domain configuration is handled in the Cloudflare dashboard
-
 ## Project Structure
-- `/src`: Source code
-  - `/components`: React components
-  - `/utils`: Utility functions and services
-  - `/hooks`: Custom React hooks
-- `/public`: Static assets
-- `/workers`: Cloudflare Workers backend
 
-## Features
-- Verse memorization with progressive word reveal
-- Offline support with local caching
-- Automatic sync when online
-- User authentication via Google
-- Progress tracking
-- Dark mode support
-- Mobile-responsive design
+```
+scripturememory/
+├── frontend/          # React frontend application
+├── workers/           # Cloudflare Workers backend
+├── shared/           # Shared types and utilities
+└── scripts/          # Build and development scripts
+```
+
+## Deployment
+
+The application is deployed on Cloudflare:
+- Frontend: Cloudflare Pages
+- Backend: Cloudflare Workers
+- Database: Cloudflare D1
 
 ## Contributing
+
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-## Contact
-For support or questions, contact ben@benandjacq.com
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
