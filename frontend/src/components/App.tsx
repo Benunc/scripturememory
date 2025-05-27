@@ -155,6 +155,13 @@ export function MainApp() {
             <Heading size="md">Scripture Memory</Heading>
           </HStack>
           <HStack spacing={4}>
+            <Button
+              variant="ghost"
+              onClick={() => navigate('/donate')}
+              colorScheme="green"
+            >
+              Support Us
+            </Button>
             <Text>{userEmail}</Text>
             <Avatar size="sm" name={userEmail || undefined} />
             <Button variant="ghost" onClick={signOut}>
@@ -166,7 +173,6 @@ export function MainApp() {
 
       <Box flex="1" p={8}>
         <VStack spacing={8} align="stretch">
-          <AddVerse onVerseAdded={handleVerseAdded} addVerse={addVerse} />
           <VerseList
             ref={verseListRef}
             verses={verses}
@@ -175,6 +181,7 @@ export function MainApp() {
             onStatusChange={handleStatusChange}
             onDelete={deleteVerse}
           />
+          <AddVerse onVerseAdded={handleVerseAdded} addVerse={addVerse} />
         </VStack>
       </Box>
 

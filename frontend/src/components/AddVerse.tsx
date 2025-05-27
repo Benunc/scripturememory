@@ -9,6 +9,7 @@ import {
   useToast,
   VStack,
   FormHelperText,
+  Heading,
 } from '@chakra-ui/react';
 import { useAuth } from '../hooks/useAuth';
 import { debug, handleError } from '../utils/debug';
@@ -86,6 +87,9 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded, addVerse }) =>
       noValidate
     >
       <VStack spacing={4} align="stretch" role="form" aria-label="Add new verse form">
+        <Heading size="md" textAlign="center" mb={2}>
+          Add Your Own Verses Here!
+        </Heading>
         <FormControl isRequired>
           <FormLabel htmlFor="reference">Verse Reference</FormLabel>
           <Input

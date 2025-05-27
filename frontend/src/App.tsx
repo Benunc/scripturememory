@@ -18,6 +18,7 @@ import { Donate } from './pages/Donate';
 import { SignIn } from './components/SignIn';
 import { MainApp } from './components/App';
 import { theme } from './theme';
+import { ThankYou } from './pages/ThankYou';
 
 // Add type for Google client
 declare global {
@@ -91,6 +92,7 @@ export function App() {
               <Route path="/" element={<MainApp />} />
               <Route path="/register" element={<Register />} />
               <Route path="/donate" element={<Donate />} />
+              <Route path="/thank-you" element={<ThankYou />} />
             </Routes>
           </Router>
         </AuthProvider>

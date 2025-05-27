@@ -39,10 +39,10 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     try {
       await signIn(email, false);
       toast({
-        title: "Magic Link Sent",
-        description: "Check your email for a sign-in link",
+        title: "Check Your Email",
+        description: "If an account exists for that email, a magic link was sent",
         status: "success",
-        duration: 5000,
+        duration: 8000,
         isClosable: true,
       });
       onClose();

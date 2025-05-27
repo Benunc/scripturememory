@@ -6,29 +6,21 @@ import {
   Heading,
   Text,
   VStack,
-  HStack,
   Card,
   CardBody,
   Divider,
-  useToast,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 
-const DONATION_AMOUNTS = [5, 10, 25, 50, 100];
-
 export function Donate() {
   const navigate = useNavigate();
-  const toast = useToast();
 
-  const handleDonate = (amount: number) => {
-    // TODO: Implement donation flow
-    toast({
-      title: 'Coming Soon',
-      description: 'Donation functionality will be available soon!',
-      status: 'info',
-      duration: 5000,
-      isClosable: true,
-    });
+  const handleDonate = () => {
+    const isProd = window.location.hostname === 'scripturememory.pages.dev';
+    const stripeUrl = isProd 
+      ? 'https://donate.stripe.com/fZu4gAdZUepr67t3yf8ww03'
+      : 'https://donate.stripe.com/test_eVqdRa094gxz0N99WD8ww00';
+    window.location.href = stripeUrl;
   };
 
   return (
@@ -56,20 +48,19 @@ export function Donate() {
 
               <Divider />
 
-              <Box>
-                <Heading size="md" mb={4}>Choose an Amount</Heading>
-                <HStack spacing={4} wrap="wrap" justify="center">
-                  {DONATION_AMOUNTS.map((amount) => (
-                    <Button
-                      key={amount}
-                      onClick={() => handleDonate(amount)}
-                      size="lg"
-                      width="100px"
-                    >
-                      ${amount}
-                    </Button>
-                  ))}
-                </HStack>
+              <Box textAlign="center">
+                <Heading size="md" mb={4}>Make a Donation</Heading>
+                <Text mb={4}>
+                  Click below to make a donation. You can adjust the amount on the next page.
+                </Text>
+                <Button
+                  onClick={handleDonate}
+                  size="lg"
+                  colorScheme="blue"
+                  width="200px"
+                >
+                  Donate Now
+                </Button>
               </Box>
 
               <Divider />
@@ -89,11 +80,11 @@ export function Donate() {
           </CardBody>
         </Card>
 
-        <HStack justify="center" spacing={4}>
+        <Box textAlign="center">
           <Button variant="link" onClick={() => navigate(-1)}>
             Go Back
           </Button>
-        </HStack>
+        </Box>
       </VStack>
     </Container>
   );

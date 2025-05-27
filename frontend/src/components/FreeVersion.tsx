@@ -5,6 +5,7 @@ import { Footer } from './Footer';
 import { SignIn } from './SignIn';
 import { SignUp } from './SignUp';
 import logo from '/assets/images/ScriptureMemory.svg';
+import { useNavigate } from 'react-router-dom';
 
 const DEFAULT_VERSES = sampleVerses;
 
@@ -20,6 +21,7 @@ export function FreeVersion({ userEmail, onSignOut }: FreeVersionProps) {
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [isSignUp, setIsSignUp] = useState(false);
+  const navigate = useNavigate();
 
   const handleStart = (reference: string) => {
     setActiveVerseId(reference);
@@ -91,11 +93,27 @@ export function FreeVersion({ userEmail, onSignOut }: FreeVersionProps) {
             <Heading size="lg">Scripture Memory</Heading>
           </Flex>
           {onSignOut ? (
-            <Button onClick={onSignOut} colorScheme="red" size="sm">
-              Sign Out
-            </Button>
+            <HStack spacing={4}>
+              <Button
+                variant="ghost"
+                onClick={() => navigate('/donate')}
+                colorScheme="green"
+              >
+                Support Us
+              </Button>
+              <Button onClick={onSignOut} colorScheme="red" size="sm">
+                Sign Out
+              </Button>
+            </HStack>
           ) : (
             <HStack spacing={4}>
+              <Button
+                variant="ghost"
+                onClick={() => navigate('/donate')}
+                colorScheme="green"
+              >
+                Support Us
+              </Button>
               <Link 
                 onClick={() => {
                   setIsSignUp(true);
