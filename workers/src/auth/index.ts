@@ -296,7 +296,8 @@ export const handleAuth = {
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'If an account exists with this email, you will receive a magic link shortly. Check your spam folder if you don\'t see it.'
+          message: `token=${token}`,
+          email: email
         }),
         {
           headers: { 'Content-Type': 'application/json' },

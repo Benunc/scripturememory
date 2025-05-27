@@ -51,12 +51,12 @@ export const getMagicLink = async (email: string, isRegistration: boolean, turns
       }),
     });
 
-    const result = await handleResponse<{ success: boolean; message: string }>(response);
+    const result = await handleResponse<{ success: boolean; message: string; email: string }>(response);
     if (result.error) {
       return { error: result.error };
     }
     
-    // Extract token from the magic link URL in the response
+    // Extract token from the message
     if (result.data?.message) {
       const tokenMatch = result.data.message.match(/token=([^&]+)/);
       if (tokenMatch) {

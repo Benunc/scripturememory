@@ -52,6 +52,13 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
   const [message, setMessage] = useState('');
   const [showTurnstile, setShowTurnstile] = useState(false);
 
+  // Load Turnstile script when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setShowTurnstile(true);
+    }
+  }, [isOpen]);
+
   // Load Turnstile script only when needed
   useEffect(() => {
     if (!showTurnstile) return;
@@ -69,11 +76,13 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
         debug.log('auth', 'Loading Turnstile script');
         script = document.createElement('script');
         script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-        script.async = true;
-        script.defer = true;
+        script.async = false;
+        script.defer = false;
         script.onload = () => {
           debug.log('auth', 'Turnstile script loaded successfully');
-          setIsTurnstileReady(true);
+          setTimeout(() => {
+            setIsTurnstileReady(true);
+          }, 100);
         };
         script.onerror = (error) => {
           debug.error('auth', 'Failed to load Turnstile script', error);
@@ -228,12 +237,6 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     e.preventDefault();
     if (!email) return;
 
-    // Show Turnstile if not already shown
-    if (!showTurnstile) {
-      setShowTurnstile(true);
-      return;
-    }
-
     try {
       if (!turnstileToken) {
         setError('Please complete the security check');
@@ -335,7 +338,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
                 width="full"
                 isLoading={isLoading}
               >
-                {showTurnstile ? 'Send Magic Link' : 'Continue'}
+                Send Magic Link
               </Button>
               <Text fontSize="sm" color="gray.600">
                 Don't have an account?{' '}
