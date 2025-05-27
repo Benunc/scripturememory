@@ -132,4 +132,10 @@ export async function deleteVerse(token: string, reference: string): Promise<Api
     headers: { 'Authorization': `Bearer ${token}` }
   });
   return handleResponse<void>(response);
-} 
+}
+
+export const getApiUrl = () => {
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? import.meta.env.VITE_WORKER_URL || 'http://localhost:8787'
+    : 'https://scripture-memory.ben-2e6.workers.dev';
+}; 

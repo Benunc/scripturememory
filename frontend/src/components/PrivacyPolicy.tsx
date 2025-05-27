@@ -1,121 +1,121 @@
-import { Box, Heading, Text, VStack, Link } from '@chakra-ui/react'
-import { useState, useEffect } from 'react'
+import React from 'react';
+import {
+  Box,
+  Container,
+  Heading,
+  Text,
+  VStack,
+  List,
+  ListItem,
+  ListIcon,
+} from '@chakra-ui/react';
+import { CheckCircleIcon } from '@chakra-ui/icons';
 
-interface PrivacyPolicyProps {
-  onBack: () => void;
-}
-
-export const PrivacyPolicy = ({ onBack }: PrivacyPolicyProps) => {
-  const [email, setEmail] = useState('');
-
-  useEffect(() => {
-    // Obfuscated email parts
-    const parts = [
-      'ben',
-      '@',
-      'benandjacq',
-      '.',
-      'com'
-    ];
-    setEmail(parts.join(''));
-  }, []);
-
+export const PrivacyPolicy: React.FC = () => {
   return (
-    <Box>
-      <Box as="header">
-        <Heading as="h1" size="xl">Scripture Memory</Heading>
-      </Box>
-      <Box as="main" p={8}>
-        <VStack spacing={6} align="stretch" maxW="800px" mx="auto">
-          <Link onClick={onBack} color="blue.500" textDecoration="underline">
-            ← Back to Home
-          </Link>
-          
-          <Heading as="h2" size="lg">Privacy Policy</Heading>
-          
-          <Text>
-            Last updated: {new Date().toLocaleDateString()}
+    <Container maxW="container.md" py={8}>
+      <VStack spacing={6} align="stretch">
+        <Heading as="h1" size="xl">Privacy Policy</Heading>
+        
+        <Box>
+          <Heading as="h2" size="lg" mb={4}>Information We Collect</Heading>
+          <List spacing={3}>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Your email address (for authentication)</Text>
+            </ListItem>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Your scripture verses and progress</Text>
+            </ListItem>
+          </List>
+        </Box>
+
+        <Box>
+          <Heading as="h2" size="lg" mb={4}>How We Use Your Information</Heading>
+          <List spacing={3}>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Authenticate your account</Text>
+            </ListItem>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Store your verses and track your progress</Text>
+            </ListItem>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Send you magic links for secure login</Text>
+            </ListItem>
+          </List>
+        </Box>
+
+        <Box>
+          <Heading as="h2" size="lg" mb={4}>Data Storage</Heading>
+          <Text mb={4}>
+            Your data is stored securely in our database with the following protections:
           </Text>
+          <List spacing={3}>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Encrypted at rest</Text>
+            </ListItem>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Protected by industry-standard security measures</Text>
+            </ListItem>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Accessible only to you and our secure API</Text>
+            </ListItem>
+          </List>
+        </Box>
 
-          <VStack align="stretch" spacing={4}>
-            <Box>
-              <Heading as="h3" size="md" mb={2}>Information We Collect</Heading>
-              <Text>
-                Scripture Memory collects and stores the following information:
-              </Text>
-              <Box pl={4} mt={2}>
-                <Text>• Your Google account email address</Text>
-                <Text>• Scripture verses you choose to memorize</Text>
-                <Text>• Your progress in memorizing these verses</Text>
-              </Box>
-            </Box>
+        <Box>
+          <Heading as="h2" size="lg" mb={4}>Technologies We Use</Heading>
+          <List spacing={3}>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Cloudflare Workers for secure API handling</Text>
+            </ListItem>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Cloudflare Turnstile for bot protection</Text>
+            </ListItem>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Magic links for passwordless authentication</Text>
+            </ListItem>
+          </List>
+        </Box>
 
-            <Box>
-              <Heading as="h3" size="md" mb={2}>How We Use Your Information</Heading>
-              <Text>
-                We use your information solely to:
-              </Text>
-              <Box pl={4} mt={2}>
-                <Text>• Provide you with access to your personal scripture memory list</Text>
-                <Text>• Track your progress in memorizing verses</Text>
-                <Text>• Store your verses in your personal Google Sheet</Text>
-              </Box>
-            </Box>
+        <Box>
+          <Heading as="h2" size="lg" mb={4}>Your Rights</Heading>
+          <List spacing={3}>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Access your data at any time</Text>
+            </ListItem>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Delete your account and all associated data</Text>
+            </ListItem>
+            <ListItem>
+              <ListIcon as={CheckCircleIcon} color="green.500" />
+              <Text>Export your data in a standard format</Text>
+            </ListItem>
+          </List>
+        </Box>
 
-            <Box>
-              <Heading as="h3" size="md" mb={2}>Data Storage</Heading>
-              <Text>
-                Your data is stored in a Google Sheet that is:
-              </Text>
-              <Box pl={4} mt={2}>
-                <Text>• Accessible only to you and the administrator</Text>
-                <Text>• Protected by Google's security measures</Text>
-                <Text>• Stored in your own personal tab within the sheet</Text>
-              </Box>
-            </Box>
-
-            <Box>
-              <Heading as="h3" size="md" mb={2}>Third-Party Services</Heading>
-              <Text>
-                We use the following third-party services:
-              </Text>
-              <Box pl={4} mt={2}>
-                <Text>• Google OAuth for authentication</Text>
-                <Text>• Google Sheets API for data storage</Text>
-              </Box>
-            </Box>
-
-            <Box>
-              <Heading as="h3" size="md" mb={2}>Your Rights</Heading>
-              <Text>
-                You have the right to:
-              </Text>
-              <Box pl={4} mt={2}>
-                <Text>• Access your data at any time</Text>
-                <Text>• Request deletion of your data</Text>
-                <Text>• Export your data from your Google Sheet</Text>
-              </Box>
-            </Box>
-
-            <Box>
-              <Heading as="h3" size="md" mb={2}>Contact</Heading>
-              <Text>
-                If you have any questions about this privacy policy, please contact:
-              </Text>
-              <Text mt={2}>
-                Ben Meredith<br />
-                <Link 
-                  href={`mailto:${email}`}
-                  color="blue.500"
-                  textDecoration="underline"
-                >
-                  {email}
-                </Link>
-              </Text>
-            </Box>
-          </VStack>
-        </VStack>
-      </Box>
-    </Box>
-  )
-} 
+        <Box>
+          <Heading as="h2" size="lg" mb={4}>Contact</Heading>
+          <Text>
+            If you have any questions about this Privacy Policy, please contact us at{' '}
+            <a href="mailto:ben@scripturememory.app" style={{ color: 'blue' }}>
+              ben@scripturememory.app
+            </a>
+          </Text>
+        </Box>
+      </VStack>
+    </Container>
+  );
+}; 

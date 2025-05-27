@@ -52,11 +52,14 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     let script: HTMLScriptElement | null = null;
     
     const loadScript = () => {
-      if (document.querySelector('script[src*="turnstile"]')) {
+      // Check if script already exists
+      const existingScript = document.querySelector('script[src*="turnstile"]');
+      if (existingScript) {
         setIsTurnstileReady(true);
         return;
       }
 
+      // Create and load new script
       script = document.createElement('script');
       script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
       script.async = true;
@@ -64,21 +67,40 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       script.onload = () => {
         setIsTurnstileReady(true);
       };
+      script.onerror = () => {
+        console.error('Failed to load Turnstile script');
+        toast({
+          title: "Error",
+          description: "Failed to load security check. Please refresh the page.",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+      };
       document.head.appendChild(script);
     };
 
     loadScript();
 
     return () => {
+      // Cleanup script and widget
       if (script && script.parentNode) {
         script.parentNode.removeChild(script);
       }
+      if (widgetIdRef.current) {
+        window.turnstile?.reset(widgetIdRef.current);
+        widgetIdRef.current = null;
+      }
+      setIsTurnstileReady(false);
     };
   }, []);
 
   // Function to render Turnstile
   const renderTurnstile = () => {
-    if (!turnstileContainerRef.current || !window.turnstile) return;
+    if (!turnstileContainerRef.current || !window.turnstile) {
+      console.error('Turnstile container or API not ready');
+      return;
+    }
     
     // Use test keys for local development
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -87,10 +109,10 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       : import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
     if (!siteKey) {
-      console.error('Turnstile site key is missing. Please check your .env file.');
+      console.error('Turnstile site key is missing');
       toast({
         title: "Configuration Error",
-        description: "Turnstile site key is missing. Please contact support.",
+        description: "Security check configuration is missing. Please contact support.",
         status: "error",
         duration: null,
         isClosable: true,
@@ -98,12 +120,13 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       return;
     }
     
-    // Reset any existing widget
-    if (widgetIdRef.current) {
-      window.turnstile.reset(widgetIdRef.current);
-    }
-
     try {
+      // Reset any existing widget
+      if (widgetIdRef.current) {
+        window.turnstile.reset(widgetIdRef.current);
+        widgetIdRef.current = null;
+      }
+
       // Render new widget
       widgetIdRef.current = window.turnstile.render(turnstileContainerRef.current, {
         sitekey: siteKey,
@@ -117,7 +140,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       console.error('Error rendering Turnstile:', error);
       toast({
         title: "Error",
-        description: "Failed to load Turnstile. Please refresh the page.",
+        description: "Failed to load security check. Please refresh the page.",
         status: "error",
         duration: 5000,
         isClosable: true,
@@ -135,15 +158,6 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       return () => clearTimeout(timer);
     }
   }, [isOpen, isTurnstileReady]);
-
-  // Cleanup Turnstile when modal closes
-  useEffect(() => {
-    if (!isOpen && widgetIdRef.current) {
-      window.turnstile?.reset(widgetIdRef.current);
-      widgetIdRef.current = null;
-      setTurnstileToken('');
-    }
-  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

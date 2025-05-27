@@ -1,144 +1,71 @@
-import { Verse } from '../types';
-import { getAccessToken } from './token';
+import { Verse } from '../types/Verse';
+import { getApiUrl } from './api';
 
-const SHEET_ID = import.meta.env.VITE_GOOGLE_SHEET_ID;
-const API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
-
-export async function fetchVerses(): Promise<Verse[]> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('No access token available');
-
-  const response = await fetch(`${API_BASE}/${SHEET_ID}/values/Verses!A2:D`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch verses');
+export const getVerses = async (userEmail: string): Promise<Verse[]> => {
+  try {
+    const response = await fetch(`${getApiUrl()}/verses?email=${encodeURIComponent(userEmail)}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch verses');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching verses:', error);
+    return [];
   }
+};
 
-  const data = await response.json();
-  return data.values.map((row: any[]) => ({
-    reference: row[0],
-    text: row[1],
-    status: row[2],
-    lastReviewed: row[3],
-  }));
-}
-
-export async function addVerse(verse: Omit<Verse, 'lastReviewed'>): Promise<Verse> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('No access token available');
-
-  const now = new Date().toISOString();
-  const newVerse = {
-    ...verse,
-    lastReviewed: now,
-  };
-
-  const response = await fetch(`${API_BASE}/${SHEET_ID}/values/Verses!A:D:append?valueInputOption=USER_ENTERED`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      values: [[
-        newVerse.reference,
-        newVerse.text,
-        newVerse.status,
-        newVerse.lastReviewed,
-      ]],
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to add verse');
+export const addVerse = async (userEmail: string, verseData: Omit<Verse, 'id'>): Promise<boolean> => {
+  try {
+    const response = await fetch(`${getApiUrl()}/verses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: userEmail,
+        ...verseData,
+      }),
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Error adding verse:', error);
+    return false;
   }
+};
 
-  return newVerse;
-}
-
-export async function updateVerse(reference: string, updates: Partial<Verse>): Promise<Verse> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('No access token available');
-
-  // First, find the row number for this verse
-  const response = await fetch(`${API_BASE}/${SHEET_ID}/values/Verses!A:A`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to find verse');
+export const updateVerse = async (userEmail: string, verseId: string, updates: Partial<Verse>): Promise<boolean> => {
+  try {
+    const response = await fetch(`${getApiUrl()}/verses/${verseId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: userEmail,
+        ...updates,
+      }),
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Error updating verse:', error);
+    return false;
   }
+};
 
-  const data = await response.json();
-  const rowIndex = data.values.findIndex((row: any[]) => row[0] === reference);
-  if (rowIndex === -1) {
-    throw new Error('Verse not found');
+export const deleteVerse = async (userEmail: string, verseId: string): Promise<boolean> => {
+  try {
+    const response = await fetch(`${getApiUrl()}/verses/${verseId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: userEmail,
+      }),
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Error deleting verse:', error);
+    return false;
   }
-
-  // Now update the specific cells
-  const row = rowIndex + 1; // Convert to 1-based index
-  const range = `Verses!A${row}:D${row}`;
-  
-  const updateResponse = await fetch(`${API_BASE}/${SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      values: [[
-        reference,
-        updates.text,
-        updates.status,
-        updates.lastReviewed,
-      ]],
-    }),
-  });
-
-  if (!updateResponse.ok) {
-    throw new Error('Failed to update verse');
-  }
-
-  return {
-    reference,
-    text: updates.text || '',
-    status: updates.status || 'not_started',
-    lastReviewed: updates.lastReviewed || new Date().toISOString(),
-  };
-}
-
-export async function deleteVerse(reference: string): Promise<void> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('No access token available');
-
-  // First, find the row number for this verse
-  const response = await fetch(`${API_BASE}/${SHEET_ID}/values/Verses!A:A`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to find verse');
-  }
-
-  const data = await response.json();
-  const rowIndex = data.values.findIndex((row: any[]) => row[0] === reference);
-  if (rowIndex === -1) {
-    throw new Error('Verse not found');
-  }
-
-  // Now delete the row
-  const row = rowIndex + 1; // Convert to 1-based index
-  const range = `Verses!A${row}:D${row}`;
-  
-  const deleteResponse = await fetch(`
+};
