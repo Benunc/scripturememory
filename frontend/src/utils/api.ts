@@ -40,6 +40,7 @@ export async function getMagicLink(
   isRegistration: boolean,
   turnstileToken: string
 ): Promise<ApiResponse<{ token: string }>> {
+  console.log('Sending magic link request with Turnstile token:', turnstileToken);
   const response = await fetch(`${API_URL}/auth/magic-link`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -128,7 +128,15 @@ const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) =>
   }
 };
 
-// Helper to verify Turnstile token
+interface TurnstileResponse {
+  success: boolean;
+  'error-codes'?: string[];
+  challenge_ts?: string;
+  hostname?: string;
+  action?: string;
+  cdata?: string;
+}
+
 const verifyTurnstileToken = async (token: string, env: Env, request: Request): Promise<boolean> => {
   const isLocalhost = request.headers.get('host')?.includes('localhost') || false;
   
@@ -138,6 +146,7 @@ const verifyTurnstileToken = async (token: string, env: Env, request: Request): 
   }
 
   try {
+    console.log('Verifying Turnstile token...');
     const formData = new FormData();
     formData.append('secret', env.TURNSTILE_SECRET_KEY);
     formData.append('response', token);
@@ -147,10 +156,16 @@ const verifyTurnstileToken = async (token: string, env: Env, request: Request): 
       body: formData
     });
 
-    const result = await response.json() as { success: boolean };
+    const result = await response.json() as TurnstileResponse;
+    console.log('Turnstile verification result:', result);
+    
+    if (!result.success) {
+      console.error('Turnstile verification failed:', result['error-codes']);
+    }
+    
     return result.success === true;
   } catch (error) {
-    console.error('Error verifying Turnstile token');
+    console.error('Error verifying Turnstile token:', error);
     return false;
   }
 };
