@@ -7,7 +7,7 @@ compatibility_date = "2024-02-20"
 ENVIRONMENT = "development"
 
 [env.production]
-name = "scripture-memory-prod"
+name = "scripture-memory"
 ENVIRONMENT = "production"
 
 [env.production.vars]
