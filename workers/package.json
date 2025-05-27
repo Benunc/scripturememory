@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "wrangler dev --env development",
     "deploy": "wrangler deploy",
+    "build": "wrangler deploy --dry-run",
     "test": "jest",
     "wipe-dev-db": "wrangler d1 execute DB_DEV --command=\"DELETE FROM verses; DELETE FROM sessions; DELETE FROM magic_links; DELETE FROM users;\"",
     "reinit-dev-db": "wrangler d1 execute DB_DEV --file=./schema.sql"

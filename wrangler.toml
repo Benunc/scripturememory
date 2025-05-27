@@ -2,48 +2,46 @@ name = "scripture-memory"
 main = "workers/src/index.ts"
 compatibility_date = "2024-02-20"
 
-[[d1_databases]]
-binding = "DB"
-database_name = "scripture-memory"
-database_id = "ef894297-d95a-4df9-bccf-3ac6be4c1cc7"
+# Worker configuration
+workers_dev = true
 
+# Build configuration
+[build]
+command = "npm run build"
+cwd = "workers"
+
+# Environment variables
 [vars]
 ENVIRONMENT = "development"
 
-[[routes]]
-pattern = "scripture.wpsteward.com/*"
-zone_name = "wpsteward.com"
+[env.production]
+name = "scripture-memory-prod"
+ENVIRONMENT = "production"
 
 [env.production.vars]
 ENVIRONMENT = "production"
 
-[env.development.vars]
-ENVIRONMENT = "development"
+# Production routes
+[[env.production.routes]]
+pattern = "scripture.wpsteward.com/*"
+zone_name = "wpsteward.com"
 
-[[d1_databases]]
-binding = "DB_DEV"
-database_name = "scripture-memory-dev"
-database_id = "d2e6214f-b924-47ee-a138-025dcf9c8256"
-migrations_dir = "migrations"
-
-[[d1_databases]]
-binding = "DB_PROD"
+[[env.production.d1_databases]]
+binding = "DB"
 database_name = "scripture-memory"
 database_id = "ef894297-d95a-4df9-bccf-3ac6be4c1cc7"
 migrations_dir = "migrations"
 
 [env.development]
+name = "scripture-memory-dev"
 ENVIRONMENT = "development"
 API_URL = "http://localhost:8787"
 
-[[env.development.d1_databases]]
-binding = "DB_DEV"
-database_name = "scripture-memory-dev"
-database_id = "d2e6214f-b924-47ee-a138-025dcf9c8256"
-migrations_dir = "migrations"
+[env.development.vars]
+ENVIRONMENT = "development"
 
 [[env.development.d1_databases]]
-binding = "DB_PROD"
-database_name = "scripture-memory"
-database_id = "ef894297-d95a-4df9-bccf-3ac6be4c1cc7"
+binding = "DB"
+database_name = "scripture-memory-dev"
+database_id = "d2e6214f-b924-47ee-a138-025dcf9c8256"
 migrations_dir = "migrations" 
