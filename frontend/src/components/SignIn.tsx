@@ -56,6 +56,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
   useEffect(() => {
     if (!showTurnstile) return;
 
+    let script: HTMLScriptElement | null = null;
     const loadTurnstile = async () => {
       try {
         debug.log('auth', 'Checking Turnstile availability');
@@ -66,7 +67,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
         }
 
         debug.log('auth', 'Loading Turnstile script');
-        const script = document.createElement('script');
+        script = document.createElement('script');
         script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
         script.async = true;
         script.defer = true;
@@ -98,6 +99,22 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     };
 
     loadTurnstile();
+
+    // Cleanup function
+    return () => {
+      if (script && script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+      if (widgetIdRef.current && window.turnstile) {
+        try {
+          window.turnstile.reset(widgetIdRef.current);
+        } catch (error) {
+          debug.error('auth', 'Error resetting Turnstile widget during cleanup', error);
+        }
+      }
+      widgetIdRef.current = null;
+      setIsTurnstileReady(false);
+    };
   }, [showTurnstile]);
 
   // Function to render Turnstile
@@ -105,7 +122,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     debug.log('auth', 'Attempting to render Turnstile', {
       containerReady: !!turnstileContainerRef.current,
       turnstileReady: !!window.turnstile,
-      isOpen,
+      showTurnstile,
       isTurnstileReady
     });
 
@@ -117,6 +134,16 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     if (!window.turnstile) {
       debug.error('auth', 'Turnstile API not ready');
       return;
+    }
+
+    // Clear any existing widget
+    if (widgetIdRef.current) {
+      try {
+        window.turnstile.reset(widgetIdRef.current);
+      } catch (error) {
+        debug.error('auth', 'Error resetting existing Turnstile widget', error);
+      }
+      widgetIdRef.current = null;
     }
     
     // Use test keys for local development
@@ -140,13 +167,6 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     }
     
     try {
-      // Reset any existing widget
-      if (widgetIdRef.current) {
-        debug.log('auth', 'Resetting existing Turnstile widget');
-        window.turnstile.reset(widgetIdRef.current);
-        widgetIdRef.current = null;
-      }
-
       debug.log('auth', 'Rendering new Turnstile widget');
       // Render new widget
       widgetIdRef.current = window.turnstile.render(turnstileContainerRef.current, {
@@ -171,6 +191,22 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     }
   };
 
+  // Cleanup when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setShowTurnstile(false);
+      setTurnstileToken('');
+      if (widgetIdRef.current && window.turnstile) {
+        try {
+          window.turnstile.reset(widgetIdRef.current);
+        } catch (error) {
+          debug.error('auth', 'Error resetting Turnstile widget on modal close', error);
+        }
+      }
+      widgetIdRef.current = null;
+    }
+  }, [isOpen]);
+
   // Render Turnstile widget when needed and ready
   useEffect(() => {
     debug.log('auth', 'Turnstile render effect triggered', {
@@ -179,7 +215,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       hasTurnstile: !!window.turnstile
     });
 
-    if (showTurnstile && isTurnstileReady) {
+    if (showTurnstile && isTurnstileReady && turnstileContainerRef.current) {
       // Small delay to ensure DOM is ready
       const timer = setTimeout(() => {
         renderTurnstile();
