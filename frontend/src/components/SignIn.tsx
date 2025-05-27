@@ -55,18 +55,42 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
   useEffect(() => {
     const loadTurnstile = async () => {
       try {
-        if (!window.turnstile) {
-          const script = document.createElement('script');
-          script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-          script.async = true;
-          script.defer = true;
-          script.onerror = () => {
-            debug.error('auth', 'Failed to load Turnstile script');
-          };
-          document.head.appendChild(script);
+        debug.log('auth', 'Checking Turnstile availability');
+        if (window.turnstile) {
+          debug.log('auth', 'Turnstile already loaded');
+          setIsTurnstileReady(true);
+          return;
         }
+
+        debug.log('auth', 'Loading Turnstile script');
+        const script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+          debug.log('auth', 'Turnstile script loaded successfully');
+          setIsTurnstileReady(true);
+        };
+        script.onerror = (error) => {
+          debug.error('auth', 'Failed to load Turnstile script', error);
+          toast({
+            title: "Error",
+            description: "Failed to load security check. Please refresh the page.",
+            status: "error",
+            duration: 5000,
+            isClosable: true,
+          });
+        };
+        document.head.appendChild(script);
       } catch (error) {
         debug.error('auth', 'Error loading Turnstile script', error);
+        toast({
+          title: "Error",
+          description: "Failed to load security check. Please refresh the page.",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
       }
     };
 
@@ -75,8 +99,20 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
 
   // Function to render Turnstile
   const renderTurnstile = () => {
-    if (!turnstileContainerRef.current || !window.turnstile) {
-      debug.error('auth', 'Turnstile container or API not ready');
+    debug.log('auth', 'Attempting to render Turnstile', {
+      containerReady: !!turnstileContainerRef.current,
+      turnstileReady: !!window.turnstile,
+      isOpen,
+      isTurnstileReady
+    });
+
+    if (!turnstileContainerRef.current) {
+      debug.error('auth', 'Turnstile container not ready');
+      return;
+    }
+
+    if (!window.turnstile) {
+      debug.error('auth', 'Turnstile API not ready');
       return;
     }
     
@@ -85,6 +121,8 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     const siteKey = import.meta.env.DEV
       ? '1x00000000000000000000AA'  // Test site key
       : import.meta.env.VITE_TURNSTILE_SITE_KEY;
+
+    debug.log('auth', 'Using Turnstile site key', { isLocalhost, hasSiteKey: !!siteKey });
 
     if (!siteKey) {
       debug.error('auth', 'Turnstile site key is missing');
@@ -101,19 +139,23 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     try {
       // Reset any existing widget
       if (widgetIdRef.current) {
+        debug.log('auth', 'Resetting existing Turnstile widget');
         window.turnstile.reset(widgetIdRef.current);
         widgetIdRef.current = null;
       }
 
+      debug.log('auth', 'Rendering new Turnstile widget');
       // Render new widget
       widgetIdRef.current = window.turnstile.render(turnstileContainerRef.current, {
         sitekey: siteKey,
         callback: (token: string) => {
+          debug.log('auth', 'Turnstile callback received token');
           setTurnstileToken(token);
         },
         'refresh-expired': 'auto',
         'appearance': 'always'
       });
+      debug.log('auth', 'Turnstile widget rendered successfully');
     } catch (error) {
       debug.error('auth', 'Error rendering Turnstile:', error);
       toast({
@@ -128,6 +170,12 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
 
   // Render Turnstile widget when modal opens and script is ready
   useEffect(() => {
+    debug.log('auth', 'Turnstile render effect triggered', {
+      isOpen,
+      isTurnstileReady,
+      hasTurnstile: !!window.turnstile
+    });
+
     if (isOpen && isTurnstileReady) {
       // Small delay to ensure DOM is ready
       const timer = setTimeout(() => {
