@@ -1,8 +1,7 @@
 import { D1Database } from '@cloudflare/workers-types';
 
 export interface Env {
-  DB_DEV: D1Database;
-  DB_PROD: D1Database;
+  DB: D1Database;
   ENVIRONMENT: string;
   AWS_ACCESS_KEY_ID: string;
   AWS_SECRET_ACCESS_KEY: string;

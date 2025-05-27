@@ -24,35 +24,45 @@ const recordRequest = (email: string) => {
 // Helper to get the correct database binding
 const getDB = (env: Env) => {
   console.log('Environment:', env.ENVIRONMENT);
-  console.log('DB_DEV available:', !!env.DB_DEV);
-  console.log('DB_PROD available:', !!env.DB_PROD);
   
-  // In local development, always use DB_DEV
-  if (env.ENVIRONMENT === 'development' || !env.ENVIRONMENT) {
-    if (!env.DB_DEV) {
-      console.error('DB_DEV is not available in development environment');
-      throw new Error('DB_DEV is not available in development environment');
-    }
-    return env.DB_DEV;
-  }
-  
-  // In production, use DB_PROD
+  // In production, use DB
   if (env.ENVIRONMENT === 'production') {
-    if (!env.DB_PROD) {
-      console.error('DB_PROD is not available in production environment');
-      throw new Error('DB_PROD is not available in production environment');
+    if (!env.DB) {
+      console.error('DB is not available in production environment');
+      throw new Error('DB is not available in production environment');
     }
-    return env.DB_PROD;
+    return env.DB;
   }
   
-  // Fallback to DB_DEV if available
-  if (env.DB_DEV) {
-    console.log('Using DB_DEV as fallback');
-    return env.DB_DEV;
+  // In development, use DB
+  if (env.ENVIRONMENT === 'development' || !env.ENVIRONMENT) {
+    if (!env.DB) {
+      console.error('DB is not available in development environment');
+      throw new Error('DB is not available in development environment');
+    }
+    return env.DB;
   }
   
   console.error('No database binding available');
   throw new Error('No database binding available');
+};
+
+// Helper to calculate AWS signature
+const calculateSignature = async (key: string, msg: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(key);
+  const msgData = encoder.encode(msg);
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, msgData);
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 };
 
 // Helper to send magic link email
@@ -67,12 +77,13 @@ const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) =>
       return;
     }
 
-    // Create SES client configuration
-    const sesConfig = {
-      accessKeyId: env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-      region: env.AWS_REGION
-    };
+    const date = new Date();
+    const dateStamp = date.toISOString().split('T')[0];
+    const amzDate = date.toISOString().replace(/[:-]|\.\d{3}/g, '');
+    const service = 'ses';
+    const region = env.AWS_REGION;
+    const algorithm = 'AWS4-HMAC-SHA256';
+    const scope = `${dateStamp}/${region}/${service}/aws4_request`;
 
     // Prepare email content
     const emailParams = {
@@ -101,19 +112,81 @@ const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) =>
       }
     };
 
+    // Create canonical request
+    const canonicalUri = '/';
+    const canonicalQuerystring = '';
+    const canonicalHeaders = [
+      'content-type:application/x-www-form-urlencoded',
+      'host:email.' + region + '.amazonaws.com',
+      'x-amz-date:' + amzDate,
+      'x-amz-target:AmazonSES.SendEmail'
+    ].join('\n') + '\n';
+    const signedHeaders = 'content-type;host;x-amz-date;x-amz-target';
+    const payload = new URLSearchParams({
+      Action: 'SendEmail',
+      Version: '2010-12-01',
+      'Source': env.SES_FROM_EMAIL,
+      'Destination.ToAddresses.member.1': email,
+      'Message.Subject.Data': 'Your Magic Link for Scripture Memory',
+      'Message.Body.Html.Data': `
+        <h1>Welcome to Scripture Memory</h1>
+        <p>Click the link below to sign in:</p>
+        <p><a href="${magicLink}">Sign in to Scripture Memory</a></p>
+        <p>This link will expire in 15 minutes.</p>
+        <p>If you didn't request this link, you can safely ignore this email.</p>
+      `,
+      'Message.Body.Text.Data': `Click the link below to sign in to Scripture Memory:\n\n${magicLink}\n\nThis link will expire in 15 minutes.`
+    }).toString();
+
+    const payloadHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
+    const payloadHashHex = Array.from(new Uint8Array(payloadHash))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    const canonicalRequest = [
+      'POST',
+      canonicalUri,
+      canonicalQuerystring,
+      canonicalHeaders,
+      signedHeaders,
+      payloadHashHex
+    ].join('\n');
+
+    const canonicalRequestHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalRequest));
+    const canonicalRequestHashHex = Array.from(new Uint8Array(canonicalRequestHash))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    // Create string to sign
+    const stringToSign = [
+      algorithm,
+      amzDate,
+      scope,
+      canonicalRequestHashHex
+    ].join('\n');
+
+    // Calculate signature
+    const kDate = await calculateSignature('AWS4' + env.AWS_SECRET_ACCESS_KEY, dateStamp);
+    const kRegion = await calculateSignature(kDate, region);
+    const kService = await calculateSignature(kRegion, service);
+    const kSigning = await calculateSignature(kService, 'aws4_request');
+    const signature = await calculateSignature(kSigning, stringToSign);
+
     // Send email using SES
-    const response = await fetch(`https://email.${env.AWS_REGION}.amazonaws.com/v2/email/outbound-emails`, {
+    const response = await fetch(`https://email.${region}.amazonaws.com`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Amz-Date': new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''),
-        'Authorization': `AWS4-HMAC-SHA256 Credential=${env.AWS_ACCESS_KEY_ID}/${new Date().toISOString().split('T')[0]}/${env.AWS_REGION}/ses/aws4_request`
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Amz-Date': amzDate,
+        'X-Amz-Target': 'AmazonSES.SendEmail',
+        'Authorization': `${algorithm} Credential=${env.AWS_ACCESS_KEY_ID}/${scope},SignedHeaders=${signedHeaders},Signature=${signature}`
       },
-      body: JSON.stringify(emailParams)
+      body: payload
     });
 
     if (!response.ok) {
-      console.error('Email sending error:', await response.text());
+      const errorText = await response.text();
+      console.error('Email sending error:', errorText);
       // Log the magic link for testing if email sending fails
       console.log('=== Magic Link for Testing (Email Failed) ===');
       console.log(magicLink);
