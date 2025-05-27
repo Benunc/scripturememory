@@ -104,12 +104,10 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     }
 
     try {
-      console.log('Rendering Turnstile with site key:', siteKey);
       // Render new widget
       widgetIdRef.current = window.turnstile.render(turnstileContainerRef.current, {
         sitekey: siteKey,
         callback: (token: string) => {
-          console.log('Turnstile token received:', token);
           setTurnstileToken(token);
         },
         'refresh-expired': 'auto',

@@ -132,17 +132,8 @@ const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) =>
 const verifyTurnstileToken = async (token: string, env: Env, request: Request): Promise<boolean> => {
   const isLocalhost = request.headers.get('host')?.includes('localhost') || false;
   
-  console.log('Verifying Turnstile token:', {
-    token,
-    environment: env.ENVIRONMENT,
-    isDevelopment: env.ENVIRONMENT === 'development',
-    isLocalhost,
-    host: request.headers.get('host')
-  });
-
   // Accept any token when running locally
   if (isLocalhost) {
-    console.log('Local development: accepting any token');
     return true;
   }
 
@@ -157,10 +148,9 @@ const verifyTurnstileToken = async (token: string, env: Env, request: Request): 
     });
 
     const result = await response.json() as { success: boolean };
-    console.log('Turnstile verification result:', result);
     return result.success === true;
   } catch (error) {
-    console.error('Error verifying Turnstile token:', error);
+    console.error('Error verifying Turnstile token');
     return false;
   }
 };
@@ -169,55 +159,42 @@ export const handleAuth = {
   // Send magic link for sign in
   sendMagicLink: async (request: Request, env: Env): Promise<Response> => {
     try {
-      console.log('Received magic link request');
       const { email, isRegistration, turnstileToken } = await request.json() as { 
         email: string; 
         isRegistration: boolean;
         turnstileToken: string;
       };
-      console.log('Request data:', { email, isRegistration, turnstileToken });
 
       if (!email) {
-        console.log('Email is missing');
         return new Response('Email is required', { status: 400 });
       }
 
       if (!turnstileToken) {
-        console.log('Turnstile token is missing');
         return new Response('Turnstile token is required', { status: 400 });
       }
 
       // Verify Turnstile token
-      console.log('Verifying Turnstile token...');
       const isValidToken = await verifyTurnstileToken(turnstileToken, env, request);
-      console.log('Turnstile token verification result:', isValidToken);
       
       if (!isValidToken) {
-        console.log('Invalid Turnstile token');
         return new Response('Invalid Turnstile token', { status: 400 });
       }
 
       if (isRateLimited(email)) {
-        console.log('Rate limit exceeded for email:', email);
         return new Response('Too many requests. Please try again later.', { status: 429 });
       }
 
       recordRequest(email);
-      console.log('Getting database connection...');
       const db = getDB(env);
-      console.log('Database connection established');
 
       // For sign in, check if user exists first
       if (!isRegistration) {
-        console.log('Checking for existing user...');
         const existingUser = await db.prepare(
           'SELECT * FROM users WHERE LOWER(email) = LOWER(?)'
         ).bind(email).first();
-        console.log('Existing user check result:', existingUser);
 
         // If user doesn't exist, return success but don't send email
         if (!existingUser) {
-          console.log('No existing user found');
           return new Response(
             JSON.stringify({
               success: true,
@@ -232,21 +209,16 @@ export const handleAuth = {
       }
 
       // Generate token and create magic link
-      console.log('Generating magic link...');
       const token = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
 
       // Store in D1
-      console.log('Storing magic link in database...');
       await db.prepare(
         'INSERT INTO magic_links (token, email, expires_at) VALUES (?, ?, ?)'
       ).bind(token, email, expiresAt.toISOString()).run();
-      console.log('Magic link stored successfully');
 
       // Send email
-      console.log('Sending magic link email...');
       await sendMagicLinkEmail(email, `${request.headers.get('origin')}/auth/verify?token=${token}`, env);
-      console.log('Magic link email sent');
 
       return new Response(
         JSON.stringify({
@@ -260,15 +232,7 @@ export const handleAuth = {
       );
     } catch (error) {
       console.error('Error in sendMagicLink:', error);
-      // Log the full error details
-      if (error instanceof Error) {
-        console.error('Error details:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        });
-      }
-      return new Response('Internal Server Error', { status: 500 });
+      return new Response('Internal server error', { status: 500 });
     }
   },
 
