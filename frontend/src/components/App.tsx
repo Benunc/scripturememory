@@ -11,6 +11,7 @@ import { ProgressStatus } from '../utils/progress';
 import { SignIn } from './SignIn';
 import logo from '/assets/images/ScriptureMemory.svg';
 import { Verse } from '../types/verse';
+import { debug } from '../utils/debug';
 
 const SAMPLE_VERSES: Verse[] = [
   {
@@ -48,7 +49,7 @@ export function MainApp() {
         // Validate environment variables first
         validateEnvVariables();
       } catch (error) {
-        console.error('Initialization error:', error);
+        debug.error('state', 'Initialization error:', error);
         toast({
           title: "Error",
           description: error instanceof Error ? error.message : 'Failed to initialize app',
@@ -73,7 +74,7 @@ export function MainApp() {
     try {
       await updateVerse(reference, { status: newStatus });
     } catch (error) {
-      console.error('Error updating verse status:', error);
+      debug.error('verses', 'Error updating verse status:', error);
       throw error; // Let VerseList handle the error display
     }
   };

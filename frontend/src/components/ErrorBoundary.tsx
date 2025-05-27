@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from '@chakra-ui/react';
+import { debug } from '../utils/debug';
 
 interface Props {
   children: React.ReactNode;
@@ -21,8 +22,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Error caught by boundary:', error);
-    console.error('Error info:', errorInfo);
+    debug.error('state', 'Error caught by boundary', error);
+    debug.error('state', 'Error info', errorInfo);
   }
 
   render() {

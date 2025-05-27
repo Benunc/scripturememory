@@ -1,7 +1,8 @@
 import { Verse } from '../types';
+import { debug } from './debug';
 
 // Use worker URL in production, relative URL in development
-const API_URL = import.meta.env.PROD 
+const API_URL = import.meta.env.MODE === 'production'
   ? 'https://scripture-memory.ben-2e6.workers.dev'
   : import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 
@@ -11,76 +12,86 @@ interface ApiResponse<T> {
 }
 
 async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
-  console.log('Handling response:', response);
+  debug.log('api', 'Handling response:', response);
   if (!response.ok) {
     const error = await response.text();
-    console.error('Response not OK:', error);
+    debug.error('api', 'Response not OK:', error);
     return { error };
   }
   
   // For 204 No Content or empty 201 Created responses
   if (response.status === 204 || (response.status === 201 && response.headers.get('content-length') === '0')) {
-    console.log('Response is empty success');
+    debug.log('api', 'Response is empty success');
     return { data: undefined as unknown as T };
   }
   
   // Try to parse as JSON for all other successful responses
   try {
     const data = await response.json();
-    console.log('Response data:', data);
+    debug.log('api', 'Response data:', data);
     return { data: data as T };
   } catch (error) {
-    console.error('Failed to parse JSON response:', error);
+    debug.error('api', 'Failed to parse JSON response:', error);
     return { error: 'Invalid response format' };
   }
 }
 
-export async function getMagicLink(
-  email: string, 
-  isRegistration: boolean,
-  turnstileToken: string
-): Promise<ApiResponse<{ token: string }>> {
-  console.log('Sending magic link request with Turnstile token:', turnstileToken);
-  const response = await fetch(`${API_URL}/auth/magic-link`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, isRegistration, turnstileToken })
-  });
-  
-  const result = await handleResponse<{ success: boolean; message: string }>(response);
-  if (result.error) {
-    return { error: result.error };
-  }
-  
-  // Extract token from the magic link URL in the response
-  if (result.data?.message) {
-    const tokenMatch = result.data.message.match(/token=([^&]+)/);
-    if (tokenMatch) {
-      return { data: { token: tokenMatch[1] } };
-    }
-  }
-  
-  return { error: 'No token found in response' };
-}
-
-export async function verifyMagicLink(token: string): Promise<ApiResponse<{ token: string; email: string }>> {
-  console.log('Making verification request to:', `${API_URL}/auth/verify?token=${token}`);
+export const getMagicLink = async (email: string, isRegistration: boolean, turnstileToken: string): Promise<ApiResponse<{ token: string }>> => {
   try {
-    const response = await fetch(`${API_URL}/auth/verify?token=${token}`);
-    console.log('Verification response status:', response.status);
-    console.log('Verification response headers:', Object.fromEntries(response.headers.entries()));
+    debug.log('api', 'Sending magic link request', { email, isRegistration });
+    const response = await fetch(`${API_URL}/auth/magic-link`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        isRegistration,
+        turnstileToken,
+      }),
+    });
+
+    const result = await handleResponse<{ success: boolean; message: string }>(response);
+    if (result.error) {
+      return { error: result.error };
+    }
     
+    // Extract token from the magic link URL in the response
+    if (result.data?.message) {
+      const tokenMatch = result.data.message.match(/token=([^&]+)/);
+      if (tokenMatch) {
+        return { data: { token: tokenMatch[1] } };
+      }
+    }
+    
+    return { error: 'No token found in response' };
+  } catch (error) {
+    debug.error('api', 'Error sending magic link request', error);
+    return { error: 'Failed to send magic link' };
+  }
+};
+
+export const verifyMagicLink = async (token: string): Promise<ApiResponse<{ token: string; email: string }>> => {
+  try {
+    debug.log('api', 'Making verification request');
+    const response = await fetch(`${API_URL}/auth/verify?token=${token}`);
+    
+    debug.log('api', 'Verification response received', { 
+      status: response.status,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+
     if (!response.ok) {
       const error = await response.text();
-      console.error('Verification failed:', error);
+      debug.error('api', 'Verification failed:', error);
       return { error };
     }
     
     const data = await response.json();
-    console.log('Verification response data:', data);
+    debug.log('api', 'Verification response data:', data);
     
     if (!data.success || !data.token || !data.email) {
-      console.error('Invalid verification response:', data);
+      debug.error('api', 'Invalid verification response:', data);
       return { error: 'Invalid verification response' };
     }
     
@@ -91,10 +102,10 @@ export async function verifyMagicLink(token: string): Promise<ApiResponse<{ toke
       }
     };
   } catch (error) {
-    console.error('Error making verification request:', error);
-    throw error;
+    debug.error('api', 'Error making verification request', error);
+    return { error: 'Failed to verify magic link' };
   }
-}
+};
 
 export async function getVerses(token: string): Promise<ApiResponse<Verse[]>> {
   const response = await fetch(`${API_URL}/verses`, {

@@ -20,6 +20,8 @@ import {
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
+import { getMagicLink } from '../utils/api';
+import { debug } from '../utils/debug';
 
 // Add Turnstile types
 declare global {
@@ -46,59 +48,35 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
   const navigate = useNavigate();
   const turnstileContainerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   // Load Turnstile script
   useEffect(() => {
-    let script: HTMLScriptElement | null = null;
-    
-    const loadScript = () => {
-      // Check if script already exists
-      const existingScript = document.querySelector('script[src*="turnstile"]');
-      if (existingScript) {
-        setIsTurnstileReady(true);
-        return;
+    const loadTurnstile = async () => {
+      try {
+        if (!window.turnstile) {
+          const script = document.createElement('script');
+          script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+          script.async = true;
+          script.defer = true;
+          script.onerror = () => {
+            debug.error('auth', 'Failed to load Turnstile script');
+          };
+          document.head.appendChild(script);
+        }
+      } catch (error) {
+        debug.error('auth', 'Error loading Turnstile script', error);
       }
-
-      // Create and load new script
-      script = document.createElement('script');
-      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        setIsTurnstileReady(true);
-      };
-      script.onerror = () => {
-        console.error('Failed to load Turnstile script');
-        toast({
-          title: "Error",
-          description: "Failed to load security check. Please refresh the page.",
-          status: "error",
-          duration: 5000,
-          isClosable: true,
-        });
-      };
-      document.head.appendChild(script);
     };
 
-    loadScript();
-
-    return () => {
-      // Cleanup script and widget
-      if (script && script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-      if (widgetIdRef.current) {
-        window.turnstile?.reset(widgetIdRef.current);
-        widgetIdRef.current = null;
-      }
-      setIsTurnstileReady(false);
-    };
+    loadTurnstile();
   }, []);
 
   // Function to render Turnstile
   const renderTurnstile = () => {
     if (!turnstileContainerRef.current || !window.turnstile) {
-      console.error('Turnstile container or API not ready');
+      debug.error('auth', 'Turnstile container or API not ready');
       return;
     }
     
@@ -109,7 +87,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       : import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
     if (!siteKey) {
-      console.error('Turnstile site key is missing');
+      debug.error('auth', 'Turnstile site key is missing');
       toast({
         title: "Configuration Error",
         description: "Security check configuration is missing. Please contact support.",
@@ -137,7 +115,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
         'appearance': 'always'
       });
     } catch (error) {
-      console.error('Error rendering Turnstile:', error);
+      debug.error('auth', 'Error rendering Turnstile:', error);
       toast({
         title: "Error",
         description: "Failed to load security check. Please refresh the page.",
@@ -161,39 +139,51 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!turnstileToken) {
-      toast({
-        title: "Error",
-        description: "Please complete the Turnstile challenge",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    setIsLoading(true);
+    if (!email) return;
 
     try {
-      await signIn(email, false, turnstileToken);
-      toast({
-        title: "Check Your Email",
-        description: "If an account exists for that email, a magic link was sent",
-        status: "success",
-        duration: 8000,
-        isClosable: true,
-      });
-      onClose();
+      if (!turnstileContainerRef.current || !window.turnstile) {
+        debug.error('auth', 'Turnstile container or API not ready');
+        return;
+      }
+
+      if (!import.meta.env.VITE_TURNSTILE_SITE_KEY) {
+        debug.error('auth', 'Turnstile site key is missing');
+        return;
+      }
+
+      setError('');
+      setIsLoading(true);
+
+      try {
+        const token = await window.turnstile.render(turnstileContainerRef.current, {
+          sitekey: import.meta.env.VITE_TURNSTILE_SITE_KEY,
+          theme: 'light',
+          callback: async (token: string) => {
+            try {
+              const result = await getMagicLink(email, false, token);
+              if (result.data?.token) {
+                setMessage('Magic link sent! Please check your email.');
+                setEmail('');
+              } else {
+                setError(result.error || 'Failed to send magic link');
+              }
+            } catch (error) {
+              debug.error('auth', 'Error sending magic link', error);
+              setError('Failed to send magic link. Please try again.');
+            } finally {
+              setIsLoading(false);
+            }
+          },
+        });
+      } catch (error) {
+        debug.error('auth', 'Error rendering Turnstile', error);
+        setError('Failed to verify. Please try again.');
+        setIsLoading(false);
+      }
     } catch (error) {
-      console.error('Error sending magic link:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : 'Failed to send magic link',
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    } finally {
+      debug.error('auth', 'Error sending magic link', error);
+      setError('Failed to send magic link. Please try again.');
       setIsLoading(false);
     }
   };

@@ -381,7 +381,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to update verse status';
-      console.error('Error updating verse status:', error);
+      debug.error('verses', 'Error updating verse status:', error);
       setStatusButtonStates(prev => ({
         ...prev,
         [reference]: {

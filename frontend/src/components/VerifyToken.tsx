@@ -2,9 +2,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Box, Spinner, Text, VStack, Alert, AlertIcon, AlertTitle, AlertDescription } from '@chakra-ui/react';
+import { debug } from '../utils/debug';
 
 export function VerifyToken() {
-  console.log('=== VerifyToken component rendering ===');
+  debug.log('auth', '=== VerifyToken component rendering ===');
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { verifyToken, error: authError } = useAuth();
@@ -13,44 +14,44 @@ export function VerifyToken() {
   const [isVerifying, setIsVerifying] = useState(true);
   const hasVerified = useRef(false);
 
-  console.log('Current token from URL:', token);
-  console.log('Current auth error:', authError);
+  debug.log('auth', 'Current token from URL:', token);
+  debug.log('auth', 'Current auth error:', authError);
 
   useEffect(() => {
-    console.log('=== VerifyToken useEffect running ===');
-    console.log('Token from URL:', token);
-    console.log('Current window location:', window.location.href);
+    debug.log('auth', '=== VerifyToken useEffect running ===');
+    debug.log('auth', 'Token from URL:', token);
+    debug.log('auth', 'Current window location:', window.location.href);
     
     const verify = async () => {
       if (!token || hasVerified.current) {
-        console.log('No token provided or already verified');
+        debug.log('auth', 'No token provided or already verified');
         return;
       }
 
       try {
-        console.log('Starting verification with token:', token);
+        debug.log('auth', 'Starting verification with token:', token);
         setIsVerifying(true);
         hasVerified.current = true;
         
         // Use the verifyToken function from useAuth
         const success = await verifyToken(token);
-        console.log('Verification result:', success);
+        debug.log('auth', 'Verification result:', success);
         
         if (success) {
-          console.log('Verification successful, will redirect in 1 second');
+          debug.log('auth', 'Verification successful, will redirect in 1 second');
           // Replace the current URL with the home page to prevent back navigation
           window.history.replaceState({}, '', '/');
           setTimeout(() => {
-            console.log('Navigating to home page');
+            debug.log('auth', 'Navigating to home page');
             navigate('/', { replace: true });
           }, 1000);
         } else {
-          console.log('Verification returned false');
+          debug.log('auth', 'Verification returned false');
           setVerificationError('Verification failed');
           setIsVerifying(false);
         }
       } catch (error) {
-        console.error('Verification error:', error);
+        debug.error('auth', 'Verification error:', error);
         setVerificationError(error instanceof Error ? error.message : 'Failed to verify token');
         setIsVerifying(false);
       }
@@ -59,10 +60,10 @@ export function VerifyToken() {
     verify();
   }, [token, navigate, verifyToken]);
 
-  console.log('Current state:', { token, verificationError, isVerifying });
+  debug.log('auth', 'Current state:', { token, verificationError, isVerifying });
 
   if (verificationError) {
-    console.log('Rendering error state:', verificationError);
+    debug.log('auth', 'Rendering error state:', verificationError);
     return (
       <Box p={4}>
         <Alert status="error">
@@ -74,7 +75,7 @@ export function VerifyToken() {
     );
   }
 
-  console.log('Rendering loading state');
+  debug.log('auth', 'Rendering loading state');
   return (
     <Box p={4}>
       <VStack spacing={4}>

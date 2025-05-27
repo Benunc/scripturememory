@@ -37,7 +37,7 @@ export const useAuth = () => {
         // If verification succeeds, redirect to the main page
         window.location.href = '/';
       }).catch((error) => {
-        console.error('Error verifying token:', error);
+        debug.error('auth', 'Error verifying token:', error);
         // If verification fails, show error and stay on the page
       });
     }
@@ -70,24 +70,24 @@ export const useAuth = () => {
   // Verify magic link
   const verifyToken = async (magicToken: string) => {
     try {
-      console.log('Starting token verification in useAuth');
-      console.log('Current window location:', window.location.href);
+      debug.log('auth', 'Starting token verification in useAuth');
+      debug.log('auth', 'Current window location:', window.location.href);
       setIsLoading(true);
       setError(null);
       
       const response = await verifyMagicLink(magicToken);
-      console.log('Verification response:', response);
+      debug.log('auth', 'Verification response:', response);
       
       if (response.error) {
-        console.error('Verification error:', response.error);
+        debug.error('auth', 'Verification error:', response.error);
         throw new Error(response.error);
       }
       
       if (response.data) {
-        console.log('Verification successful, setting session');
+        debug.log('auth', 'Verification successful, setting session');
         const { token: sessionToken, email } = response.data;
-        console.log('Session token:', sessionToken);
-        console.log('Email:', email);
+        debug.log('auth', 'Session token:', sessionToken);
+        debug.log('auth', 'Email:', email);
         
         // Store session
         localStorage.setItem('session_token', sessionToken);
@@ -97,14 +97,14 @@ export const useAuth = () => {
         setUserEmail(email);
         setIsAuthenticated(true);
         
-        console.log('Session set successfully');
+        debug.log('auth', 'Session set successfully');
         return true;
       }
       
-      console.error('No data received from verification');
+      debug.error('auth', 'No data received from verification');
       throw new Error('No data received from verification');
     } catch (error) {
-      console.error('Error in verifyToken:', error);
+      debug.error('auth', 'Error in verifyToken:', error);
       setError(error instanceof Error ? error.message : 'Failed to verify magic link');
       throw error; // Re-throw to be caught by the component
     } finally {
