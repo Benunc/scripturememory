@@ -3,7 +3,17 @@ import { getApiUrl } from './api';
 
 export const getVerses = async (userEmail: string): Promise<Verse[]> => {
   try {
-    const response = await fetch(`${getApiUrl()}/verses?email=${encodeURIComponent(userEmail)}`);
+    const sessionToken = localStorage.getItem('session_token');
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+
+    const response = await fetch(`${getApiUrl()}/verses`, {
+      headers: {
+        'Authorization': `Bearer ${sessionToken}`
+      }
+    });
+    
     if (!response.ok) {
       throw new Error('Failed to fetch verses');
     }
@@ -16,15 +26,18 @@ export const getVerses = async (userEmail: string): Promise<Verse[]> => {
 
 export const addVerse = async (userEmail: string, verseData: Omit<Verse, 'id'>): Promise<boolean> => {
   try {
+    const sessionToken = localStorage.getItem('session_token');
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+
     const response = await fetch(`${getApiUrl()}/verses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionToken}`
       },
-      body: JSON.stringify({
-        email: userEmail,
-        ...verseData,
-      }),
+      body: JSON.stringify(verseData),
     });
     return response.ok;
   } catch (error) {
@@ -35,15 +48,18 @@ export const addVerse = async (userEmail: string, verseData: Omit<Verse, 'id'>):
 
 export const updateVerse = async (userEmail: string, verseId: string, updates: Partial<Verse>): Promise<boolean> => {
   try {
+    const sessionToken = localStorage.getItem('session_token');
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+
     const response = await fetch(`${getApiUrl()}/verses/${verseId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionToken}`
       },
-      body: JSON.stringify({
-        email: userEmail,
-        ...updates,
-      }),
+      body: JSON.stringify(updates),
     });
     return response.ok;
   } catch (error) {
@@ -54,14 +70,16 @@ export const updateVerse = async (userEmail: string, verseId: string, updates: P
 
 export const deleteVerse = async (userEmail: string, verseId: string): Promise<boolean> => {
   try {
+    const sessionToken = localStorage.getItem('session_token');
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+
     const response = await fetch(`${getApiUrl()}/verses/${verseId}`, {
       method: 'DELETE',
       headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: userEmail,
-      }),
+        'Authorization': `Bearer ${sessionToken}`
+      }
     });
     return response.ok;
   } catch (error) {

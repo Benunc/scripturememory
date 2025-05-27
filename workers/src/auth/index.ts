@@ -48,9 +48,9 @@ const getDB = (env: Env) => {
 };
 
 // Helper to calculate AWS signature
-const calculateSignature = async (key: string, msg: string): Promise<string> => {
+const calculateSignature = async (key: string | ArrayBuffer, msg: string): Promise<ArrayBuffer> => {
   const encoder = new TextEncoder();
-  const keyData = encoder.encode(key);
+  const keyData = typeof key === 'string' ? encoder.encode(key) : new Uint8Array(key);
   const msgData = encoder.encode(msg);
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
@@ -59,10 +59,19 @@ const calculateSignature = async (key: string, msg: string): Promise<string> => 
     false,
     ['sign']
   );
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, msgData);
-  return Array.from(new Uint8Array(signature))
+  return crypto.subtle.sign('HMAC', cryptoKey, msgData);
+};
+
+// Helper to convert ArrayBuffer to hex string
+const arrayBufferToHex = (buffer: ArrayBuffer): string => {
+  return Array.from(new Uint8Array(buffer))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
+};
+
+// Helper to convert ArrayBuffer to string for key derivation
+const arrayBufferToString = (buffer: ArrayBuffer): string => {
+  return arrayBufferToHex(buffer);
 };
 
 // Helper to send magic link email
@@ -78,7 +87,9 @@ const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) =>
     }
 
     const date = new Date();
-    const dateStamp = date.toISOString().split('T')[0];
+    // Format: YYYYMMDD
+    const dateStamp = date.toISOString().slice(0, 10).replace(/-/g, '');
+    // Format: YYYYMMDDTHHMMSSZ
     const amzDate = date.toISOString().replace(/[:-]|\.\d{3}/g, '');
     const service = 'ses';
     const region = env.AWS_REGION;
@@ -86,42 +97,6 @@ const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) =>
     const scope = `${dateStamp}/${region}/${service}/aws4_request`;
 
     // Prepare email content
-    const emailParams = {
-      Source: env.SES_FROM_EMAIL,
-      Destination: {
-        ToAddresses: [email]
-      },
-      Message: {
-        Subject: {
-          Data: 'Your Magic Link for Scripture Memory'
-        },
-        Body: {
-          Html: {
-            Data: `
-              <h1>Welcome to Scripture Memory</h1>
-              <p>Click the link below to sign in:</p>
-              <p><a href="${magicLink}">Sign in to Scripture Memory</a></p>
-              <p>This link will expire in 15 minutes.</p>
-              <p>If you didn't request this link, you can safely ignore this email.</p>
-            `
-          },
-          Text: {
-            Data: `Click the link below to sign in to Scripture Memory:\n\n${magicLink}\n\nThis link will expire in 15 minutes.`
-          }
-        }
-      }
-    };
-
-    // Create canonical request
-    const canonicalUri = '/';
-    const canonicalQuerystring = '';
-    const canonicalHeaders = [
-      'content-type:application/x-www-form-urlencoded',
-      'host:email.' + region + '.amazonaws.com',
-      'x-amz-date:' + amzDate,
-      'x-amz-target:AmazonSES.SendEmail'
-    ].join('\n') + '\n';
-    const signedHeaders = 'content-type;host;x-amz-date;x-amz-target';
     const payload = new URLSearchParams({
       Action: 'SendEmail',
       Version: '2010-12-01',
@@ -138,10 +113,20 @@ const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) =>
       'Message.Body.Text.Data': `Click the link below to sign in to Scripture Memory:\n\n${magicLink}\n\nThis link will expire in 15 minutes.`
     }).toString();
 
+    // Create canonical request
+    const canonicalUri = '/';
+    const canonicalQuerystring = '';
+    const canonicalHeaders = [
+      'content-type:application/x-www-form-urlencoded',
+      'host:email.' + region + '.amazonaws.com',
+      'x-amz-date:' + amzDate,
+      'x-amz-target:AmazonSES.SendEmail'
+    ].join('\n') + '\n';
+    const signedHeaders = 'content-type;host;x-amz-date;x-amz-target';
+
+    // Calculate payload hash
     const payloadHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
-    const payloadHashHex = Array.from(new Uint8Array(payloadHash))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    const payloadHashHex = arrayBufferToHex(payloadHash);
 
     const canonicalRequest = [
       'POST',
@@ -152,10 +137,9 @@ const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) =>
       payloadHashHex
     ].join('\n');
 
+    // Calculate canonical request hash
     const canonicalRequestHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalRequest));
-    const canonicalRequestHashHex = Array.from(new Uint8Array(canonicalRequestHash))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    const canonicalRequestHashHex = arrayBufferToHex(canonicalRequestHash);
 
     // Create string to sign
     const stringToSign = [
@@ -165,12 +149,13 @@ const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) =>
       canonicalRequestHashHex
     ].join('\n');
 
-    // Calculate signature
+    // Calculate signing key
     const kDate = await calculateSignature('AWS4' + env.AWS_SECRET_ACCESS_KEY, dateStamp);
     const kRegion = await calculateSignature(kDate, region);
     const kService = await calculateSignature(kRegion, service);
     const kSigning = await calculateSignature(kService, 'aws4_request');
     const signature = await calculateSignature(kSigning, stringToSign);
+    const signatureHex = arrayBufferToHex(signature);
 
     // Send email using SES
     const response = await fetch(`https://email.${region}.amazonaws.com`, {
@@ -179,7 +164,7 @@ const sendMagicLinkEmail = async (email: string, magicLink: string, env: Env) =>
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-Amz-Date': amzDate,
         'X-Amz-Target': 'AmazonSES.SendEmail',
-        'Authorization': `${algorithm} Credential=${env.AWS_ACCESS_KEY_ID}/${scope},SignedHeaders=${signedHeaders},Signature=${signature}`
+        'Authorization': `${algorithm} Credential=${env.AWS_ACCESS_KEY_ID}/${scope},SignedHeaders=${signedHeaders},Signature=${signatureHex}`
       },
       body: payload
     });
