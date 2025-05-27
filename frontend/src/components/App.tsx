@@ -144,6 +144,24 @@ export function MainApp() {
               >
                 Sign In
               </Button>
+              <Button
+                size="lg"
+                colorScheme="green"
+                bg="green.100"
+                color="green.700"
+                _hover={{
+                  bg: 'green.200',
+                  transform: 'translateY(-1px)',
+                  boxShadow: 'sm'
+                }}
+                _active={{
+                  bg: 'green.300',
+                  transform: 'translateY(0)'
+                }}
+                onClick={() => navigate('/donate')}
+              >
+                Support Us
+              </Button>
             </HStack>
           </VStack>
         </Box>

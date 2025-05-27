@@ -460,17 +460,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       setAnnouncedWord(`Next word: "${word}". One more word to go!`);
     } else if (isLastWord) {
       setAnnouncedWord(`Final word: "${word}". Would you like to start over?`);
-      // Move focus to Reset button after a much longer delay to ensure announcement completes
-      setTimeout(() => {
-        const resetButton = document.querySelector(`[aria-label="Reset"]`) as HTMLButtonElement;
-        if (resetButton) {
-          resetButton.focus();
-          // Add a delay before announcing the reset button
-          setTimeout(() => {
-            setAnnouncedWord("Start over");
-          }, 1000);
-        }
-      }, 4000); // Much longer delay to ensure last word announcement completes
     } else {
       setAnnouncedWord(`Next word: "${word}"`);
     }
@@ -478,6 +467,12 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     // Update status to In Progress on first word reveal if Not Started
     if (nextWordIndex === 0 && verse.status === ProgressStatus.NotStarted) {
       void handleStatusChange(reference, ProgressStatus.InProgress, false);
+    }
+
+    // Maintain focus on the verse element
+    const verseElement = verseRefs.current[reference];
+    if (verseElement) {
+      verseElement.focus();
     }
   };
 
@@ -488,13 +483,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       [reference]: false,
     }));
     setActiveVerseId(null);
-    // Focus the "Start Memorizing" button after reset
-    setTimeout(() => {
-      const startButton = document.querySelector(`[aria-label="Start memorizing ${reference}"]`) as HTMLButtonElement;
-      if (startButton) {
-        startButton.focus();
-      }
-    }, 100);
+    // Maintain focus on the verse element
+    const verseElement = verseRefs.current[reference];
+    if (verseElement) {
+      verseElement.focus();
+    }
   };
 
   const handleShowVerse = (reference: string) => {
@@ -516,6 +509,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       
       return newState;
     });
+    // Maintain focus on the verse element
+    const verseElement = verseRefs.current[reference];
+    if (verseElement) {
+      verseElement.focus();
+    }
   };
 
   const handleManualStatusChange = (reference: string, newStatus: ProgressStatus) => {
