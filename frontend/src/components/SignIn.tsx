@@ -82,7 +82,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     
     // Use test keys for local development
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const siteKey = isLocalhost 
+    const siteKey = import.meta.env.DEV
       ? '1x00000000000000000000AA'  // Test site key
       : import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
@@ -92,7 +92,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
         title: "Configuration Error",
         description: "Turnstile site key is missing. Please contact support.",
         status: "error",
-        duration: 5000,
+        duration: null,
         isClosable: true,
       });
       return;
