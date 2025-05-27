@@ -50,9 +50,12 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
   const widgetIdRef = useRef<string | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [showTurnstile, setShowTurnstile] = useState(false);
 
-  // Load Turnstile script
+  // Load Turnstile script only when needed
   useEffect(() => {
+    if (!showTurnstile) return;
+
     const loadTurnstile = async () => {
       try {
         debug.log('auth', 'Checking Turnstile availability');
@@ -95,7 +98,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     };
 
     loadTurnstile();
-  }, []);
+  }, [showTurnstile]);
 
   // Function to render Turnstile
   const renderTurnstile = () => {
@@ -168,26 +171,32 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     }
   };
 
-  // Render Turnstile widget when modal opens and script is ready
+  // Render Turnstile widget when needed and ready
   useEffect(() => {
     debug.log('auth', 'Turnstile render effect triggered', {
-      isOpen,
+      showTurnstile,
       isTurnstileReady,
       hasTurnstile: !!window.turnstile
     });
 
-    if (isOpen && isTurnstileReady) {
+    if (showTurnstile && isTurnstileReady) {
       // Small delay to ensure DOM is ready
       const timer = setTimeout(() => {
         renderTurnstile();
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, isTurnstileReady]);
+  }, [showTurnstile, isTurnstileReady]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
+
+    // Show Turnstile if not already shown
+    if (!showTurnstile) {
+      setShowTurnstile(true);
+      return;
+    }
 
     try {
       if (!turnstileToken) {
@@ -211,6 +220,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
           setMessage('Magic link sent! Please check your email.');
           setEmail('');
           setTurnstileToken(''); // Reset token after successful use
+          setShowTurnstile(false); // Hide Turnstile
           if (widgetIdRef.current) {
             window.turnstile.reset(widgetIdRef.current);
             widgetIdRef.current = null;
@@ -271,23 +281,25 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
                   placeholder="Enter your email"
                 />
               </FormControl>
-              <Box 
-                ref={turnstileContainerRef} 
-                w="full" 
-                minH="65px" 
-                display="flex" 
-                alignItems="center" 
-                justifyContent="center"
-              >
-                {!isTurnstileReady && <Spinner />}
-              </Box>
+              {showTurnstile && (
+                <Box 
+                  ref={turnstileContainerRef} 
+                  w="full" 
+                  minH="65px" 
+                  display="flex" 
+                  alignItems="center" 
+                  justifyContent="center"
+                >
+                  {!isTurnstileReady && <Spinner />}
+                </Box>
+              )}
               <Button
                 type="submit"
                 colorScheme="blue"
                 width="full"
                 isLoading={isLoading}
               >
-                Send Magic Link
+                {showTurnstile ? 'Send Magic Link' : 'Continue'}
               </Button>
               <Text fontSize="sm" color="gray.600">
                 Don't have an account?{' '}
