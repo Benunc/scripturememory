@@ -142,13 +142,8 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
     if (!email) return;
 
     try {
-      if (!turnstileContainerRef.current || !window.turnstile) {
-        debug.error('auth', 'Turnstile container or API not ready');
-        return;
-      }
-
-      if (!import.meta.env.VITE_TURNSTILE_SITE_KEY) {
-        debug.error('auth', 'Turnstile site key is missing');
+      if (!turnstileToken) {
+        setError('Please complete the security check');
         return;
       }
 
@@ -156,29 +151,21 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       setIsLoading(true);
 
       try {
-        const token = await window.turnstile.render(turnstileContainerRef.current, {
-          sitekey: import.meta.env.VITE_TURNSTILE_SITE_KEY,
-          theme: 'light',
-          callback: async (token: string) => {
-            try {
-              const result = await getMagicLink(email, false, token);
-              if (result.data?.token) {
-                setMessage('Magic link sent! Please check your email.');
-                setEmail('');
-              } else {
-                setError(result.error || 'Failed to send magic link');
-              }
-            } catch (error) {
-              debug.error('auth', 'Error sending magic link', error);
-              setError('Failed to send magic link. Please try again.');
-            } finally {
-              setIsLoading(false);
-            }
-          },
-        });
+        const result = await getMagicLink(email, false, turnstileToken);
+        if (result.data?.token) {
+          setMessage('Magic link sent! Please check your email.');
+          setEmail('');
+          setTurnstileToken(''); // Reset token after successful use
+          if (widgetIdRef.current) {
+            window.turnstile.reset(widgetIdRef.current);
+          }
+        } else {
+          setError(result.error || 'Failed to send magic link');
+        }
       } catch (error) {
-        debug.error('auth', 'Error rendering Turnstile', error);
-        setError('Failed to verify. Please try again.');
+        debug.error('auth', 'Error sending magic link', error);
+        setError('Failed to send magic link. Please try again.');
+      } finally {
         setIsLoading(false);
       }
     } catch (error) {
