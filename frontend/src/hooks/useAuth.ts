@@ -44,12 +44,12 @@ export const useAuth = () => {
   }, []);
 
   // Sign in with magic link
-  const signIn = async (email: string, isRegistration: boolean) => {
+  const signIn = async (email: string, isRegistration: boolean, turnstileToken: string) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const response = await getMagicLink(email, isRegistration);
+      const response = await getMagicLink(email, isRegistration, turnstileToken);
       if (response.error) {
         throw new Error(response.error);
       }

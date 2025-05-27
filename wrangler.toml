@@ -12,8 +12,24 @@ database_name = "scripture-memory"
 database_id = "ef894297-d95a-4df9-bccf-3ac6be4c1cc7"
 
 [vars]
-ENVIRONMENT = "production"
+ENVIRONMENT = "development"
 
 [[routes]]
 pattern = "scripture.wpsteward.com/*"
-zone_name = "wpsteward.com" 
+zone_name = "wpsteward.com"
+
+[env.production]
+vars = { 
+  ENVIRONMENT = "production",
+  SENDY_API_KEY = "",
+  SENDY_LIST_ID = "",
+  SENDY_URL = ""
+}
+
+[env.development]
+vars = { 
+  ENVIRONMENT = "development",
+  SENDY_API_KEY = "",
+  SENDY_LIST_ID = "",
+  SENDY_URL = ""
+} 

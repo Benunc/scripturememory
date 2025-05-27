@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --env development",
     "deploy": "wrangler deploy",
     "test": "jest",
     "wipe-dev-db": "wrangler d1 execute DB_DEV --command=\"DELETE FROM verses; DELETE FROM sessions; DELETE FROM magic_links; DELETE FROM users;\"",

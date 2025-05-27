@@ -604,40 +604,32 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
   const renderVerseText = (verse: Verse) => {
     if (showFullVerse[verse.reference]) {
       return (
-        <Text>
+        <Text fontSize="lg" color="gray.700">
           {verse.text}
-          <Text srOnly>Full verse text is now visible</Text>
         </Text>
       );
     }
 
-    if (activeVerseId !== verse.reference) {
+    if (activeVerseId === verse.reference) {
+      const words = verse.text.split(' ');
       return (
-        <Text>
-          {verse.text.split(' ').map(() => '_____').join(' ')}
-          <Text srOnly>Verse text is hidden. Click Start Memorizing to begin.</Text>
+        <Text fontSize="lg" color="gray.700">
+          {words.map((word, index) => {
+            const isRevealed = revealedWords.includes(index);
+            return (
+              <span key={index}>
+                {isRevealed ? word : '_____'}
+                {index < words.length - 1 ? ' ' : ''}
+              </span>
+            );
+          })}
         </Text>
       );
     }
 
-    const words = verse.text.split(' ');
-    const revealedCount = revealedWords.length;
-    const totalWords = words.length;
-    
     return (
-      <Text>
-        {words.map((word, index) => {
-          if (revealedWords.includes(index)) {
-            return word;
-          }
-          return '_____';
-        }).join(' ')}
-        <Text srOnly>
-          {revealedCount === 0 
-            ? "No words revealed yet. Click Show Next Word to begin."
-            : `Revealed ${revealedCount} of ${totalWords} words. Click Show Next Word to continue.`
-          }
-        </Text>
+      <Text fontSize="lg" color="gray.700">
+        {verse.text.split(' ').map((_, index) => '_____').join(' ')}
       </Text>
     );
   };

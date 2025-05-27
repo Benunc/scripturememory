@@ -14,6 +14,19 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
+// Helper to add CORS headers to a response
+const addCorsHeaders = (response: Response): Response => {
+  const newHeaders = new Headers(response.headers);
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    newHeaders.set(key, value);
+  });
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders
+  });
+};
+
 // Handle CORS preflight requests
 router.options('*', () => {
   return new Response(null, {
@@ -34,28 +47,6 @@ router.delete('/verses/:reference', handleVerses.deleteVerse);
 // 404 handler
 router.all('*', () => new Response('Not Found', { status: 404 }));
 
-// Add CORS headers to all responses
-router.all('*', async (request: Request, env: Env) => {
-  try {
-    const response = await router.handle(request, env);
-    const newHeaders = new Headers(response.headers);
-    Object.entries(corsHeaders).forEach(([key, value]) => {
-      newHeaders.set(key, value);
-    });
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: newHeaders
-    });
-  } catch (error) {
-    console.error('Error handling request:', error);
-    return new Response('Internal Server Error', {
-      status: 500,
-      headers: corsHeaders
-    });
-  }
-});
-
 // Export the fetch handler
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -71,14 +62,10 @@ export default {
       const response = await router.handle(request, env, ctx);
       
       // Add CORS headers to the response
-      Object.entries(corsHeaders).forEach(([key, value]) => {
-        response.headers.set(key, value);
-      });
-
-      return response;
+      return addCorsHeaders(response);
     } catch (error) {
       console.error('Error handling request:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      return addCorsHeaders(new Response('Internal Server Error', { status: 500 }));
     }
   }
 }; 

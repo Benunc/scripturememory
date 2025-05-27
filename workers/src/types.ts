@@ -4,6 +4,16 @@ export interface Env {
   DB_DEV: D1Database;
   DB_PROD: D1Database;
   ENVIRONMENT: string;
+  AWS_ACCESS_KEY_ID: string;
+  AWS_SECRET_ACCESS_KEY: string;
+  AWS_REGION: string;
+  SES_FROM_EMAIL: string;
+  SENDY_API_KEY: string;
+  SENDY_LIST_ID: string;
+  SENDY_URL: string;
+  TURNSTILE_SECRET_KEY: string;
+  TURNSTILE_SITE_KEY: string;
+  API_URL?: string;
 }
 
 export interface D1Result {

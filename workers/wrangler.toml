@@ -20,7 +20,8 @@ migrations_dir = "migrations"
 
 # Development environment configuration
 [env.development]
-vars = { ENVIRONMENT = "development" }
+ENVIRONMENT = "development"
+API_URL = "http://localhost:8787"
 
 [[env.development.d1_databases]]
 binding = "DB_DEV"

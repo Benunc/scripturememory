@@ -35,11 +35,15 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   }
 }
 
-export async function getMagicLink(email: string, isRegistration: boolean): Promise<ApiResponse<{ token: string }>> {
+export async function getMagicLink(
+  email: string, 
+  isRegistration: boolean,
+  turnstileToken: string
+): Promise<ApiResponse<{ token: string }>> {
   const response = await fetch(`${API_URL}/auth/magic-link`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, isRegistration })
+    body: JSON.stringify({ email, isRegistration, turnstileToken })
   });
   
   const result = await handleResponse<{ success: boolean; message: string }>(response);

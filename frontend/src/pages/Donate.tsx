@@ -16,7 +16,7 @@ export function Donate() {
   const navigate = useNavigate();
 
   const handleDonate = () => {
-    const isProd = window.location.hostname === 'scripturememory.pages.dev';
+    const isProd = window.location.hostname === 'scripture.wpsteward.com';
     const stripeUrl = isProd 
       ? 'https://donate.stripe.com/fZu4gAdZUepr67t3yf8ww03'
       : 'https://donate.stripe.com/test_eVqdRa094gxz0N99WD8ww00';
