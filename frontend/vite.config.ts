@@ -20,6 +20,16 @@ export default defineConfig(({ mode }) => {
           const src = resolve(__dirname, 'public', '_headers')
           const dest = resolve(__dirname, 'dist', '_headers')
           require('fs').copyFileSync(src, dest)
+          
+          // In production, rename index.prod.html to index.html
+          if (mode === 'production') {
+            const fs = require('fs')
+            const prodHtml = resolve(__dirname, 'dist', 'index.prod.html')
+            const finalHtml = resolve(__dirname, 'dist', 'index.html')
+            if (fs.existsSync(prodHtml)) {
+              fs.renameSync(prodHtml, finalHtml)
+            }
+          }
         }
       }
     ],
