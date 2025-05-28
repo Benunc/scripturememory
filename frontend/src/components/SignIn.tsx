@@ -248,15 +248,15 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
 
       try {
         const result = await getMagicLink(email, false, turnstileToken);
-        if (result.data?.token) {
+        if (result.data) {
           toast({
             title: "Success",
-            description: "Magic link sent! Please check your email.",
+            description: "If an account exists with this email, you will receive a magic link shortly. Check your spam folder if you don't see it.",
             status: "success",
             duration: 5000,
             isClosable: true,
           });
-          setMessage('Magic link sent! Please check your email.');
+          setMessage("If an account exists with this email, you will receive a magic link shortly. Check your spam folder if you don't see it.");
           setEmail('');
           setTurnstileToken(''); // Reset token after successful use
           setShowTurnstile(false); // Hide Turnstile

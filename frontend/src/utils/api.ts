@@ -56,12 +56,9 @@ export const getMagicLink = async (email: string, isRegistration: boolean, turns
       return { error: result.error };
     }
     
-    // Extract token from the message
-    if (result.data?.message) {
-      const tokenMatch = result.data.message.match(/token=([^&]+)/);
-      if (tokenMatch) {
-        return { data: { token: tokenMatch[1] } };
-      }
+    // Always return success, even if we have a token
+    if (result.data?.success) {
+      return { data: { token: '' } };
     }
     
     return { error: 'No token found in response' };
