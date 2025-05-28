@@ -18,6 +18,8 @@ import { SignIn } from './components/SignIn';
 import { MainApp } from './components/App';
 import { theme } from './theme';
 import { ThankYou } from './pages/ThankYou';
+import { About } from './pages/About';
+import { PrivacyPolicy } from './components/PrivacyPolicy';
 
 // Add type for Google client
 declare global {
@@ -71,6 +73,8 @@ export function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/donate" element={<Donate />} />
               <Route path="/thank-you" element={<ThankYou />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
             </Routes>
           </Router>
         </AuthProvider>
