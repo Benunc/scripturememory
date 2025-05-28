@@ -105,8 +105,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
 
   // Add timeout and session management
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
-  const TIMEOUT_DURATION = 30 * 60 * 1000; // 30 minutes
-  const WARNING_DURATION = 5 * 60 * 1000; // 5 minutes
+  const TIMEOUT_DURATION = 3 * 60 * 60 * 1000; // 3 hours
+  const WARNING_DURATION = 2 * 60 * 1000; // 2 minutes
 
   // Expose scrollToVerse through ref
   useImperativeHandle(ref, () => ({
@@ -282,59 +282,125 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     };
   }, []);
 
+  // Handle session expiration
+  const handleSessionExpiration = async () => {
+    try {
+      // Save any pending changes
+      await Promise.all(
+        verses.map(async (verse) => {
+          const buttonState = statusButtonStates[verse.reference];
+          if (buttonState?.isLoading) {
+            await onStatusChange(verse.reference, verse.status);
+          }
+        })
+      );
+
+      // Clear session data
+      localStorage.removeItem('userEmail');
+      localStorage.removeItem('token');
+
+      // Redirect to sign in page with message
+      const params = new URLSearchParams({
+        message: 'Your session has expired. Please sign in again to continue.'
+      });
+      window.location.href = `/signin?${params.toString()}`;
+    } catch (error) {
+      debug.error('auth', 'Error handling session expiration:', error);
+      // If saving fails, still redirect to sign in
+      window.location.href = '/signin?message=Your session has expired. Please sign in again to continue.';
+    }
+  };
+
   // Add timeout warning
   useEffect(() => {
+    let warningToastId: string | number | undefined;
+    let countdownInterval: NodeJS.Timeout;
+
     const checkTimeout = () => {
       const timeSinceLastActivity = Date.now() - lastActivity;
-      if (timeSinceLastActivity >= TIMEOUT_DURATION - WARNING_DURATION) {
-        toast({
-          title: "Session Timeout Warning",
-          description: "Your session will expire in 5 minutes. Would you like to continue?",
-          status: "warning",
-          duration: null,
-          isClosable: true,
-          position: "top",
-          render: () => (
-            <Box
-              p={3}
-              bg="orange.100"
-              color="orange.800"
-              borderRadius="md"
-              role="alert"
-              aria-live="assertive"
-            >
-              <Text fontWeight="bold">Session Timeout Warning</Text>
-              <Text>Your session will expire in 5 minutes. Would you like to continue?</Text>
-              <Flex mt={2} gap={2}>
-                <Button
-                  size="sm"
-                  colorScheme="orange"
-                  onClick={() => {
-                    setLastActivity(Date.now());
-                    toast.closeAll();
-                  }}
-                >
-                  Continue Session
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    window.location.reload();
-                  }}
-                >
-                  Refresh Page
-                </Button>
-              </Flex>
-            </Box>
-          ),
-        });
+      const timeUntilTimeout = TIMEOUT_DURATION - timeSinceLastActivity;
+      
+      if (timeUntilTimeout <= WARNING_DURATION && timeUntilTimeout > 0) {
+        // Only show toast if one isn't already showing
+        if (!warningToastId) {
+          const updateCountdown = () => {
+            const remainingTime = Math.ceil((TIMEOUT_DURATION - (Date.now() - lastActivity)) / 1000);
+            if (remainingTime <= 0) {
+              clearInterval(countdownInterval);
+              return;
+            }
+            
+            const minutes = Math.floor(remainingTime / 60);
+            const seconds = remainingTime % 60;
+            
+            toast.update(warningToastId!, {
+              description: `Your session will expire in ${minutes}:${seconds.toString().padStart(2, '0')}. Would you like to continue?`,
+            });
+          };
+
+          warningToastId = toast({
+            title: "Session Timeout Warning",
+            description: "Your session will expire in 2:00. Would you like to continue?",
+            status: "warning",
+            duration: null,
+            isClosable: true,
+            position: "top",
+            render: () => (
+              <Box
+                p={3}
+                bg="orange.100"
+                color="orange.800"
+                borderRadius="md"
+                role="alert"
+                aria-live="assertive"
+              >
+                <Text fontWeight="bold">Session Timeout Warning</Text>
+                <Text>Your session will expire in 2:00. Would you like to continue?</Text>
+                <Flex mt={2} gap={2}>
+                  <Button
+                    size="sm"
+                    colorScheme="orange"
+                    onClick={() => {
+                      setLastActivity(Date.now());
+                      toast.close(warningToastId!);
+                      warningToastId = undefined;
+                      clearInterval(countdownInterval);
+                    }}
+                  >
+                    Continue Session
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      handleSessionExpiration();
+                    }}
+                  >
+                    Sign Out
+                  </Button>
+                </Flex>
+              </Box>
+            ),
+          });
+
+          // Start countdown
+          countdownInterval = setInterval(updateCountdown, 1000);
+        }
+      } else if (timeUntilTimeout <= 0) {
+        // Session expired
+        handleSessionExpiration();
       }
     };
 
-    const interval = setInterval(checkTimeout, 60000); // Check every minute
-    return () => clearInterval(interval);
-  }, [lastActivity, toast]);
+    const interval = setInterval(checkTimeout, 1000); // Check every second
+    return () => {
+      clearInterval(interval);
+      clearInterval(countdownInterval);
+      if (warningToastId) {
+        toast.close(warningToastId);
+      }
+    };
+  }, [lastActivity, toast, verses, statusButtonStates, onStatusChange]);
 
   // Update status button handler
   const handleStatusChange = async (reference: string, newStatus: ProgressStatus, showToast = true) => {
