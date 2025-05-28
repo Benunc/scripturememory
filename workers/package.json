@@ -9,7 +9,12 @@
     "build": "wrangler deploy --dry-run",
     "test": "jest",
     "wipe-dev-db": "wrangler d1 execute DB_DEV --command=\"DELETE FROM verses; DELETE FROM sessions; DELETE FROM magic_links; DELETE FROM users;\"",
-    "reinit-dev-db": "wrangler d1 execute DB_DEV --file=./schema.sql"
+    "reinit-dev-db": "wrangler d1 execute DB_DEV --file=./schema.sql",
+    "db:prod": "wrangler d1 execute DB --env production --remote",
+    "db:prod:users": "wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM users;\"",
+    "db:prod:verses": "wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM verses;\"",
+    "db:prod:sessions": "wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM sessions;\"",
+    "db:prod:magic-links": "wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM magic_links;\""
   },
   "dependencies": {
     "@cloudflare/workers-types": "^4.20240208.0",
