@@ -67,33 +67,26 @@ export default {
       // Handle the request
       const response = await router.handle(request, env, ctx);
       
-      // Create new response with all headers
-      const newHeaders = new Headers();
-      
-      // Copy all existing headers
-      response.headers.forEach((value, key) => {
-        newHeaders.set(key, value);
-      });
-      
-      // Add CORS headers
+      // Create new response with original headers plus CORS
+      const headers = new Headers(response.headers);
       Object.entries(corsHeaders).forEach(([key, value]) => {
-        newHeaders.set(key, value);
+        headers.set(key, value);
       });
       
-      // Create new response with all headers
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
-        headers: newHeaders
+        headers
       });
     } catch (error) {
       console.error('Error handling request:', error);
+      const headers = new Headers({
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      });
       return new Response(JSON.stringify({ error: 'Not Found' }), { 
         status: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
-        }
+        headers
       });
     }
   }
