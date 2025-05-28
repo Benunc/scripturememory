@@ -97,9 +97,13 @@ export const handleVerses = {
         'INSERT INTO verses (user_id, reference, text, translation, created_at) VALUES (?, ?, ?, ?, ?)'
       ).bind(userId, verse.reference, verse.text, verse.translation || 'NIV', Date.now()).run();
 
+      const headers = new Headers({
+        'Content-Type': 'application/json'
+      });
+
       return new Response(JSON.stringify({ success: true, message: 'Verse added successfully' }), { 
         status: 201,
-        headers: { 'Content-Type': 'application/json' }
+        headers
       });
     } catch (error) {
       console.error('Error adding verse:', error);
