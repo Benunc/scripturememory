@@ -69,6 +69,14 @@ export default {
       
       // Create new response with original headers plus CORS
       const headers = new Headers(response.headers);
+      
+      // Ensure Content-Type is preserved
+      const contentType = response.headers.get('Content-Type');
+      if (contentType) {
+        headers.set('Content-Type', contentType);
+      }
+      
+      // Add CORS headers
       Object.entries(corsHeaders).forEach(([key, value]) => {
         headers.set(key, value);
       });
