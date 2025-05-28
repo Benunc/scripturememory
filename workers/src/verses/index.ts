@@ -19,14 +19,20 @@ export const handleVerses = {
     try {
       const authHeader = request.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return new Response('Unauthorized', { status: 401 });
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const token = authHeader.split(' ')[1];
       const userId = await getUserId(token, env);
       
       if (!userId) {
-        return new Response('Invalid or expired session', { status: 401 });
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const verses = await getDB(env).prepare(
@@ -38,7 +44,10 @@ export const handleVerses = {
       });
     } catch (error) {
       console.error('Error getting verses:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
   },
 
@@ -47,19 +56,28 @@ export const handleVerses = {
     try {
       const authHeader = request.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return new Response('Unauthorized', { status: 401 });
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const token = authHeader.split(' ')[1];
       const userId = await getUserId(token, env);
       
       if (!userId) {
-        return new Response('Invalid or expired session', { status: 401 });
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const verse = await request.json() as Verse;
       if (!verse.reference || !verse.text) {
-        return new Response('Reference and text are required', { status: 400 });
+        return new Response(JSON.stringify({ error: 'Reference and text are required' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       // Check if verse already exists
@@ -68,7 +86,10 @@ export const handleVerses = {
       ).bind(userId, verse.reference).first();
 
       if (existing) {
-        return new Response('Verse already exists', { status: 409 });
+        return new Response(JSON.stringify({ error: 'Verse already exists' }), { 
+          status: 409,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       // Insert new verse
@@ -76,10 +97,16 @@ export const handleVerses = {
         'INSERT INTO verses (user_id, reference, text, translation, created_at) VALUES (?, ?, ?, ?, ?)'
       ).bind(userId, verse.reference, verse.text, verse.translation || 'NIV', Date.now()).run();
 
-      return new Response('Verse added successfully', { status: 201 });
+      return new Response(JSON.stringify({ success: true, message: 'Verse added successfully' }), { 
+        status: 201,
+        headers: { 'Content-Type': 'application/json' }
+      });
     } catch (error) {
       console.error('Error adding verse:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
   },
 
@@ -88,21 +115,30 @@ export const handleVerses = {
     try {
       const authHeader = request.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return new Response('Unauthorized', { status: 401 });
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const token = authHeader.split(' ')[1];
       const userId = await getUserId(token, env);
       
       if (!userId) {
-        return new Response('Invalid or expired session', { status: 401 });
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const url = new URL(request.url);
       const reference = decodeURIComponent(url.pathname.split('/').pop() || '');
       
       if (!reference) {
-        return new Response('Verse reference is required', { status: 400 });
+        return new Response(JSON.stringify({ error: 'Verse reference is required' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const verse: Verse = await request.json();
@@ -113,7 +149,10 @@ export const handleVerses = {
       ).bind(reference, userId).first();
 
       if (!existing) {
-        return new Response('Verse not found or unauthorized', { status: 404 });
+        return new Response(JSON.stringify({ error: 'Verse not found or unauthorized' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       // Only update fields that are provided
@@ -136,7 +175,10 @@ export const handleVerses = {
       }
 
       if (updates.length === 0) {
-        return new Response('No updates provided', { status: 400 });
+        return new Response(JSON.stringify({ error: 'No updates provided' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       // Add reference and user_id to bindings
@@ -149,7 +191,10 @@ export const handleVerses = {
       return new Response(null, { status: 204 });
     } catch (error) {
       console.error('Error updating verse:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
   },
 
@@ -158,21 +203,30 @@ export const handleVerses = {
     try {
       const authHeader = request.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return new Response('Unauthorized', { status: 401 });
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const token = authHeader.split(' ')[1];
       const userId = await getUserId(token, env);
       
       if (!userId) {
-        return new Response('Invalid or expired session', { status: 401 });
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       const url = new URL(request.url);
       const reference = decodeURIComponent(url.pathname.split('/').pop() || '');
       
       if (!reference) {
-        return new Response('Verse reference is required', { status: 400 });
+        return new Response(JSON.stringify({ error: 'Verse reference is required' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       // Check if verse exists
@@ -181,7 +235,10 @@ export const handleVerses = {
       ).bind(userId, reference).first();
 
       if (!existing) {
-        return new Response('Verse not found', { status: 404 });
+        return new Response(JSON.stringify({ error: 'Verse not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       // Delete verse
@@ -192,7 +249,10 @@ export const handleVerses = {
       return new Response(null, { status: 204 });
     } catch (error) {
       console.error('Error deleting verse:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
   }
 }; 
