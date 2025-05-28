@@ -602,9 +602,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
   };
 
   const renderVerseText = (verse: Verse) => {
+    const textColor = useColorModeValue('gray.700', 'gray.200');
+
     if (showFullVerse[verse.reference]) {
       return (
-        <Text fontSize="lg" color="gray.700">
+        <Text fontSize="lg" color={textColor}>
           {verse.text}
         </Text>
       );
@@ -613,7 +615,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     if (activeVerseId === verse.reference) {
       const words = verse.text.split(' ');
       return (
-        <Text fontSize="lg" color="gray.700">
+        <Text fontSize="lg" color={textColor}>
           {words.map((word, index) => {
             const isRevealed = revealedWords.includes(index);
             return (
@@ -628,7 +630,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     }
 
     return (
-      <Text fontSize="lg" color="gray.700">
+      <Text fontSize="lg" color={textColor}>
         {verse.text.split(' ').map((_, index) => '_____').join(' ')}
       </Text>
     );
