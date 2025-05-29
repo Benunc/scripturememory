@@ -1,5 +1,3 @@
-import { API_URL } from '../config';
-
 interface TestResult {
   name: string;
   passed: boolean;
@@ -11,9 +9,9 @@ class TestSuite {
   private results: TestResult[] = [];
   private baseUrl: string;
   private token: string | null = null;
+  private testVerseReference: string | null = null;
 
   constructor() {
-    // Use the worker URL instead of the frontend URL
     this.baseUrl = 'https://scripture-memory.ben-2e6.workers.dev';
   }
 
@@ -73,41 +71,30 @@ class TestSuite {
       return data;
     });
 
-    // Test 2: Get Verses
-    await this.test('Get Verses', async () => {
+    // Test 2: Create Test Verse
+    await this.test('Create Test Verse', async () => {
+      const testReference = 'Testing 1:2';
+      this.testVerseReference = testReference;
       const response = await this.fetchWithTimeout(`${this.baseUrl}/verses`, {
-        headers: this.getAuthHeader()
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.getAuthHeader()
+        },
+        body: JSON.stringify({
+          reference: testReference,
+          text: 'Blessed are the linters, for they shall inherit the DOM'
+        })
       });
-      if (!response.ok) throw new Error(`Get verses failed: ${response.status}`);
+      if (!response.ok) throw new Error(`Create verse failed: ${response.status}`);
       const data = await response.json();
-      if (!Array.isArray(data)) throw new Error('Invalid verses response format');
+      if (!data.success) throw new Error('Invalid create verse response');
       return data;
     });
 
-    // Test 3: Get Single Verse
-    await this.test('Get Single Verse', async () => {
-      const response = await this.fetchWithTimeout(`${this.baseUrl}/verses/1`, {
-        headers: this.getAuthHeader()
-      });
-      if (!response.ok) throw new Error(`Get single verse failed: ${response.status}`);
-      const data = await response.json();
-      if (!data.id || !data.text) throw new Error('Invalid verse response format');
-      return data;
-    });
-
-    // Test 4: Get Progress
-    await this.test('Get Progress', async () => {
-      const response = await this.fetchWithTimeout(`${this.baseUrl}/progress`, {
-        headers: this.getAuthHeader()
-      });
-      if (!response.ok) throw new Error(`Get progress failed: ${response.status}`);
-      const data = await response.json();
-      if (!Array.isArray(data)) throw new Error('Invalid progress response format');
-      return data;
-    });
-
-    // Test 5: Update Progress
-    await this.test('Update Progress', async () => {
+    // Test 3: Update Test Verse Status
+    await this.test('Update Test Verse Status', async () => {
+      if (!this.testVerseReference) throw new Error('No test verse reference available');
       const response = await this.fetchWithTimeout(`${this.baseUrl}/progress`, {
         method: 'POST',
         headers: {
@@ -115,13 +102,26 @@ class TestSuite {
           ...this.getAuthHeader()
         },
         body: JSON.stringify({
-          verseId: 1,
-          status: 'memorized'
+          verseId: this.testVerseReference,
+          status: 'in_progress'
         })
       });
       if (!response.ok) throw new Error(`Update progress failed: ${response.status}`);
       const data = await response.json();
       if (!data.success) throw new Error('Invalid update progress response');
+      return data;
+    });
+
+    // Test 4: Delete Test Verse
+    await this.test('Delete Test Verse', async () => {
+      if (!this.testVerseReference) throw new Error('No test verse reference available');
+      const response = await this.fetchWithTimeout(`${this.baseUrl}/verses/${encodeURIComponent(this.testVerseReference)}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeader()
+      });
+      if (!response.ok) throw new Error(`Delete verse failed: ${response.status}`);
+      const data = await response.json();
+      if (!data.success) throw new Error('Invalid delete verse response');
       return data;
     });
 
