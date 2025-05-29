@@ -1,7 +1,9 @@
 import { Router } from 'itty-router';
 import { Env } from './types';
-import { handleAuth } from './auth/index';
-import { handleVerses } from './verses/index';
+import { handleAuth } from './auth';
+import { handleVerses } from './verses';
+import { handleProgress } from './progress';
+import { handleGamification } from './gamification';
 
 // Create a new router
 const router = Router();
@@ -52,6 +54,14 @@ router.get('/verses', handleVerses.getVerses);
 router.post('/verses', handleVerses.addVerse);
 router.put('/verses/:reference', handleVerses.updateVerse);
 router.delete('/verses/:reference', handleVerses.deleteVerse);
+
+// Progress routes
+router.post('/progress/word', handleProgress.recordWordProgress);
+router.post('/progress/verse', handleProgress.recordVerseAttempt);
+
+// Gamification routes
+router.post('/gamification/points', handleGamification.recordPointEvent);
+router.get('/gamification/stats', handleGamification.getUserStats);
 
 // Export the fetch handler
 export default {

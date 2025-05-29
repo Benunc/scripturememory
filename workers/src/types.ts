@@ -7,12 +7,9 @@ export interface Env {
   AWS_SECRET_ACCESS_KEY: string;
   AWS_REGION: string;
   SES_FROM_EMAIL: string;
-  SENDY_API_KEY: string;
-  SENDY_LIST_ID: string;
-  SENDY_URL: string;
   TURNSTILE_SECRET_KEY: string;
   TURNSTILE_SITE_KEY: string;
-  API_URL?: string;
+  API_URL: string;
   ASSETS: {
     fetch: (request: Request) => Promise<Response>;
   };
@@ -64,4 +61,22 @@ export interface Session {
   email: string;
   expires_at: number;
   created_at?: number;
+}
+
+export interface WordProgress {
+  user_id: number;
+  verse_reference: string;
+  word_index: number;
+  word: string;
+  is_correct: boolean;
+  created_at: number;
+}
+
+export interface VerseAttempt {
+  user_id: number;
+  verse_reference: string;
+  attempt_date: number;
+  words_correct: number;
+  total_words: number;
+  created_at: number;
 } 

@@ -1,4 +1,5 @@
 -- Add word_progress table
+-- NOTE: verses.reference must be UNIQUE for this foreign key to work in SQLite
 CREATE TABLE IF NOT EXISTS word_progress (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
