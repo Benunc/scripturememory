@@ -20,11 +20,13 @@ import { theme } from './theme';
 import { ThankYou } from './pages/ThankYou';
 import { About } from './pages/About';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
+import { runTestSuite } from './utils/testSuite';
 
 // Add type for Google client
 declare global {
   interface Window {
     google: any;
+    runTestSuite: typeof runTestSuite;
   }
 }
 
@@ -59,6 +61,9 @@ function ColorModeManager() {
 
   return null;
 }
+
+// Initialize test suite
+window.runTestSuite = runTestSuite;
 
 export function App() {
   return (
