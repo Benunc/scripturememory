@@ -13,8 +13,8 @@ class TestSuite {
   private token: string | null = null;
 
   constructor() {
-    // Use the current origin for the API URL
-    this.baseUrl = window.location.origin;
+    // Use the worker URL instead of the frontend URL
+    this.baseUrl = 'https://scripture-memory.ben-2e6.workers.dev';
   }
 
   private async test(name: string, testFn: () => Promise<any>): Promise<void> {
@@ -75,7 +75,9 @@ class TestSuite {
 
     // Test 2: Get Verses
     await this.test('Get Verses', async () => {
-      const response = await this.fetchWithTimeout(`${this.baseUrl}/verses`);
+      const response = await this.fetchWithTimeout(`${this.baseUrl}/verses`, {
+        headers: this.getAuthHeader()
+      });
       if (!response.ok) throw new Error(`Get verses failed: ${response.status}`);
       const data = await response.json();
       if (!Array.isArray(data)) throw new Error('Invalid verses response format');
@@ -84,7 +86,9 @@ class TestSuite {
 
     // Test 3: Get Single Verse
     await this.test('Get Single Verse', async () => {
-      const response = await this.fetchWithTimeout(`${this.baseUrl}/verses/1`);
+      const response = await this.fetchWithTimeout(`${this.baseUrl}/verses/1`, {
+        headers: this.getAuthHeader()
+      });
       if (!response.ok) throw new Error(`Get single verse failed: ${response.status}`);
       const data = await response.json();
       if (!data.id || !data.text) throw new Error('Invalid verse response format');
