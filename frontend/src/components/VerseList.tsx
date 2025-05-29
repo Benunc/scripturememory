@@ -299,15 +299,15 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       localStorage.removeItem('userEmail');
       localStorage.removeItem('token');
 
-      // Redirect to sign in page with message
+      // Redirect to root route with message
       const params = new URLSearchParams({
         message: 'Your session has expired. Please sign in again to continue.'
       });
-      window.location.href = `/signin?${params.toString()}`;
+      window.location.href = `/?${params.toString()}`;
     } catch (error) {
       debug.error('auth', 'Error handling session expiration:', error);
-      // If saving fails, still redirect to sign in
-      window.location.href = '/signin?message=Your session has expired. Please sign in again to continue.';
+      // If saving fails, still redirect to root
+      window.location.href = '/?message=Your session has expired. Please sign in again to continue.';
     }
   };
 

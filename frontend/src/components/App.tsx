@@ -48,6 +48,15 @@ export function MainApp() {
       try {
         // Validate environment variables first
         validateEnvVariables();
+
+        // Check for message parameter
+        const params = new URLSearchParams(window.location.search);
+        const message = params.get('message');
+        if (message) {
+          setIsSignInOpen(true);
+          // Clear the message from URL
+          window.history.replaceState({}, '', '/');
+        }
       } catch (error) {
         debug.error('state', 'Initialization error:', error);
         toast({
