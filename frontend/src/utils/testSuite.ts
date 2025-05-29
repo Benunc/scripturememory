@@ -87,7 +87,7 @@ class TestSuite {
     await this.test('Update Test Verse Status', async () => {
       if (!this.testVerseReference) throw new Error('No test verse reference available');
       const response = await this.fetchWithTimeout(`${this.baseUrl}/verses/${encodeURIComponent(this.testVerseReference)}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           ...this.getAuthHeader()
