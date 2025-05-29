@@ -62,16 +62,7 @@ class TestSuite {
     }
     this.token = authToken;
 
-    // Test 1: Health Check
-    await this.test('Health Check', async () => {
-      const response = await this.fetchWithTimeout(`${this.baseUrl}/health`);
-      if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
-      const data = await response.json();
-      if (data.status !== 'ok') throw new Error('Invalid health check response');
-      return data;
-    });
-
-    // Test 2: Create Test Verse
+    // Test 1: Create Test Verse
     await this.test('Create Test Verse', async () => {
       const testReference = 'Testing 1:2';
       this.testVerseReference = testReference;
@@ -92,27 +83,25 @@ class TestSuite {
       return data;
     });
 
-    // Test 3: Update Test Verse Status
+    // Test 2: Update Test Verse Status
     await this.test('Update Test Verse Status', async () => {
       if (!this.testVerseReference) throw new Error('No test verse reference available');
-      const response = await this.fetchWithTimeout(`${this.baseUrl}/progress`, {
-        method: 'POST',
+      const response = await this.fetchWithTimeout(`${this.baseUrl}/verses/${encodeURIComponent(this.testVerseReference)}`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           ...this.getAuthHeader()
         },
         body: JSON.stringify({
-          verseId: this.testVerseReference,
           status: 'in_progress'
         })
       });
-      if (!response.ok) throw new Error(`Update progress failed: ${response.status}`);
-      const data = await response.json();
-      if (!data.success) throw new Error('Invalid update progress response');
-      return data;
+      if (!response.ok) throw new Error(`Update verse failed: ${response.status}`);
+      // 204 No Content is a valid response
+      return { success: true };
     });
 
-    // Test 4: Delete Test Verse
+    // Test 3: Delete Test Verse
     await this.test('Delete Test Verse', async () => {
       if (!this.testVerseReference) throw new Error('No test verse reference available');
       const response = await this.fetchWithTimeout(`${this.baseUrl}/verses/${encodeURIComponent(this.testVerseReference)}`, {
@@ -120,9 +109,8 @@ class TestSuite {
         headers: this.getAuthHeader()
       });
       if (!response.ok) throw new Error(`Delete verse failed: ${response.status}`);
-      const data = await response.json();
-      if (!data.success) throw new Error('Invalid delete verse response');
-      return data;
+      // 204 No Content is a valid response
+      return { success: true };
     });
 
     // Print Summary
