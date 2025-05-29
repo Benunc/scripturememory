@@ -26,6 +26,7 @@ yarn-error.log*
 
 # Database migrations
 workers/migrations/*.sql
+!workers/migrations/0001_add_progress_tables.sql
 
 # TypeScript
 *.tsbuildinfo
