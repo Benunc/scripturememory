@@ -62,3 +62,6 @@ dist-ssr
 
 # Cloudflare Workers
 .dev.vars
+
+# Implementation plan
+implementation_plan.md
