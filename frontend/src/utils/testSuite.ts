@@ -57,7 +57,7 @@ class TestSuite {
     console.log('🧪 Starting test suite...\n');
 
     // Check if we're authenticated
-    const authToken = localStorage.getItem('authToken');
+    const authToken = localStorage.getItem('session_token');
     if (!authToken) {
       console.error('❌ Authentication required. Please sign in first.');
       return;
