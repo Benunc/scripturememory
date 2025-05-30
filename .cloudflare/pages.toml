@@ -1,6 +1,7 @@
 [build]
-command = "cd frontend && npm ci && npm run build"
-publish = "frontend/dist"
+command = "npm ci && npm run build"
+publish = "dist"
+root_dir = "frontend"
 
 [build.environment]
 NODE_VERSION = "20"
@@ -11,10 +12,12 @@ branch = "main"
 
 [env.production]
 name = "Production"
-build.command = "cd frontend && npm ci && npm run build"
-build.publish = "frontend/dist"
+build.command = "npm ci && npm run build"
+build.publish = "dist"
+build.root_dir = "frontend"
 
 [env.preview]
 name = "Preview"
-build.command = "cd frontend && npm ci && npm run build"
-build.publish = "frontend/dist" 
+build.command = "npm ci && npm run build"
+build.publish = "dist"
+build.root_dir = "frontend" 
