@@ -461,30 +461,31 @@ export const handleAuth = {
 
       const db = getDB(env);
 
-      // Start a transaction to ensure all deletions succeed or none do
-      await db.prepare('BEGIN TRANSACTION').run();
+      // Use D1's batch API for atomic operations
+      // Order matters - delete child records before parent records
+      await db.batch([
+        // First delete all point events and progress tracking
+        db.prepare('DELETE FROM point_events WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM word_progress WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM verse_attempts WHERE user_id = ?').bind(userId),
+        
+        // Delete mastery records (both tables)
+        db.prepare('DELETE FROM mastered_verses WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM verse_mastery WHERE user_id = ?').bind(userId),
+        
+        // Now we can delete verses
+        db.prepare('DELETE FROM verses WHERE user_id = ?').bind(userId),
+        
+        // Delete remaining user data
+        db.prepare('DELETE FROM user_stats WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM magic_links WHERE email = (SELECT email FROM users WHERE id = ?)').bind(userId),
+        
+        // Finally delete the user
+        db.prepare('DELETE FROM users WHERE id = ?').bind(userId)
+      ]);
 
-      try {
-        // Delete all user data in the correct order to respect foreign key constraints
-        await db.prepare('DELETE FROM point_events WHERE user_id = ?').bind(userId).run();
-        await db.prepare('DELETE FROM word_progress WHERE user_id = ?').bind(userId).run();
-        await db.prepare('DELETE FROM verse_attempts WHERE user_id = ?').bind(userId).run();
-        await db.prepare('DELETE FROM mastered_verses WHERE user_id = ?').bind(userId).run();
-        await db.prepare('DELETE FROM verses WHERE user_id = ?').bind(userId).run();
-        await db.prepare('DELETE FROM user_stats WHERE user_id = ?').bind(userId).run();
-        await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
-        await db.prepare('DELETE FROM magic_links WHERE email = (SELECT email FROM users WHERE id = ?)').bind(userId).run();
-        await db.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
-
-        // Commit the transaction
-        await db.prepare('COMMIT').run();
-
-        return new Response(null, { status: 204 });
-      } catch (error) {
-        // Rollback on error
-        await db.prepare('ROLLBACK').run();
-        throw error;
-      }
+      return new Response(null, { status: 204 });
     } catch (error) {
       console.error('Error deleting user:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
