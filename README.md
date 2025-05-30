@@ -26,6 +26,7 @@ A modern web application for memorizing Bible verses, built with React, Cloudfla
 
 ## Development
 
+
 ### Prerequisites 
 - Node.js >= 20.0.0 
 - npm
