@@ -1,6 +1,7 @@
 import { Router } from 'itty-router';
 import { Env, MagicLink, D1Result } from '../types';
 import { generateToken, verifyToken } from './token';
+import { getUserId } from '../utils/db';
 
 // Rate limiting
 const RATE_LIMIT = 5; // requests per minute
@@ -435,5 +436,61 @@ export const handleAuth = {
         ...Object.fromEntries(headers)
       }
     });
+  },
+
+  // Delete user and all associated data
+  deleteUser: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Start a transaction to ensure all deletions succeed or none do
+      await db.prepare('BEGIN TRANSACTION').run();
+
+      try {
+        // Delete all user data in the correct order to respect foreign key constraints
+        await db.prepare('DELETE FROM point_events WHERE user_id = ?').bind(userId).run();
+        await db.prepare('DELETE FROM word_progress WHERE user_id = ?').bind(userId).run();
+        await db.prepare('DELETE FROM verse_attempts WHERE user_id = ?').bind(userId).run();
+        await db.prepare('DELETE FROM mastered_verses WHERE user_id = ?').bind(userId).run();
+        await db.prepare('DELETE FROM verses WHERE user_id = ?').bind(userId).run();
+        await db.prepare('DELETE FROM user_stats WHERE user_id = ?').bind(userId).run();
+        await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+        await db.prepare('DELETE FROM magic_links WHERE email = (SELECT email FROM users WHERE id = ?)').bind(userId).run();
+        await db.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+
+        // Commit the transaction
+        await db.prepare('COMMIT').run();
+
+        return new Response(null, { status: 204 });
+      } catch (error) {
+        // Rollback on error
+        await db.prepare('ROLLBACK').run();
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 }; 

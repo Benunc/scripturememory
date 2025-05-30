@@ -48,6 +48,7 @@ router.options('*', () => {
 // Auth routes
 router.post('/auth/magic-link', handleAuth.sendMagicLink);
 router.get('/auth/verify', handleAuth.verifyMagicLink);
+router.delete('/auth/delete', handleAuth.deleteUser);
 
 // Verse routes
 router.get('/verses', handleVerses.getVerses);

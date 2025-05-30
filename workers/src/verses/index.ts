@@ -2,7 +2,7 @@ import { Env, Verse } from '../types';
 
 // Helper to get the correct database binding
 const getDB = (env: Env) => {
-  return env.ENVIRONMENT === 'production' ? env.DB_PROD : env.DB_DEV;
+  return env.DB;
 };
 
 // Helper to get user ID from session token
