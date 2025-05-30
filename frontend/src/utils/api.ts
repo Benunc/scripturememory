@@ -1,10 +1,23 @@
 import { Verse } from '../types';
 import { debug } from './debug';
 
-// Use worker URL in production, relative URL in development
-const API_URL = import.meta.env.MODE === 'production'
-  ? 'https://scripture-memory.ben-2e6.workers.dev'
-  : import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
+// Determine the API URL based on the environment
+const getApiUrl = () => {
+  // In development, use the environment variable or localhost
+  if (import.meta.env.DEV) {
+    return import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
+  }
+
+  // In preview deployments, use the preview worker
+  if (import.meta.env.VITE_PREVIEW) {
+    return 'https://scripture-memory-preview.ben-2e6.workers.dev';
+  }
+
+  // In production, use the production worker
+  return 'https://scripture-memory.ben-2e6.workers.dev';
+};
+
+const API_URL = getApiUrl();
 
 interface ApiResponse<T> {
   data?: T;
@@ -141,10 +154,4 @@ export async function deleteVerse(token: string, reference: string): Promise<Api
     headers: { 'Authorization': `Bearer ${token}` }
   });
   return handleResponse<void>(response);
-}
-
-export const getApiUrl = () => {
-  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? import.meta.env.VITE_WORKER_URL || 'http://localhost:8787'
-    : 'https://scripture-memory.ben-2e6.workers.dev';
-}; 
+} 

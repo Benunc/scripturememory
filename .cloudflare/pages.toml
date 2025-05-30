@@ -1,0 +1,20 @@
+[build]
+command = "npm run build"
+publish = "frontend/dist"
+
+[build.environment]
+NODE_VERSION = "20"
+NPM_FLAGS = "--legacy-peer-deps"
+
+[build.trigger]
+branch = "main"
+
+[env.production]
+name = "Production"
+build.command = "npm run build"
+build.publish = "frontend/dist"
+
+[env.preview]
+name = "Preview"
+build.command = "npm run build"
+build.publish = "frontend/dist" 
