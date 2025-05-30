@@ -1,5 +1,5 @@
 [build]
-command = "cd frontend && npm ci && npm run build"
+command = "cd frontend && npm install --no-workspaces && npm run build"
 publish = "frontend/dist"
 
 [build.environment]
@@ -11,10 +11,10 @@ branch = "main"
 
 [env.production]
 name = "Production"
-build.command = "cd frontend && npm ci && npm run build"
+build.command = "cd frontend && npm install --no-workspaces && npm run build"
 build.publish = "frontend/dist"
 
 [env.preview]
 name = "Preview"
-build.command = "cd frontend && npm ci && npm run build"
+build.command = "cd frontend && npm install --no-workspaces && npm run build"
 build.publish = "frontend/dist" 
