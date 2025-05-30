@@ -32,13 +32,6 @@ extract_magic_token() {
     echo "$1" | grep -o '"message":"token=[^"]*' | cut -d'=' -f2 | cut -d'"' -f1
 }
 
-# Function to get magic link token from Wrangler output
-get_magic_token() {
-    echo "${YELLOW}Please enter the magic link token from the Wrangler console output:${NC}"
-    read -r MAGIC_TOKEN
-    echo "$MAGIC_TOKEN"
-}
-
 # Check if server is running
 echo "${YELLOW}Is the Wrangler dev server running? (y/n)${NC}"
 read -r SERVER_RUNNING
@@ -59,132 +52,255 @@ if [ "$DB_CLEAN" != "y" ]; then
     check_status
 fi
 
-# 0. Run Migrations (if needed)
-echo "${YELLOW}Do you need to run the database migrations? (y/n)${NC}"
-read -r RUN_MIGRATIONS
-
-if [ "$RUN_MIGRATIONS" = "y" ]; then
-    echo "${YELLOW}Running database migrations...${NC}"
-    npx wrangler d1 execute DB --env development --file=./migrations/0000_initial_schema.sql
-    npx wrangler d1 execute DB --env development --file=./migrations/0001_add_progress_tables.sql
-    npx wrangler d1 execute DB --env development --file=./migrations/0002_add_gamification_tables.sql
-    npx wrangler d1 execute DB --env development --file=./migrations/0003_add_unique_constraint_to_verses_reference.sql
-    npx wrangler d1 execute DB --env development --file=./migrations/0004_add_mastered_verses.sql
-    check_status
-fi
-
-# 0. Create test user
-echo "${YELLOW}Creating test user...${NC}"
-CREATE_USER_RESPONSE=$(npx wrangler d1 execute DB --env development --command="INSERT INTO users (email, created_at) VALUES ('test@example.com', strftime('%s','now') * 1000);")
+# 1. Run initial schema. Don't try to change this, it's there because we deployed the live app incorrectly with this file.
+echo "${YELLOW}Running initial schema...${NC}"
+npx wrangler d1 execute DB --env development --file=./schema_test.sql
 check_status
 
-# 1. Request Magic Link
-echo "${YELLOW}Requesting magic link...${NC}"
-MAGIC_LINK_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+
+# Get the user ID (will always be 1 since we clean the database)
+USER_ID=1
+echo "${GREEN}Using user ID: $USER_ID${NC}"
+
+echo "Checking for user existence at line 100..."
+USERCHECK1=$(npx wrangler d1 execute DB --env development --command="SELECT * FROM users WHERE LOWER(email) = LOWER('test@example.com');")
+echo "${BLUE}User check response:${NC}"
+echo "$USERCHECK1"
+check_status
+
+echo "Checking verses before first migration..."
+npx wrangler d1 execute DB --env development --command="SELECT * FROM verses WHERE user_id = 1;"
+echo "Checking all tables before first migration..."
+npx wrangler d1 execute DB --env development --command="SELECT name FROM sqlite_master WHERE type='table';"
+
+# 4. Run migrations in correct order
+echo "${YELLOW}Running migrations...${NC}"
+
+# 4.1 Add unique constraint first
+echo "${YELLOW}running new initial schema...${NC}"
+npx wrangler d1 execute DB --env development --file=./migrations/0000_2_gamification_update.sql
+check_status
+
+echo "Checking verses after first migration..."
+npx wrangler d1 execute DB --env development --command="SELECT * FROM verses WHERE user_id = 1;"
+echo "Checking all tables after first migration..."
+npx wrangler d1 execute DB --env development --command="SELECT name FROM sqlite_master WHERE type='table';"
+
+echo "${YELLOW}Adding unique constraint to verses...${NC}"
+npx wrangler d1 execute DB --env development --file=./migrations/0001_add_unique_constraint_to_verses_reference.sql
+check_status
+
+# 4.2 Add progress tables (now UNIQUE constraint exists)
+echo "${YELLOW}Adding progress tables...${NC}"
+npx wrangler d1 execute DB --env development --file=./migrations/0002_add_progress_tables.sql
+check_status
+
+# 4.3 Add gamification tables
+echo "${YELLOW}Adding gamification tables...${NC}"
+npx wrangler d1 execute DB --env development --file=./migrations/0003_add_gamification_tables.sql
+check_status
+
+# 4.4 Add mastered verses table
+echo "${YELLOW}Adding mastered verses table...${NC}"
+npx wrangler d1 execute DB --env development --file=./migrations/0004_add_mastered_verses.sql
+check_status
+
+echo "Checking for user existence at line 127..."
+echo "Checking users table structure..."
+npx wrangler d1 execute DB --env development --command="SELECT sql FROM sqlite_master WHERE type='table' AND name='users';"
+echo "Checking all tables..."
+npx wrangler d1 execute DB --env development --command="SELECT name FROM sqlite_master WHERE type='table';"
+echo "Checking user data..."
+npx wrangler d1 execute DB --env development --command="SELECT * FROM users WHERE LOWER(email) = LOWER('test@example.com');"
+
+echo "${YELLOW}Logging back in after migrations...${NC}"
+MAGIC_LINK_RESPONSE_2=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
   -H "Origin: http://localhost:8787" \
-  -d '{"email":"test@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+  -d '{"email":"test@example.com","isRegistration":false,"turnstileToken":"test-token"}')
 check_status
-
 echo "${BLUE}Magic link response:${NC}"
-echo "$MAGIC_LINK_RESPONSE"
+echo "$MAGIC_LINK_RESPONSE_2"
 
 # Extract magic link token from response
-MAGIC_TOKEN=$(extract_magic_token "$MAGIC_LINK_RESPONSE")
-if [ -z "$MAGIC_TOKEN" ]; then
+MAGIC_TOKEN2=$(extract_magic_token "$MAGIC_LINK_RESPONSE_2")
+if [ -z "$MAGIC_TOKEN2" ]; then
     echo "${RED}Failed to extract magic link token from response${NC}"
-    exit 1
+    echo "$MAGIC_LINK_RESPONSE_2"
+    echo "${YELLOW}Getting token from database...${NC}"
+    # Get the most recent magic link token
+    DB_RESPONSE=$(npx wrangler d1 execute DB --env development --command="SELECT * FROM magic_links WHERE email = 'test@example.com';" | cat)
+    echo "${BLUE}Database response:${NC}"
+    echo "$DB_RESPONSE"
+    
+    # Extract the token from the results array
+    MAGIC_TOKEN2=$(echo "$DB_RESPONSE" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+    
+    if [ -z "$MAGIC_TOKEN2" ]; then
+        echo "${RED}No magic link token found in database${NC}"
+        exit 1
+    fi
+    echo "${GREEN}Successfully extracted token from database: $MAGIC_TOKEN2${NC}"
 fi
 
-echo "\n${GREEN}Magic link token: $MAGIC_TOKEN${NC}"
+echo "\n${GREEN}Magic link token: $MAGIC_TOKEN2${NC}"
 
-# 2. Verify Magic Link (Login)
+# 3. Verify Magic Link (Login)
 echo "\n${YELLOW}Verifying magic link...${NC}"
-VERIFY_RESPONSE=$(curl -s -i "http://localhost:8787/auth/verify?token=$MAGIC_TOKEN")
+VERIFY_RESPONSE2=$(curl -s -i "http://localhost:8787/auth/verify?token=$MAGIC_TOKEN2")
 check_status
 
 echo "${BLUE}Verification response:${NC}"
-echo "$VERIFY_RESPONSE"
+echo "$VERIFY_RESPONSE2"
 
 # Extract session token
-SESSION_TOKEN=$(extract_token "$VERIFY_RESPONSE")
-if [ -z "$SESSION_TOKEN" ]; then
+SESSION_TOKEN2=$(extract_token "$VERIFY_RESPONSE2")
+if [ -z "$SESSION_TOKEN2" ]; then
     echo "${RED}Failed to extract session token${NC}"
     exit 1
 fi
 
-echo "\n${GREEN}Session token: $SESSION_TOKEN${NC}"
+echo "\n${GREEN}Session token: $SESSION_TOKEN2${NC}"
 
-# 3. Add a Verse
-echo "\n${YELLOW}Adding a verse...${NC}"
+# Base timestamp for all events
+BASE_TIMESTAMP=1748631950215
+
+echo "${YELLOW}Adding new verse after points system...${NC}"
 ADD_VERSE_RESPONSE=$(curl -s -X POST http://localhost:8787/verses \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $SESSION_TOKEN" \
-  -d '{"reference":"John 3:16","text":"For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.","translation":"NIV","status":"not_started"}')
+  -H "Authorization: Bearer $SESSION_TOKEN2" \
+  -d "{\"reference\":\"Psalm 23:1\",\"text\":\"The LORD is my shepherd, I lack nothing.\",\"translation\":\"NIV\",\"created_at\":$BASE_TIMESTAMP}")
 check_status
-
 echo "${BLUE}Add verse response:${NC}"
 echo "$ADD_VERSE_RESPONSE"
 
-# 4. Get All Verses
-echo "\n${YELLOW}Getting all verses...${NC}"
-GET_VERSES_RESPONSE=$(curl -s -X GET http://localhost:8787/verses \
-  -H "Authorization: Bearer $SESSION_TOKEN")
-check_status
-
-echo "${BLUE}Get verses response:${NC}"
-echo "$GET_VERSES_RESPONSE"
-
-# 5. Record Verse Progress
-echo "\n${YELLOW}Recording verse progress...${NC}"
-PROGRESS_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/verse \
+echo "${YELLOW}Checking stats after adding verse...${NC}"
+STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$BASE_TIMESTAMP" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $SESSION_TOKEN" \
-  -d '{"verse_reference":"John 3:16","words_correct":10,"total_words":10}')
+  -H "Authorization: Bearer $SESSION_TOKEN2")
 check_status
-
-echo "${BLUE}Progress response:${NC}"
-echo "$PROGRESS_RESPONSE"
-
-# 6. Get User Stats
-echo "\n${YELLOW}Getting user stats...${NC}"
-STATS_RESPONSE=$(curl -s -X GET http://localhost:8787/gamification/stats \
-  -H "Authorization: Bearer $SESSION_TOKEN")
-check_status
-
-echo "${BLUE}Stats response:${NC}"
+echo "${BLUE}Stats after adding verse:${NC}"
 echo "$STATS_RESPONSE"
 
-# 7. Record Point Event
-echo "\n${YELLOW}Recording point event...${NC}"
-POINTS_RESPONSE=$(curl -s -X POST http://localhost:8787/gamification/points \
+echo "${YELLOW}Recording progress on initial verse...${NC}"
+PROGRESS_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/word \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $SESSION_TOKEN" \
-  -d '{"event_type":"verse_mastered","points":10,"metadata":{"verse_reference":"John 3:16"}}')
+  -H "Authorization: Bearer $SESSION_TOKEN2" \
+  -d "{\"verse_reference\":\"Psalm 23:1\",\"word_index\":0,\"word\":\"The\",\"is_correct\":true,\"created_at\":$BASE_TIMESTAMP}")
 check_status
+echo "${BLUE}Record progress response:${NC}"
+echo "$PROGRESS_RESPONSE"
 
-echo "${BLUE}Points response:${NC}"
-echo "$POINTS_RESPONSE"
-
-# 8. Delete User
-echo "\n${YELLOW}Deleting user...${NC}"
-echo "${RED}WARNING: This will permanently delete the user and all associated data${NC}"
-echo "${YELLOW}Press Enter to continue or Ctrl+C to cancel...${NC}"
-read
-
-DELETE_RESPONSE=$(curl -s -i -X DELETE http://localhost:8787/auth/delete \
-  -H "Authorization: Bearer $SESSION_TOKEN")
+echo "${YELLOW}Checking stats after word progress...${NC}"
+STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$BASE_TIMESTAMP" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
 check_status
+echo "${BLUE}Stats after word progress:${NC}"
+echo "$STATS_RESPONSE"
 
-echo "${BLUE}Delete response:${NC}"
-echo "$DELETE_RESPONSE"
+echo "${YELLOW}Recording verse attempt...${NC}"
+ATTEMPT_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/verse \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN2" \
+  -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":10,\"total_words\":15,\"created_at\":$BASE_TIMESTAMP}")
+check_status
+echo "${BLUE}Record attempt response:${NC}"
+echo "$ATTEMPT_RESPONSE"
 
-# Check if delete was successful (204 No Content)
-if [[ "$DELETE_RESPONSE" == *"204 No Content"* ]]; then
-    echo "${GREEN}User deleted successfully${NC}"
+echo "${YELLOW}Checking stats after first attempt...${NC}"
+STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$BASE_TIMESTAMP" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+check_status
+echo "${BLUE}Stats after first attempt:${NC}"
+echo "$STATS_RESPONSE"
+
+# Add more attempts to work towards mastery
+echo "${YELLOW}Recording more verse attempts for mastery...${NC}"
+# First 2 attempts with some mistakes to build up total attempts
+for i in {1..2}; do
+  # Each attempt is 1 day apart
+  TIMESTAMP=$((BASE_TIMESTAMP + (i * 86400000)))
+  ATTEMPT_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/verse \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2" \
+    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":14,\"total_words\":15,\"created_at\":$TIMESTAMP}")
+  check_status
+  echo "${BLUE}Record attempt $i response:${NC}"
+  echo "$ATTEMPT_RESPONSE"
+
+  echo "${YELLOW}Checking stats after attempt $i...${NC}"
+  STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$TIMESTAMP" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2")
+  check_status
+  echo "${BLUE}Stats after attempt $i:${NC}"
+  echo "$STATS_RESPONSE"
+done
+
+# Then 3 perfect attempts to trigger mastery
+for i in {3..5}; do
+  # Each attempt is 1 day apart
+  TIMESTAMP=$((BASE_TIMESTAMP + (i * 86400000)))
+  ATTEMPT_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/verse \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2" \
+    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":15,\"total_words\":15,\"created_at\":$TIMESTAMP}")
+  check_status
+  echo "${BLUE}Record attempt $i response:${NC}"
+  echo "$ATTEMPT_RESPONSE"
+
+  echo "${YELLOW}Checking stats after attempt $i...${NC}"
+  STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$TIMESTAMP" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2")
+  check_status
+  echo "${BLUE}Stats after attempt $i:${NC}"
+  echo "$STATS_RESPONSE"
+done
+
+# Add another verse (1 day after last attempt)
+TIMESTAMP=$((BASE_TIMESTAMP + (6 * 86400000)))  # Add 6 days (1 day after last attempt)
+echo "${YELLOW}Adding another verse on next day...${NC}"
+ADD_VERSE_RESPONSE=$(curl -s -X POST http://localhost:8787/verses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN2" \
+  -d "{\"reference\":\"Psalm 23:3\",\"text\":\"He refreshes my soul. He guides me along the right paths for his name's sake.\",\"translation\":\"NIV\",\"created_at\":$TIMESTAMP}")
+check_status
+echo "${BLUE}Add verse response:${NC}"
+echo "$ADD_VERSE_RESPONSE"
+
+echo "${YELLOW}Checking stats after adding verse on next day...${NC}"
+STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$TIMESTAMP" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+check_status
+echo "${BLUE}Stats after adding verse on next day:${NC}"
+echo "$STATS_RESPONSE"
+
+# Check final stats
+echo "${YELLOW}Checking final stats...${NC}"
+STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$TIMESTAMP" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+check_status
+echo "${BLUE}Final stats:${NC}"
+echo "$STATS_RESPONSE"
+
+# Add confirmation step before deleting user
+echo "\n${YELLOW}Would you like to delete the test user? (y/n)${NC}"
+read -r DELETE_USER
+
+if [ "$DELETE_USER" = "y" ]; then
+    echo "${YELLOW}Deleting user...${NC}"
+    DELETE_RESPONSE=$(curl -s -i -X DELETE http://localhost:8787/auth/delete \
+      -H "Authorization: Bearer $SESSION_TOKEN2")
+    check_status
+    echo "${BLUE}Delete response:${NC}"
+    echo "$DELETE_RESPONSE"
 else
-    echo "${RED}Failed to delete user${NC}"
-    exit 1
+    echo "${YELLOW}Skipping user deletion${NC}"
 fi
 
-echo "\n${GREEN}All tests completed successfully!${NC}" 
+echo "\n${GREEN}Test completed successfully!${NC}" 

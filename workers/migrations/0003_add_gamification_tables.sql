@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS point_events (
   points INTEGER NOT NULL,
   metadata TEXT,    -- JSON string for event-specific data
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-  FOREIGN KEY (user_id) REFERENCES users(id)
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
 );
 
 -- Add verse_mastery table
@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS verse_mastery (
   last_mastered_date INTEGER,
   days_mastered INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-  FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (verse_reference) REFERENCES verses(reference),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (verse_reference) REFERENCES verses(reference) ON DELETE RESTRICT,
   UNIQUE(user_id, verse_reference)
 );
 
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS user_stats (
   total_attempts INTEGER NOT NULL DEFAULT 0,
   last_activity_date INTEGER,
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-  FOREIGN KEY (user_id) REFERENCES users(id)
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
 );
 
 -- Add indexes

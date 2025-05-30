@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS word_progress (
   is_correct BOOLEAN NOT NULL DEFAULT FALSE,
   last_correct_date INTEGER,
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-  FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (verse_reference) REFERENCES verses(reference),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (verse_reference) REFERENCES verses(reference) ON DELETE RESTRICT,
   UNIQUE(user_id, verse_reference, word_index)
 );
 
@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS verse_attempts (
   words_correct INTEGER NOT NULL DEFAULT 0,
   total_words INTEGER NOT NULL,
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-  FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (verse_reference) REFERENCES verses(reference)
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (verse_reference) REFERENCES verses(reference) ON DELETE RESTRICT
 );
 
 -- Add indexes

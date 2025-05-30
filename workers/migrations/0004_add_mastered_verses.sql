@@ -1,12 +1,12 @@
 -- Add mastered_verses table to track when verses are first mastered
-CREATE TABLE mastered_verses (
+CREATE TABLE IF NOT EXISTS mastered_verses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
   verse_reference TEXT NOT NULL,
   mastered_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-  FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (verse_reference) REFERENCES verses(reference),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (verse_reference) REFERENCES verses(reference) ON DELETE RESTRICT,
   UNIQUE(user_id, verse_reference)
 );
 

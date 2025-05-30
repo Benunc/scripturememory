@@ -13,6 +13,10 @@ export interface Env {
   ASSETS: {
     fetch: (request: Request) => Promise<Response>;
   };
+  SENDGRID_API_KEY: string;
+  SENDGRID_FROM_EMAIL: string;
+  SENDGRID_FROM_NAME: string;
+  SESSION_SECRET: string;
 }
 
 export interface D1Result {

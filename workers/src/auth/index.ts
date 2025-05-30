@@ -379,6 +379,20 @@ export const handleAuth = {
       }
       userId = parsedId;
       
+      // Create initial user_stats row
+      await db.prepare(`
+        INSERT INTO user_stats (
+          user_id,
+          total_points,
+          current_streak,
+          longest_streak,
+          verses_mastered,
+          total_attempts,
+          last_activity_date,
+          created_at
+        ) VALUES (?, 0, 0, 0, 0, 0, ?, ?)
+      `).bind(userId, Date.now(), Date.now()).run();
+      
       // Initialize user's verses with sample verses
       const sampleVerses = [
         { reference: 'John 3:16', text: 'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.' },

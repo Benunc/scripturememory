@@ -1,7 +1,16 @@
 import { Router } from 'itty-router';
 import { Env, WordProgress, VerseAttempt } from '../types';
 import { getDB, getUserId } from '../utils/db';
-import { updateMastery } from '../gamification';
+import { updateMastery, updateStreak } from '../gamification';
+
+// Point system constants
+const POINTS = {
+  VERSE_ADDED: 100,        // Big bonus for adding a new verse
+  WORD_CORRECT: 1,         // Base points per correct word
+  STREAK_MULTIPLIER: 0.5,  // 50% bonus per word in streak
+  MASTERY_ACHIEVED: 500,   // Big bonus for mastering a verse
+  DAILY_STREAK: 50,        // Bonus for maintaining daily streak
+};
 
 export const handleProgress = {
   // Record word-by-word progress
@@ -25,9 +34,9 @@ export const handleProgress = {
         });
       }
 
-      const { verse_reference, word_index, word, is_correct } = await request.json() as WordProgress;
+      const { verse_reference, word_index, word, is_correct, created_at } = await request.json() as WordProgress & { created_at?: number };
       
-      if (!verse_reference || word_index === undefined || !word) {
+      if (!verse_reference || word_index === undefined || !word || is_correct === undefined) {
         return new Response(JSON.stringify({ error: 'Missing required fields' }), { 
           status: 400,
           headers: { 'Content-Type': 'application/json' }
@@ -46,28 +55,85 @@ export const handleProgress = {
         });
       }
 
-      // Record word progress
-      await getDB(env).prepare(`
-        INSERT INTO word_progress (
-          user_id, 
-          verse_reference, 
-          word_index, 
-          word, 
-          is_correct, 
-          created_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
-      `).bind(
-        userId,
-        verse_reference,
-        word_index,
-        word,
-        is_correct ? 1 : 0,
-        Date.now()
-      ).run();
+      const db = getDB(env);
+      try {
+        // Update streak before recording progress
+        await updateStreak(userId, env, created_at);
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+        // Record word progress
+        await db.prepare(`
+          INSERT INTO word_progress (
+            user_id, 
+            verse_reference, 
+            word_index, 
+            word, 
+            is_correct, 
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(
+          userId,
+          verse_reference,
+          word_index,
+          word,
+          is_correct ? 1 : 0,
+          created_at || Date.now()
+        ).run();
+
+        // Award points for correct words
+        if (is_correct) {
+          // First check if user stats exist
+          const stats = await db.prepare(`
+            SELECT 1 FROM user_stats WHERE user_id = ?
+          `).bind(userId).first();
+
+          if (!stats) {
+            // Create initial stats if they don't exist
+            await db.prepare(`
+              INSERT INTO user_stats (
+                user_id,
+                total_points,
+                current_streak,
+                longest_streak,
+                verses_mastered,
+                total_attempts,
+                last_activity_date,
+                created_at
+              ) VALUES (?, ?, 0, 0, 0, 0, ?, ?)
+            `).bind(userId, POINTS.WORD_CORRECT, created_at || Date.now(), created_at || Date.now()).run();
+          } else {
+            // Update existing stats
+            await db.prepare(`
+              UPDATE user_stats 
+              SET total_points = total_points + ?,
+                  last_activity_date = ?
+              WHERE user_id = ?
+            `).bind(POINTS.WORD_CORRECT, created_at || Date.now(), userId).run();
+          }
+
+          // Record point event
+          await db.prepare(`
+            INSERT INTO point_events (
+              user_id,
+              event_type,
+              points,
+              metadata,
+              created_at
+            ) VALUES (?, 'word_correct', ?, ?, ?)
+          `).bind(
+            userId,
+            POINTS.WORD_CORRECT,
+            JSON.stringify({ verse_reference, word_index, word }),
+            created_at || Date.now()
+          ).run();
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        console.error('Error recording word progress:', error);
+        throw error;
+      }
     } catch (error) {
       console.error('Error recording word progress:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
@@ -98,7 +164,7 @@ export const handleProgress = {
         });
       }
 
-      const { verse_reference, words_correct, total_words } = await request.json() as VerseAttempt;
+      const { verse_reference, words_correct, total_words, created_at } = await request.json() as VerseAttempt & { created_at?: number };
       
       if (!verse_reference || words_correct === undefined || total_words === undefined) {
         return new Response(JSON.stringify({ error: 'Missing required fields' }), { 
@@ -119,31 +185,90 @@ export const handleProgress = {
         });
       }
 
-      // Record verse attempt
-      await getDB(env).prepare(`
-        INSERT INTO verse_attempts (
-          user_id,
+      const db = getDB(env);
+      try {
+        // Update streak before recording attempt
+        await updateStreak(userId, env, created_at);
+
+        // 1. Record verse attempt
+        await db.prepare(`
+          INSERT INTO verse_attempts (
+            user_id,
+            verse_reference,
+            attempt_date,
+            words_correct,
+            total_words,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(
+          userId,
           verse_reference,
-          attempt_date,
+          created_at || Date.now(),
           words_correct,
           total_words,
-          created_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
-      `).bind(
-        userId,
-        verse_reference,
-        Date.now(),
-        words_correct,
-        total_words,
-        Date.now()
-      ).run();
+          created_at || Date.now()
+        ).run();
 
-      // Check for mastery
-      await updateMastery(userId, verse_reference, env);
+        // 2. Award points for correct words
+        const points = words_correct * POINTS.WORD_CORRECT;
+        if (points > 0) {
+          // First check if user stats exist
+          const stats = await db.prepare(`
+            SELECT 1 FROM user_stats WHERE user_id = ?
+          `).bind(userId).first();
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+          if (!stats) {
+            // Create initial stats if they don't exist
+            await db.prepare(`
+              INSERT INTO user_stats (
+                user_id,
+                total_points,
+                current_streak,
+                longest_streak,
+                verses_mastered,
+                total_attempts,
+                last_activity_date,
+                created_at
+              ) VALUES (?, ?, 0, 0, 0, 1, ?, ?)
+            `).bind(userId, points, created_at || Date.now(), created_at || Date.now()).run();
+          } else {
+            // Update existing stats
+            await db.prepare(`
+              UPDATE user_stats 
+              SET total_points = total_points + ?,
+                  total_attempts = total_attempts + 1,
+                  last_activity_date = ?
+              WHERE user_id = ?
+            `).bind(points, created_at || Date.now(), userId).run();
+          }
+
+          // Record point event
+          await db.prepare(`
+            INSERT INTO point_events (
+              user_id,
+              event_type,
+              points,
+              metadata,
+              created_at
+            ) VALUES (?, 'verse_attempt', ?, ?, ?)
+          `).bind(
+            userId,
+            points,
+            JSON.stringify({ verse_reference, words_correct, total_words }),
+            created_at || Date.now()
+          ).run();
+        }
+
+        // 3. Check for mastery
+        await updateMastery(userId, verse_reference, env);
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        console.error('Error recording verse attempt:', error);
+        throw error;
+      }
     } catch (error) {
       console.error('Error recording verse attempt:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 

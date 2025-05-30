@@ -1,16 +1,25 @@
+import { Router } from 'itty-router';
 import { Env, Verse } from '../types';
 
-// Helper to get the correct database binding
-const getDB = (env: Env) => {
-  return env.DB;
+// Point system constants
+const POINTS = {
+  VERSE_ADDED: 100,        // Big bonus for adding a new verse
+  WORD_CORRECT: 1,         // Base points per correct word
+  STREAK_MULTIPLIER: 0.5,  // 50% bonus per word in streak
+  MASTERY_ACHIEVED: 500,   // Big bonus for mastering a verse
+  DAILY_STREAK: 50,        // Bonus for maintaining daily streak
 };
+
+// Helper to get the correct database binding
+const getDB = (env: Env) => env.DB;
 
 // Helper to get user ID from session token
 const getUserId = async (token: string, env: Env): Promise<number | null> => {
-  const result = await getDB(env).prepare(
+  const session = await getDB(env).prepare(
     'SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?'
-  ).bind(token, Date.now()).first<{ user_id: number }>();
-  return result?.user_id || null;
+  ).bind(token, Date.now()).first();
+
+  return session ? session.user_id as number : null;
 };
 
 export const handleVerses = {
@@ -72,38 +81,106 @@ export const handleVerses = {
         });
       }
 
-      const verse = await request.json() as Verse;
-      if (!verse.reference || !verse.text) {
-        return new Response(JSON.stringify({ error: 'Reference and text are required' }), { 
+      const { reference, text, translation, created_at } = await request.json() as Verse & { created_at?: number };
+      
+      if (!reference || !text || !translation) {
+        return new Response(JSON.stringify({ error: 'Missing required fields' }), { 
           status: 400,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      // Check if verse already exists
-      const existing = await getDB(env).prepare(
-        'SELECT * FROM verses WHERE user_id = ? AND reference = ?'
-      ).bind(userId, verse.reference).first();
+      const db = getDB(env);
+      try {
+        // Check if verse already exists
+        const existingVerse = await db.prepare(`
+          SELECT 1 FROM verses 
+          WHERE user_id = ? AND reference = ?
+        `).bind(userId, reference).first();
 
-      if (existing) {
-        return new Response(JSON.stringify({ error: 'Verse already exists' }), { 
-          status: 409,
+        if (existingVerse) {
+          return new Response(JSON.stringify({ error: 'Verse already exists' }), { 
+            status: 409,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Insert new verse
+        await db.prepare(`
+          INSERT INTO verses (
+            user_id,
+            reference,
+            text,
+            translation,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?)
+        `).bind(
+          userId,
+          reference,
+          text,
+          translation,
+          created_at || Date.now()
+        ).run();
+
+        // Award points for adding a verse
+        await db.prepare(`
+          INSERT INTO point_events (
+            user_id,
+            event_type,
+            points,
+            metadata,
+            created_at
+          ) VALUES (?, 'verse_added', ?, ?, ?)
+        `).bind(
+          userId,
+          POINTS.VERSE_ADDED,
+          JSON.stringify({ verse_reference: reference }),
+          created_at || Date.now()
+        ).run();
+
+        // First check if user stats exist
+        const stats = await db.prepare(`
+          SELECT 1 FROM user_stats WHERE user_id = ?
+        `).bind(userId).first();
+
+        if (!stats) {
+          // Create initial stats if they don't exist
+          await db.prepare(`
+            INSERT INTO user_stats (
+              user_id,
+              total_points,
+              current_streak,
+              longest_streak,
+              verses_mastered,
+              total_attempts,
+              last_activity_date,
+              created_at
+            ) VALUES (?, ?, 0, 0, 0, 0, ?, ?)
+          `).bind(userId, POINTS.VERSE_ADDED, created_at || Date.now(), created_at || Date.now()).run();
+        } else {
+          // Update existing stats
+          await db.prepare(`
+            UPDATE user_stats 
+            SET total_points = total_points + ?,
+                last_activity_date = ?
+            WHERE user_id = ?
+          `).bind(POINTS.VERSE_ADDED, created_at || Date.now(), userId).run();
+        }
+
+        return new Response(JSON.stringify({ success: true, message: 'Verse added successfully' }), { 
+          status: 201,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': JSON.stringify({ success: true, message: 'Verse added successfully' }).length.toString()
+          }
+        });
+      } catch (error) {
+        console.error('Error adding verse:', error);
+        return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+          status: 500,
           headers: { 'Content-Type': 'application/json' }
         });
       }
-
-      // Insert new verse
-      await getDB(env).prepare(
-        'INSERT INTO verses (user_id, reference, text, translation, created_at) VALUES (?, ?, ?, ?, ?)'
-      ).bind(userId, verse.reference, verse.text, verse.translation || 'NIV', Date.now()).run();
-
-      return new Response(JSON.stringify({ success: true, message: 'Verse added successfully' }), { 
-        status: 201,
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': JSON.stringify({ success: true, message: 'Verse added successfully' }).length.toString()
-        }
-      });
     } catch (error) {
       console.error('Error adding verse:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 

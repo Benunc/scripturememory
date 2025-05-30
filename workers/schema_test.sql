@@ -1,4 +1,4 @@
--- Drop existing tables
+-- Drop existing tables in correct order
 DROP TABLE IF EXISTS verses;
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS magic_links;
@@ -57,4 +57,8 @@ CREATE INDEX IF NOT EXISTS idx_users_has_donated ON users(has_donated);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_magic_links_email ON magic_links(email);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_verses_user_id ON verses(user_id); 
+CREATE INDEX IF NOT EXISTS idx_verses_user_id ON verses(user_id);
+
+-- Insert test user
+INSERT INTO users (email, created_at, last_login_at, preferred_translation) 
+VALUES ('test@example.com', unixepoch() * 1000, unixepoch() * 1000, 'NIV'); 

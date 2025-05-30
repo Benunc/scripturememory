@@ -28,6 +28,7 @@ interface UserStats {
   last_activity_date: number;
   current_streak: number;
   longest_streak: number;
+  created_at: number;
 }
 
 interface VerseAttempt {
@@ -37,7 +38,7 @@ interface VerseAttempt {
 }
 
 // Helper function to check and update streak
-async function updateStreak(userId: number, env: Env): Promise<void> {
+export async function updateStreak(userId: number, env: Env, eventTimestamp?: number): Promise<void> {
   const db = getDB(env);
   
   // Get user's last activity date
@@ -50,9 +51,21 @@ async function updateStreak(userId: number, env: Env): Promise<void> {
   if (!stats) return;
 
   const lastActivity = new Date(stats.last_activity_date);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+  const currentTime = eventTimestamp ? new Date(eventTimestamp) : new Date();
+  const yesterday = new Date(currentTime);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+
+  // If this is the first activity (last_activity_date is the same as created_at)
+  if (stats.last_activity_date === stats.created_at) {
+    await db.prepare(`
+      UPDATE user_stats 
+      SET current_streak = 1,
+          longest_streak = 1,
+          last_activity_date = ?
+      WHERE user_id = ?
+    `).bind(eventTimestamp || Date.now(), userId).run();
+    return;
+  }
 
   // Reset streak if more than one day has passed
   if (lastActivity < yesterday) {
@@ -61,12 +74,15 @@ async function updateStreak(userId: number, env: Env): Promise<void> {
       SET current_streak = 0,
           last_activity_date = ?
       WHERE user_id = ?
-    `).bind(Date.now(), userId).run();
+    `).bind(eventTimestamp || Date.now(), userId).run();
     return;
   }
 
-  // Increment streak if last activity was yesterday
-  if (lastActivity < today) {
+  // Only increment streak if last activity was yesterday
+  // This ensures we only count one activity per day
+  if (lastActivity.getUTCDate() === yesterday.getUTCDate() && 
+      lastActivity.getUTCMonth() === yesterday.getUTCMonth() && 
+      lastActivity.getUTCFullYear() === yesterday.getUTCFullYear()) {
     const newStreak = stats.current_streak + 1;
     const longestStreak = Math.max(newStreak, stats.longest_streak);
 
@@ -76,7 +92,7 @@ async function updateStreak(userId: number, env: Env): Promise<void> {
           longest_streak = ?,
           last_activity_date = ?
       WHERE user_id = ?
-    `).bind(newStreak, longestStreak, Date.now(), userId).run();
+    `).bind(newStreak, longestStreak, eventTimestamp || Date.now(), userId).run();
 
     // Award points for maintaining streak
     if (newStreak > 1) {  // Only award points for streaks > 1 day
@@ -92,7 +108,7 @@ async function updateStreak(userId: number, env: Env): Promise<void> {
         userId,
         POINTS.DAILY_STREAK,
         JSON.stringify({ streak_days: newStreak }),
-        Date.now()
+        eventTimestamp || Date.now()
       ).run();
 
       // Update total points
@@ -102,6 +118,13 @@ async function updateStreak(userId: number, env: Env): Promise<void> {
         WHERE user_id = ?
       `).bind(POINTS.DAILY_STREAK, userId).run();
     }
+  } else {
+    // Update last activity date without incrementing streak
+    await db.prepare(`
+      UPDATE user_stats 
+      SET last_activity_date = ?
+      WHERE user_id = ?
+    `).bind(eventTimestamp || Date.now(), userId).run();
   }
 }
 
@@ -109,14 +132,14 @@ async function updateStreak(userId: number, env: Env): Promise<void> {
 export async function updateMastery(userId: number, verseReference: string, env: Env): Promise<void> {
   const db = getDB(env);
 
-  // Get recent attempts for this verse
+  // Get all attempts for this verse (up to MIN_ATTEMPTS)
   const result = await db.prepare(`
     SELECT words_correct, total_words, created_at
     FROM verse_attempts
     WHERE user_id = ? AND verse_reference = ?
     ORDER BY created_at DESC
     LIMIT ?
-  `).bind(userId, verseReference, MASTERY.CONSECUTIVE_CORRECT).all();
+  `).bind(userId, verseReference, MASTERY.MIN_ATTEMPTS).all();
 
   const attempts = result.results.map(row => ({
     verse_reference: verseReference,
@@ -134,7 +157,7 @@ export async function updateMastery(userId: number, verseReference: string, env:
 
   if (!hasConsecutiveCorrect) return;
 
-  // Calculate overall accuracy
+  // Calculate overall accuracy using all attempts
   const totalCorrect = attempts.reduce((sum, attempt) => sum + attempt.words_correct, 0);
   const totalWords = attempts.reduce((sum, attempt) => sum + attempt.total_words, 0);
   const accuracy = totalCorrect / totalWords;
@@ -206,7 +229,7 @@ export const handleGamification = {
         });
       }
 
-      const { event_type, points, metadata } = await request.json() as PointEventRequest;
+      const { event_type, points, metadata, created_at } = await request.json() as PointEventRequest & { created_at?: number };
       
       if (!event_type || points === undefined) {
         return new Response(JSON.stringify({ error: 'Missing required fields' }), { 
@@ -216,36 +239,63 @@ export const handleGamification = {
       }
 
       // Update streak before recording points
-      await updateStreak(userId, env);
+      await updateStreak(userId, env, created_at);
 
-      // Record point event
-      await getDB(env).prepare(`
-        INSERT INTO point_events (
-          user_id,
+      const db = getDB(env);
+      try {
+        // Record point event first
+        await db.prepare(`
+          INSERT INTO point_events (
+            user_id,
+            event_type,
+            points,
+            metadata,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?)
+        `).bind(
+          userId,
           event_type,
           points,
-          metadata,
-          created_at
-        ) VALUES (?, ?, ?, ?, ?)
-      `).bind(
-        userId,
-        event_type,
-        points,
-        metadata ? JSON.stringify(metadata) : null,
-        Date.now()
-      ).run();
+          metadata ? JSON.stringify(metadata) : null,
+          created_at || Date.now()
+        ).run();
 
-      // Update user stats
-      await getDB(env).prepare(`
-        UPDATE user_stats 
-        SET total_points = total_points + ?,
-            last_activity_date = ?
-        WHERE user_id = ?
-      `).bind(points, Date.now(), userId).run();
+        // Then check if user stats exist
+        const stats = await db.prepare(`
+          SELECT 1 FROM user_stats WHERE user_id = ?
+        `).bind(userId).first();
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+        if (!stats) {
+          // Create initial stats if they don't exist
+          await db.prepare(`
+            INSERT INTO user_stats (
+              user_id,
+              total_points,
+              current_streak,
+              longest_streak,
+              verses_mastered,
+              total_attempts,
+              last_activity_date,
+              created_at
+            ) VALUES (?, ?, 0, 0, 0, 0, ?, ?)
+          `).bind(userId, points, Date.now(), Date.now()).run();
+        } else {
+          // Update existing stats
+          await db.prepare(`
+            UPDATE user_stats 
+            SET total_points = total_points + ?,
+                last_activity_date = ?
+            WHERE user_id = ?
+          `).bind(points, created_at || Date.now(), userId).run();
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        console.error('Error in point event:', error);
+        throw error;
+      }
     } catch (error) {
       console.error('Error recording point event:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
@@ -276,44 +326,58 @@ export const handleGamification = {
         });
       }
 
-      // Update streak before getting stats
-      await updateStreak(userId, env);
+      // Get timestamp from request URL if provided
+      const url = new URL(request.url);
+      const timestamp = url.searchParams.get('timestamp');
+      const eventTimestamp = timestamp ? parseInt(timestamp, 10) : Date.now();
 
-      // Get user stats
-      const stats = await getDB(env).prepare(`
-        SELECT * FROM user_stats WHERE user_id = ?
-      `).bind(userId).first();
+      // Update streak before getting stats, using provided timestamp
+      await updateStreak(userId, env, eventTimestamp);
 
-      if (!stats) {
-        // Create initial stats if they don't exist
-        await getDB(env).prepare(`
-          INSERT INTO user_stats (
-            user_id,
-            total_points,
-            current_streak,
-            longest_streak,
-            verses_mastered,
-            total_attempts,
-            last_activity_date,
-            created_at
-          ) VALUES (?, 0, 0, 0, 0, 0, ?, ?)
-        `).bind(userId, Date.now(), Date.now()).run();
+      const db = getDB(env);
+      try {
+        // Get user stats
+        const stats = await db.prepare(`
+          SELECT * FROM user_stats WHERE user_id = ?
+        `).bind(userId).first();
 
-        return new Response(JSON.stringify({
-          total_points: 0,
-          current_streak: 0,
-          longest_streak: 0,
-          verses_mastered: 0,
-          total_attempts: 0,
-          last_activity_date: Date.now()
-        }), {
+        if (!stats) {
+          // Create initial stats if they don't exist
+          await db.prepare(`
+            INSERT INTO user_stats (
+              user_id,
+              total_points,
+              current_streak,
+              longest_streak,
+              verses_mastered,
+              total_attempts,
+              last_activity_date,
+              created_at
+            ) VALUES (?, 0, 0, 0, 0, 0, ?, ?)
+          `).bind(userId, Date.now(), Date.now()).run();
+
+          return new Response(JSON.stringify({
+            total_points: 0,
+            current_streak: 0,
+            longest_streak: 0,
+            verses_mastered: 0,
+            total_attempts: 0,
+            last_activity_date: Date.now()
+          }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        return new Response(JSON.stringify(stats), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        console.error('Error getting user stats:', error);
+        return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+          status: 500,
           headers: { 'Content-Type': 'application/json' }
         });
       }
-
-      return new Response(JSON.stringify(stats), {
-        headers: { 'Content-Type': 'application/json' }
-      });
     } catch (error) {
       console.error('Error getting user stats:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
