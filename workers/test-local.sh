@@ -208,7 +208,7 @@ check_status
 echo "${BLUE}Record attempt response:${NC}"
 echo "$ATTEMPT_RESPONSE"
 
-echo "${YELLOW}Checking stats after first attempt...${NC}"
+echo "${YELLOW}Checking stats after first attempt (should still have streak=1)...${NC}"
 STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$BASE_TIMESTAMP" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $SESSION_TOKEN2")
@@ -287,6 +287,39 @@ STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timest
 check_status
 echo "${BLUE}Final stats:${NC}"
 echo "$STATS_RESPONSE"
+
+echo -e "\n=== Testing verse deletion ==="
+
+echo -e "\n=== Testing unauthorized verse deletion ==="
+# Try to delete verse without auth
+UNAUTH_DELETE_RESPONSE=$(curl -s -X DELETE "http://localhost:8787/verses/Psalm%2023:3")
+echo "Unauthorized delete response:"
+echo $UNAUTH_DELETE_RESPONSE | jq
+
+echo -e "\n=== Testing non-existent verse deletion ==="
+# Try to delete non-existent verse
+NOT_FOUND_DELETE_RESPONSE=$(curl -s -X DELETE "http://localhost:8787/verses/NonExistentVerse" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+echo "Not found delete response:"
+echo $NOT_FOUND_DELETE_RESPONSE | jq
+
+echo -e "\n=== Testing successful verse deletion ==="
+# Delete Psalm 23:3
+DELETE_RESPONSE=$(curl -s -X DELETE "http://localhost:8787/verses/Psalm%2023:3" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+echo "Delete response status: $DELETE_RESPONSE"
+
+# Verify verse was deleted by trying to get it
+GET_RESPONSE=$(curl -s -X GET "http://localhost:8787/verses" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+echo "Remaining verses:"
+echo $GET_RESPONSE | jq
+
+echo -e "\n=== Checking stats after verse deletion ==="
+STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$TIMESTAMP" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+echo "Stats after verse deletion:"
+echo $STATS_RESPONSE | jq
 
 # Add confirmation step before deleting user
 echo "\n${YELLOW}Would you like to delete the test user? (y/n)${NC}"
