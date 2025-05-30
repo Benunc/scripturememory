@@ -62,3 +62,9 @@ dist-ssr
 
 # Implementation plan
 implementation_plan.md
+
+# Ignore root package-lock.json but keep workspace ones
+/package-lock.json
+!/frontend/package-lock.json
+!/workers/package-lock.json
+!/shared/package-lock.json
