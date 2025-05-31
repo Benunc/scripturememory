@@ -10,7 +10,7 @@ A modern web application for memorizing Bible verses, built with React, Cloudfla
 - **Responsive Design**: Works on desktop and mobile devices
 - **Dark/Light Mode**: Automatic theme switching based on system preferences
 
-## Tech Stack
+## Tech Stack 
 
 ### Frontend
 - React 18
