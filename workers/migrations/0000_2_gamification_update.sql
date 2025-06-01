@@ -1,3 +1,9 @@
+-- Create backup table to preserve verses
+CREATE TABLE IF NOT EXISTS verses_backup AS SELECT * FROM verses;
+
+-- Drop verses table to avoid ID conflicts
+DROP TABLE IF EXISTS verses;
+
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +49,14 @@ CREATE TABLE IF NOT EXISTS verses (
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+-- Restore verses from backup table (without specifying IDs)
+INSERT INTO verses (user_id, reference, text, translation, status, created_at)
+SELECT user_id, reference, text, translation, status, created_at
+FROM verses_backup;
+
+-- Drop backup table
+DROP TABLE verses_backup;
 
 -- Add gamification-related columns to users table if they don't exist
 SELECT CASE 

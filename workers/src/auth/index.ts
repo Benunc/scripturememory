@@ -368,8 +368,12 @@ export const handleAuth = {
         Date.now()
       ).run() as D1Result;
 
+      console.log('User creation result:', result);
+
       // Get the last inserted row ID
       const lastRowId = result.meta.last_row_id;
+      console.log('Last inserted row ID:', lastRowId);
+      
       if (lastRowId === null || lastRowId === undefined) {
         throw new Error('Failed to get last inserted row ID');
       }
@@ -378,8 +382,10 @@ export const handleAuth = {
         throw new Error('Invalid last inserted row ID');
       }
       userId = parsedId;
+      console.log('Parsed user ID:', userId);
       
       // Create initial user_stats row
+      console.log('Creating initial user stats');
       await db.prepare(`
         INSERT INTO user_stats (
           user_id,
@@ -392,30 +398,42 @@ export const handleAuth = {
           created_at
         ) VALUES (?, 0, 0, 0, 0, 0, ?, ?)
       `).bind(userId, Date.now(), Date.now()).run();
-      
-      // Initialize user's verses with sample verses
+      console.log('User stats created successfully');
+
+      // Add sample verses for new users only
+      console.log('Starting to add sample verses for new user');
       const sampleVerses = [
         { reference: 'John 3:16', text: 'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.' },
         { reference: 'Philippians 4:13', text: 'I can do all things through Christ who strengthens me.' },
         { reference: 'Jeremiah 29:11', text: 'For I know the plans I have for you," declares the LORD, "plans to prosper you and not to harm you, plans to give you hope and a future.' }
       ];
 
+      // Insert sample verses
       for (const verse of sampleVerses) {
-        await db.prepare(`
-          INSERT INTO verses (
-            user_id,
-            reference,
-            text,
-            translation,
-            created_at
-          ) VALUES (?, ?, ?, 'NIV', ?)
-        `).bind(
-          userId,
-          verse.reference,
-          verse.text,
-          Date.now()
-        ).run();
+        console.log('Inserting verse:', verse.reference);
+        try {
+          await db.prepare(`
+            INSERT INTO verses (
+              user_id,
+              reference,
+              text,
+              translation,
+              created_at
+            ) VALUES (?, ?, ?, ?, ?)
+          `).bind(
+            userId,
+            verse.reference,
+            verse.text,
+            'NIV',
+            Date.now()
+          ).run();
+          console.log('Successfully inserted verse:', verse.reference);
+        } catch (error) {
+          console.error('Error inserting verse:', verse.reference, error);
+          throw error;
+        }
       }
+      console.log('Finished adding sample verses');
     } else {
       userId = Number(existingUser.id);
       // Update last login

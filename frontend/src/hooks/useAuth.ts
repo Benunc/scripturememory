@@ -27,21 +27,11 @@ export const useAuth = () => {
     }
   }, []);
 
-  // Check for magic link token in URL
+  // Check session on mount
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const token = url.searchParams.get('token');
-    if (token) {
-      // If we have a token in the URL, verify it immediately
-      verifyToken(token).then(() => {
-        // If verification succeeds, redirect to the main page
-        window.location.href = '/';
-      }).catch((error) => {
-        debug.error('auth', 'Error verifying token:', error);
-        // If verification fails, show error and stay on the page
-      });
-    }
-  }, []);
+    debug.log('auth', 'useAuth hook mounted');
+    checkSession();
+  }, [checkSession]);
 
   // Sign in with magic link
   const signIn = async (email: string, isRegistration: boolean, turnstileToken: string) => {
@@ -122,12 +112,6 @@ export const useAuth = () => {
     setUserEmail(null);
     setIsAuthenticated(false);
   };
-
-  // Check session on mount
-  useEffect(() => {
-    debug.log('auth', 'useAuth hook mounted');
-    checkSession();
-  }, [checkSession]);
 
   return {
     isAuthenticated,

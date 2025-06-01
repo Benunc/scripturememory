@@ -80,6 +80,7 @@ export function App() {
               <Route path="/thank-you" element={<ThankYou />} />
               <Route path="/about" element={<About />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/auth/verify" element={<VerifyToken />} />
             </Routes>
           </Router>
         </AuthProvider>

@@ -61,4 +61,10 @@ CREATE INDEX IF NOT EXISTS idx_verses_user_id ON verses(user_id);
 
 -- Insert test user
 INSERT INTO users (email, created_at, last_login_at, preferred_translation) 
-VALUES ('test@example.com', unixepoch() * 1000, unixepoch() * 1000, 'NIV'); 
+VALUES ('test@example.com', unixepoch() * 1000, unixepoch() * 1000, 'NIV');
+
+-- Insert sample verses for test user
+INSERT INTO verses (user_id, reference, text, translation, status, created_at) VALUES
+(1, 'John 3:16', 'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.', 'NIV', 'not_started', unixepoch() * 1000),
+(1, 'Philippians 4:13', 'I can do all things through Christ who strengthens me.', 'NIV', 'not_started', unixepoch() * 1000),
+(1, 'Jeremiah 29:11', 'For I know the plans I have for you," declares the LORD, "plans to prosper you and not to harm you, plans to give you hope and a future.', 'NIV', 'not_started', unixepoch() * 1000); 
