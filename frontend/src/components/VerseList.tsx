@@ -29,6 +29,7 @@ import {
   Th,
   Td,
   Kbd,
+  Input,
 } from '@chakra-ui/react';
 import { ProgressStatus } from '../utils/progress';
 import { useAuth } from '../hooks/useAuth';
@@ -56,7 +57,7 @@ interface VerseListProps {
   showStatusButtons?: boolean;
 }
 
-export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) => {
+export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): JSX.Element => {
   const { verses, loading, error, onStatusChange, onDelete, showStatusButtons = true } = props;
   const [activeVerseId, setActiveVerseId] = useState<string | null>(null);
   const [revealedWords, setRevealedWords] = useState<number[]>([]);
@@ -107,6 +108,16 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
   const TIMEOUT_DURATION = 3 * 60 * 60 * 1000; // 3 hours
   const WARNING_DURATION = 2 * 60 * 1000; // 2 minutes
+
+  // Add user guess state management
+  const [userGuess, setUserGuess] = useState<string>('');
+  const [guessFeedback, setGuessFeedback] = useState<{
+    isCorrect: boolean;
+    message: string;
+  } | null>(null);
+
+  // Add input ref for focus management
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Expose scrollToVerse through ref
   useImperativeHandle(ref, () => ({
@@ -194,7 +205,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
           if (activeVerseId !== verseReference) {
             e.preventDefault();
             handleStart(verseReference);
-            setAnnouncedWord('Started memorizing. Press S to show next word.');
+            setAnnouncedWord('Started memorizing. Type the next word.');
           } else if (!showFullVerse[verseReference]) {
             e.preventDefault();
             const verse = verses.find(v => v.reference === verseReference);
@@ -489,12 +500,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     setActiveVerseId(reference);
     setRevealedWords([]);
     setShowFullVerse({});
-    // Focus the "Show Next Word" button after a short delay
+    // Focus the input field after a short delay
     setTimeout(() => {
-      const nextWordButton = document.querySelector(`[aria-label="Show next word of ${reference}"]`) as HTMLButtonElement;
-      if (nextWordButton) {
-        nextWordButton.focus();
-      }
+      inputRef.current?.focus();
     }, 100);
   };
 
@@ -535,11 +543,10 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       void handleStatusChange(reference, ProgressStatus.InProgress, false);
     }
 
-    // Maintain focus on the verse element
-    const verseElement = verseRefs.current[reference];
-    if (verseElement) {
-      verseElement.focus();
-    }
+    // Keep the input focusable but don't force focus
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
   };
 
   const handleReset = (reference: string) => {
@@ -549,6 +556,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       [reference]: false,
     }));
     setActiveVerseId(null);
+    setUserGuess('');
+    setGuessFeedback(null);
     // Maintain focus on the verse element
     const verseElement = verseRefs.current[reference];
     if (verseElement) {
@@ -667,6 +676,65 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     }
   };
 
+  const handleGuessSubmit = (reference: string) => {
+    const verse = verses.find(v => v.reference === reference);
+    if (!verse) return;
+
+    const words = verse.text.split(' ');
+    const nextWordIndex = revealedWords.length;
+    
+    if (nextWordIndex >= words.length) {
+      setGuessFeedback({
+        isCorrect: false,
+        message: "You've completed this verse!"
+      });
+      return;
+    }
+
+    const correctWord = words[nextWordIndex].toLowerCase();
+    const isCorrect = userGuess.toLowerCase() === correctWord;
+
+    if (isCorrect) {
+      const newRevealedWords = [...revealedWords, nextWordIndex];
+      setRevealedWords(newRevealedWords);
+      setUserGuess('');
+      setGuessFeedback({
+        isCorrect: true,
+        message: "Correct! Keep going!"
+      });
+
+      // Update status to In Progress on first word if Not Started
+      if (nextWordIndex === 0 && verse.status === ProgressStatus.NotStarted) {
+        void handleStatusChange(reference, ProgressStatus.InProgress, false);
+      }
+
+      // Announce the next word if there is one
+      if (nextWordIndex + 1 < words.length) {
+        setAnnouncedWord(`Correct! The next word starts with "${words[nextWordIndex + 1][0]}"`);
+        // Keep focus on input for next word
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+      } else {
+        setAnnouncedWord("Congratulations! You've completed the verse!");
+        // Return focus to verse card when complete
+        const verseElement = verseRefs.current[reference];
+        if (verseElement) {
+          verseElement.focus();
+        }
+      }
+    } else {
+      setGuessFeedback({
+        isCorrect: false,
+        message: "Not quite right. Try again or use the hint button."
+      });
+      // Keep focus on input for retry
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  };
+
   const renderVerseText = (verse: Verse) => {
     const textColor = useColorModeValue('gray.700', 'gray.200');
 
@@ -681,17 +749,78 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     if (activeVerseId === verse.reference) {
       const words = verse.text.split(' ');
       return (
-        <Text fontSize="lg" color={textColor}>
-          {words.map((word, index) => {
-            const isRevealed = revealedWords.includes(index);
-            return (
-              <span key={index}>
-                {isRevealed ? word : '_____'}
-                {index < words.length - 1 ? ' ' : ''}
-              </span>
-            );
-          })}
-        </Text>
+        <VStack align="stretch" spacing={3}>
+          <Text fontSize="lg" color={textColor}>
+            {words.map((word, index) => {
+              const isRevealed = revealedWords.includes(index);
+              return (
+                <span key={index}>
+                  {isRevealed ? word : '_____'}
+                  {index < words.length - 1 ? ' ' : ''}
+                </span>
+              );
+            })}
+          </Text>
+          {revealedWords.length < words.length && (
+            <Flex direction="column" align="center" gap={2}>
+              <Flex gap={2} align="center" justify="center" width="100%">
+                <Input
+                  ref={inputRef}
+                  value={userGuess}
+                  onChange={(e) => {
+                    setUserGuess(e.target.value);
+                    setGuessFeedback(null);
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleGuessSubmit(verse.reference);
+                    }
+                  }}
+                  onClick={(e) => {
+                    // Stop propagation to prevent verse card focus
+                    e.stopPropagation();
+                  }}
+                  placeholder="Type the next word..."
+                  size="sm"
+                  aria-label="Type your guess for the next word"
+                  autoFocus
+                  tabIndex={0}
+                  maxWidth="200px"
+                  textAlign="center"
+                  _focus={{
+                    outline: 'none',
+                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                  }}
+                  _focusVisible={{
+                    outline: 'none',
+                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                  }}
+                />
+                <Button
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGuessSubmit(verse.reference);
+                  }}
+                  aria-label="Submit your guess"
+                >
+                  Submit
+                </Button>
+              </Flex>
+              {guessFeedback && (
+                <Text
+                  color={guessFeedback.isCorrect ? 'green.500' : 'red.500'}
+                  fontSize="sm"
+                  role="alert"
+                  aria-live="polite"
+                  textAlign="center"
+                >
+                  {guessFeedback.message}
+                </Text>
+              )}
+            </Flex>
+          )}
+        </VStack>
       );
     }
 
@@ -706,8 +835,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
   const renderStatusButton = (reference: string, status: ProgressStatus, label: string, shortcut: string) => {
     const buttonState = statusButtonStates[reference] || { isLoading: false, error: null, lastUpdated: 0 };
     const isCurrentStatus = verses.find(v => v.reference === reference)?.status === status;
-    const hasError = !!buttonState.error;
-    const isLoading = buttonState.isLoading;
 
     // Map status to color scheme with improved contrast
     const getColorScheme = (status: ProgressStatus) => {
@@ -731,38 +858,43 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
           size="sm"
           colorScheme={colorScheme}
           variant={isCurrentStatus ? 'solid' : 'outline'}
-          onClick={() => handleManualStatusChange(reference, status)}
-          onKeyPress={(e) => handleKeyPress(e, () => handleManualStatusChange(reference, status))}
-          role="radio"
-          aria-label={label}
-          aria-checked={isCurrentStatus}
-          aria-describedby={`status-description-${reference} ${hasError ? `status-error-${reference}` : ''}`}
-          tabIndex={isCurrentStatus ? 0 : -1}
-          isLoading={isLoading}
-          loadingText="Updating..."
-          aria-busy={isLoading}
-          isDisabled={hasError}
+          role="status"
+          aria-label={`Current status: ${label}`}
+          tabIndex={-1}
+          isDisabled={true}
+          opacity={1}
+          _disabled={{
+            opacity: 1,
+            bg: isCurrentStatus ? `${colorScheme}.500` : 'transparent',
+            color: isCurrentStatus ? 'white' : `${colorScheme}.500`,
+            borderColor: `${colorScheme}.500`,
+            cursor: 'default'
+          }}
           _hover={{
-            transform: 'translateY(-1px)',
-            boxShadow: '0 0 0 2px var(--chakra-colors-' + colorScheme + '-500)',
+            bg: isCurrentStatus ? `${colorScheme}.500` : 'transparent',
+            color: isCurrentStatus ? 'white' : `${colorScheme}.500`,
+            borderColor: `${colorScheme}.500`,
+            cursor: 'default'
           }}
           _active={{
-            transform: 'translateY(0)',
-            boxShadow: 'none'
+            bg: isCurrentStatus ? `${colorScheme}.500` : 'transparent',
+            color: isCurrentStatus ? 'white' : `${colorScheme}.500`,
+            borderColor: `${colorScheme}.500`,
+            transform: 'none'
           }}
           _focus={{
-            boxShadow: '0 0 0 3px var(--chakra-colors-' + colorScheme + '-300)',
+            boxShadow: 'none',
             outline: 'none'
           }}
           _focusVisible={{
-            boxShadow: '0 0 0 3px var(--chakra-colors-' + colorScheme + '-300)',
+            boxShadow: 'none',
             outline: 'none'
           }}
           transition="all 0.2s"
           position="relative"
           overflow="hidden"
         >
-          {label} {renderKeyboardShortcut(shortcut)}
+          {label}
           {isCurrentStatus && (
             <Box
               position="absolute"
@@ -782,27 +914,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
             />
           )}
         </Button>
-        {hasError && (
-          <Text
-            id={`status-error-${reference}`}
-            color="red.600"
-            fontSize="xs"
-            mt={1}
-            role="alert"
-            aria-live="assertive"
-            fontWeight="medium"
-          >
-            {buttonState.error}
-          </Text>
-        )}
         <Text
           id={`status-description-${reference}`}
           srOnly
         >
-          {isCurrentStatus 
-            ? `Current status: ${label}. Press ${shortcut} to keep this status.`
-            : `Press ${shortcut} to set status to ${label}.`
-          }
+          Current status: {label}. Status is automatically updated based on your progress.
         </Text>
       </Box>
     );
@@ -813,7 +929,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     <Flex 
       gap={2} 
       wrap="wrap" 
-      role="radiogroup" 
+      role="status" 
       aria-label={`Progress status for ${verse.reference}`}
       aria-describedby={`status-description-${verse.reference}`}
     >
@@ -824,7 +940,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
         id={`status-description-${verse.reference}`}
         srOnly
       >
-        Select the current progress status for memorizing this verse. Use number keys 1, 2, or 3 to quickly change status.
+        Current progress status for memorizing this verse. Status is automatically updated based on your progress.
       </Text>
     </Flex>
   );
@@ -872,245 +988,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     };
   }, [isDeleteDialogOpen, isShortcutsModalOpen]);
 
-  // Focus management for verse cards
-  const handleVerseFocus = (reference: string) => {
-    const verseElement = verseRefs.current[reference];
-    if (verseElement) {
-      verseElement.focus();
-    }
-  };
-
-  // Update the delete dialog with improved accessibility and animations
-  const renderDeleteDialog = () => (
-    <AlertDialog
-      isOpen={modalState.isOpen && modalState.type === 'delete'}
-      leastDestructiveRef={cancelRef}
-      onClose={handleModalClose}
-      motionPreset="slideInBottom"
-      isCentered
-      closeOnOverlayClick={false}
-      closeOnEsc={true}
-    >
-      <AlertDialogOverlay
-        bg="blackAlpha.300"
-        backdropFilter="blur(10px)"
-        animation="fadeIn 0.2s ease-out"
-        sx={{
-          '@keyframes fadeIn': {
-            from: { opacity: 0 },
-            to: { opacity: 1 }
-          }
-        }}
-      >
-        <AlertDialogContent
-          ref={modalRef}
-          bg={useColorModeValue('white', 'gray.800')}
-          color={useColorModeValue('gray.800', 'white')}
-          animation="slideIn 0.2s ease-out"
-          sx={{
-            '@keyframes slideIn': {
-              from: { transform: 'translateY(20px)', opacity: 0 },
-              to: { transform: 'translateY(0)', opacity: 1 }
-            }
-          }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-dialog-title"
-          aria-describedby="delete-dialog-description"
-        >
-          <AlertDialogHeader id="delete-dialog-title" fontSize="lg" fontWeight="bold">
-            Delete Verse
-          </AlertDialogHeader>
-
-          <AlertDialogBody id="delete-dialog-description">
-            {verseToDelete && (
-              <>
-                <Text>Are you sure you want to delete this verse? This action cannot be undone.</Text>
-                <Box 
-                  mt={4} 
-                  p={3} 
-                  bg={useColorModeValue('gray.50', 'gray.700')} 
-                  borderRadius="md"
-                  role="region"
-                  aria-label="Verse details"
-                >
-                  <Text fontWeight="bold">Reference:</Text>
-                  <Text>{verseToDelete}</Text>
-                  <Text fontWeight="bold" mt={2}>Text:</Text>
-                  <Text>{verses.find(v => v.reference === verseToDelete)?.text}</Text>
-                </Box>
-                {deleteDialogState.error && (
-                  <Text
-                    color="red.500"
-                    mt={3}
-                    role="alert"
-                    aria-live="assertive"
-                  >
-                    {deleteDialogState.error}
-                  </Text>
-                )}
-              </>
-            )}
-          </AlertDialogBody>
-
-          <AlertDialogFooter>
-            <Button 
-              ref={cancelRef} 
-              onClick={handleModalClose}
-              aria-label="Cancel deletion"
-              onKeyPress={(e) => handleKeyPress(e, handleModalClose)}
-              variant="ghost"
-              isDisabled={deleteDialogState.isDeleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              colorScheme="red"
-              onClick={handleDeleteConfirm}
-              ml={3}
-              isLoading={deleteDialogState.isDeleting}
-              aria-label="Confirm deletion"
-              onKeyPress={(e) => handleKeyPress(e, handleDeleteConfirm)}
-              loadingText="Deleting..."
-              isDisabled={deleteDialogState.isDeleting}
-              _hover={{
-                transform: 'translateY(-1px)',
-                boxShadow: 'sm'
-              }}
-              _active={{
-                transform: 'translateY(0)',
-                boxShadow: 'none'
-              }}
-              transition="all 0.2s"
-            >
-              Delete
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialogOverlay>
-    </AlertDialog>
-  );
-
-  // Update the shortcuts modal with improved accessibility and animations
-  const renderShortcutsModal = () => (
-    <Modal 
-      isOpen={modalState.isOpen && modalState.type === 'shortcuts'} 
-      onClose={handleModalClose} 
-      size="xl"
-      closeOnOverlayClick={false}
-      closeOnEsc={true}
-      motionPreset="slideInBottom"
-      isCentered
-    >
-      <ModalOverlay
-        backdropFilter="blur(10px)"
-        animation="fadeIn 0.2s ease-out"
-        sx={{
-          '@keyframes fadeIn': {
-            from: { opacity: 0 },
-            to: { opacity: 1 }
-          }
-        }}
-      />
-      <ModalContent
-        ref={modalRef}
-        bg={useColorModeValue('white', 'gray.800')}
-        color={useColorModeValue('gray.800', 'white')}
-        animation="slideIn 0.2s ease-out"
-        sx={{
-          '@keyframes slideIn': {
-            from: { transform: 'translateY(20px)', opacity: 0 },
-            to: { transform: 'translateY(0)', opacity: 1 }
-          }
-        }}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="shortcuts-dialog-title"
-        aria-describedby="shortcuts-dialog-description"
-      >
-        <ModalHeader id="shortcuts-dialog-title">Keyboard Shortcuts</ModalHeader>
-        <ModalCloseButton aria-label="Close shortcuts" />
-        <ModalBody pb={6} id="shortcuts-dialog-description">
-          <Table variant="simple">
-            <Thead>
-              <Tr>
-                <Th>Action</Th>
-                <Th>Shortcut</Th>
-                <Th>Description</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              <Tr>
-                <Td>Show Shortcuts</Td>
-                <Td><Kbd>?</Kbd></Td>
-                <Td>Show this help modal</Td>
-              </Tr>
-              <Tr>
-                <Td>Navigate Up</Td>
-                <Td><Kbd>↑</Kbd></Td>
-                <Td>Move focus to previous verse</Td>
-              </Tr>
-              <Tr>
-                <Td>Navigate Down</Td>
-                <Td><Kbd>↓</Kbd></Td>
-                <Td>Move focus to next verse</Td>
-              </Tr>
-              <Tr>
-                <Td>Go to First</Td>
-                <Td><Kbd>Home</Kbd></Td>
-                <Td>Move focus to first verse</Td>
-              </Tr>
-              <Tr>
-                <Td>Go to Last</Td>
-                <Td><Kbd>End</Kbd></Td>
-                <Td>Move focus to last verse</Td>
-              </Tr>
-              <Tr>
-                <Td>Start/Show Next</Td>
-                <Td><Kbd>S</Kbd></Td>
-                <Td>Start memorizing or show next word</Td>
-              </Tr>
-              <Tr>
-                <Td>Reset</Td>
-                <Td><Kbd>R</Kbd></Td>
-                <Td>Reset the current memorization</Td>
-              </Tr>
-              <Tr>
-                <Td>Toggle Full Verse</Td>
-                <Td><Kbd>F</Kbd></Td>
-                <Td>Show/hide the complete verse text</Td>
-              </Tr>
-              <Tr>
-                <Td>Cancel/Close</Td>
-                <Td><Kbd>Esc</Kbd></Td>
-                <Td>Reset current verse or close modal</Td>
-              </Tr>
-              <Tr>
-                <Td>Set Status: Not Started</Td>
-                <Td><Kbd>1</Kbd></Td>
-                <Td>Mark verse as not started</Td>
-              </Tr>
-              <Tr>
-                <Td>Set Status: In Progress</Td>
-                <Td><Kbd>2</Kbd></Td>
-                <Td>Mark verse as in progress</Td>
-              </Tr>
-              <Tr>
-                <Td>Set Status: Mastered</Td>
-                <Td><Kbd>3</Kbd></Td>
-                <Td>Mark verse as mastered</Td>
-              </Tr>
-            </Tbody>
-          </Table>
-          <Text mt={4} fontSize="sm" color="gray.500">
-            Note: Keyboard shortcuts only work when a verse is focused and no input fields are active.
-          </Text>
-        </ModalBody>
-      </ModalContent>
-    </Modal>
-  );
-
-  // Update verse card to handle focus
+  // Update the verse card rendering
   const renderVerseCard = (verse: Verse) => (
     <Box
       key={`${verse.reference}-${verse.lastReviewed}`}
@@ -1122,8 +1000,28 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       role="article"
       aria-labelledby={`verse-${verse.reference}`}
       tabIndex={0}
-      onClick={() => handleVerseFocus(verse.reference)}
-      onKeyPress={(e) => handleKeyPress(e, () => handleVerseFocus(verse.reference))}
+      onClick={(e) => {
+        // Don't handle clicks on buttons or inputs
+        if (e.target instanceof HTMLElement && 
+            (e.target.tagName === 'BUTTON' || 
+             e.target.tagName === 'INPUT' || 
+             e.target.closest('button') || 
+             e.target.closest('input'))) {
+          return;
+        }
+        
+        // Focus the verse card
+        const verseElement = verseRefs.current[verse.reference];
+        if (verseElement) {
+          verseElement.focus();
+        }
+      }}
+      onKeyPress={(e) => handleKeyPress(e, () => {
+        const verseElement = verseRefs.current[verse.reference];
+        if (verseElement) {
+          verseElement.focus();
+        }
+      })}
       _focus={{
         outline: 'none',
         boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
@@ -1241,7 +1139,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
                 {!showFullVerse[verse.reference] && revealedWords.length < verse.text.split(' ').length && (
                   <Button
                     size="sm"
-                    variant="solid"
+                    variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleShowHint(verse.reference);
@@ -1251,7 +1149,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
                       handleShowHint(verse.reference);
                     }}
                     role="button"
-                    aria-label={`Show next word of ${verse.reference}`}
+                    aria-label={`Show hint for next word of ${verse.reference}`}
                     _focus={{
                       outline: 'none',
                       boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
@@ -1261,7 +1159,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
                       boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
                     }}
                   >
-                    Show Next Word {renderKeyboardShortcut('S')}
+                    Show Hint {renderKeyboardShortcut('S')}
                   </Button>
                 )}
                 <Button
@@ -1319,6 +1217,244 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
         </Flex>
       </VStack>
     </Box>
+  );
+
+  // Add back the handleVerseFocus function
+  const handleVerseFocus = (reference: string) => {
+    const verseElement = verseRefs.current[reference];
+    if (verseElement) {
+      verseElement.focus();
+    }
+  };
+
+  // Add back the renderDeleteDialog function
+  const renderDeleteDialog = () => (
+    <AlertDialog
+      isOpen={modalState.isOpen && modalState.type === 'delete'}
+      leastDestructiveRef={cancelRef}
+      onClose={handleModalClose}
+      motionPreset="slideInBottom"
+      isCentered
+      closeOnOverlayClick={false}
+      closeOnEsc={true}
+    >
+      <AlertDialogOverlay
+        bg="blackAlpha.300"
+        backdropFilter="blur(10px)"
+        animation="fadeIn 0.2s ease-out"
+        sx={{
+          '@keyframes fadeIn': {
+            from: { opacity: 0 },
+            to: { opacity: 1 }
+          }
+        }}
+      >
+        <AlertDialogContent
+          ref={modalRef}
+          bg={useColorModeValue('white', 'gray.800')}
+          color={useColorModeValue('gray.800', 'white')}
+          animation="slideIn 0.2s ease-out"
+          sx={{
+            '@keyframes slideIn': {
+              from: { transform: 'translateY(20px)', opacity: 0 },
+              to: { transform: 'translateY(0)', opacity: 1 }
+            }
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-dialog-title"
+          aria-describedby="delete-dialog-description"
+        >
+          <AlertDialogHeader id="delete-dialog-title" fontSize="lg" fontWeight="bold">
+            Delete Verse
+          </AlertDialogHeader>
+
+          <AlertDialogBody id="delete-dialog-description">
+            {verseToDelete && (
+              <>
+                <Text>Are you sure you want to delete this verse? This action cannot be undone.</Text>
+                <Box 
+                  mt={4} 
+                  p={3} 
+                  bg={useColorModeValue('gray.50', 'gray.700')} 
+                  borderRadius="md"
+                  role="region"
+                  aria-label="Verse details"
+                >
+                  <Text fontWeight="bold">Reference:</Text>
+                  <Text>{verseToDelete}</Text>
+                  <Text fontWeight="bold" mt={2}>Text:</Text>
+                  <Text>{verses.find(v => v.reference === verseToDelete)?.text}</Text>
+                </Box>
+                {deleteDialogState.error && (
+                  <Text
+                    color="red.500"
+                    mt={3}
+                    role="alert"
+                    aria-live="assertive"
+                  >
+                    {deleteDialogState.error}
+                  </Text>
+                )}
+              </>
+            )}
+          </AlertDialogBody>
+
+          <AlertDialogFooter>
+            <Button 
+              ref={cancelRef} 
+              onClick={handleModalClose}
+              aria-label="Cancel deletion"
+              onKeyPress={(e) => handleKeyPress(e, handleModalClose)}
+              variant="ghost"
+              isDisabled={deleteDialogState.isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              colorScheme="red"
+              onClick={handleDeleteConfirm}
+              ml={3}
+              isLoading={deleteDialogState.isDeleting}
+              aria-label="Confirm deletion"
+              onKeyPress={(e) => handleKeyPress(e, handleDeleteConfirm)}
+              loadingText="Deleting..."
+              isDisabled={deleteDialogState.isDeleting}
+              _hover={{
+                transform: 'translateY(-1px)',
+                boxShadow: 'sm'
+              }}
+              _active={{
+                transform: 'translateY(0)',
+                boxShadow: 'none'
+              }}
+              transition="all 0.2s"
+            >
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialogOverlay>
+    </AlertDialog>
+  );
+
+  // Add back the renderShortcutsModal function
+  const renderShortcutsModal = () => (
+    <Modal 
+      isOpen={modalState.isOpen && modalState.type === 'shortcuts'} 
+      onClose={handleModalClose} 
+      size="xl"
+      closeOnOverlayClick={false}
+      closeOnEsc={true}
+      motionPreset="slideInBottom"
+      isCentered
+    >
+      <ModalOverlay
+        backdropFilter="blur(10px)"
+        animation="fadeIn 0.2s ease-out"
+        sx={{
+          '@keyframes fadeIn': {
+            from: { opacity: 0 },
+            to: { opacity: 1 }
+          }
+        }}
+      />
+      <ModalContent
+        ref={modalRef}
+        bg={useColorModeValue('white', 'gray.800')}
+        color={useColorModeValue('gray.800', 'white')}
+        animation="slideIn 0.2s ease-out"
+        sx={{
+          '@keyframes slideIn': {
+            from: { transform: 'translateY(20px)', opacity: 0 },
+            to: { transform: 'translateY(0)', opacity: 1 }
+          }
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shortcuts-dialog-title"
+        aria-describedby="shortcuts-dialog-description"
+      >
+        <ModalHeader id="shortcuts-dialog-title">Keyboard Shortcuts</ModalHeader>
+        <ModalCloseButton aria-label="Close shortcuts" />
+        <ModalBody pb={6} id="shortcuts-dialog-description">
+          <Table variant="simple">
+            <Thead>
+              <Tr>
+                <Th>Action</Th>
+                <Th>Shortcut</Th>
+                <Th>Description</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              <Tr>
+                <Td>Show Shortcuts</Td>
+                <Td><Kbd>?</Kbd></Td>
+                <Td>Show this help modal</Td>
+              </Tr>
+              <Tr>
+                <Td>Navigate Up</Td>
+                <Td><Kbd>↑</Kbd></Td>
+                <Td>Move focus to previous verse</Td>
+              </Tr>
+              <Tr>
+                <Td>Navigate Down</Td>
+                <Td><Kbd>↓</Kbd></Td>
+                <Td>Move focus to next verse</Td>
+              </Tr>
+              <Tr>
+                <Td>Go to First</Td>
+                <Td><Kbd>Home</Kbd></Td>
+                <Td>Move focus to first verse</Td>
+              </Tr>
+              <Tr>
+                <Td>Go to Last</Td>
+                <Td><Kbd>End</Kbd></Td>
+                <Td>Move focus to last verse</Td>
+              </Tr>
+              <Tr>
+                <Td>Start/Show Next</Td>
+                <Td><Kbd>S</Kbd></Td>
+                <Td>Start memorizing or show next word</Td>
+              </Tr>
+              <Tr>
+                <Td>Reset</Td>
+                <Td><Kbd>R</Kbd></Td>
+                <Td>Reset the current memorization</Td>
+              </Tr>
+              <Tr>
+                <Td>Toggle Full Verse</Td>
+                <Td><Kbd>F</Kbd></Td>
+                <Td>Show/hide the complete verse text</Td>
+              </Tr>
+              <Tr>
+                <Td>Cancel/Close</Td>
+                <Td><Kbd>Esc</Kbd></Td>
+                <Td>Reset current verse or close modal</Td>
+              </Tr>
+              <Tr>
+                <Td>Set Status: Not Started</Td>
+                <Td><Kbd>1</Kbd></Td>
+                <Td>Mark verse as not started</Td>
+              </Tr>
+              <Tr>
+                <Td>Set Status: In Progress</Td>
+                <Td><Kbd>2</Kbd></Td>
+                <Td>Mark verse as in progress</Td>
+              </Tr>
+              <Tr>
+                <Td>Set Status: Mastered</Td>
+                <Td><Kbd>3</Kbd></Td>
+                <Td>Mark verse as mastered</Td>
+              </Tr>
+            </Tbody>
+          </Table>
+          <Text mt={4} fontSize="sm" color="gray.500">
+            Note: Keyboard shortcuts only work when a verse is focused and no input fields are active.
+          </Text>
+        </ModalBody>
+      </ModalContent>
+    </Modal>
   );
 
   if (loading) {
