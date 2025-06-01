@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
 import {
   Box,
   Text,
@@ -36,12 +36,20 @@ import { useAuth } from '../hooks/useAuth';
 import { debug, handleError } from '../utils/debug';
 import { useVerses } from '../hooks/useVerses';
 import { Footer } from './Footer';
+import { getApiUrl } from '../utils/api';
 
 interface Verse {
   reference: string;
   text: string;
   status: ProgressStatus;
   lastReviewed: string;
+}
+
+// Add interface for tracking recorded words
+interface RecordedWord {
+  verse_reference: string;
+  word_index: number;
+  timestamp: number;
 }
 
 export interface VerseListRef {
@@ -55,6 +63,15 @@ interface VerseListProps {
   onStatusChange: (reference: string, newStatus: ProgressStatus) => Promise<void>;
   onDelete: (reference: string) => Promise<void>;
   showStatusButtons?: boolean;
+}
+
+// Add WordProgress interface
+interface WordProgress {
+  verse_reference: string;
+  word_index: number;
+  word: string;
+  is_correct: boolean;
+  timestamp: number;
 }
 
 export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): JSX.Element => {
@@ -74,6 +91,99 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   const [lastFocusedElement, setLastFocusedElement] = useState<HTMLElement | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const [focusedVerseIndex, setFocusedVerseIndex] = useState<number>(-1);
+
+  // Add word progress state
+  const [wordProgressQueue, setWordProgressQueue] = useState<WordProgress[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const syncTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Add state for tracking recorded words (only from correct guesses)
+  const [recordedWords, setRecordedWords] = useState<RecordedWord[]>(() => {
+    // Initialize from localStorage if available
+    const saved = localStorage.getItem('recordedWords');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Add function to check if word has been recorded
+  const isWordRecorded = useCallback((reference: string, wordIndex: number): boolean => {
+    return recordedWords.some(
+      word => word.verse_reference === reference && word.word_index === wordIndex
+    );
+  }, [recordedWords]);
+
+  // Add function to record a word
+  const recordWord = useCallback((reference: string, wordIndex: number) => {
+    setRecordedWords(prev => {
+      const newRecordedWords = [
+        ...prev,
+        { verse_reference: reference, word_index: wordIndex, timestamp: Date.now() }
+      ];
+      // Save to localStorage
+      localStorage.setItem('recordedWords', JSON.stringify(newRecordedWords));
+      return newRecordedWords;
+    });
+  }, []);
+
+  // Update syncProgress to use simple timeout-based debounce
+  const syncProgress = useCallback(() => {
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    syncTimeoutRef.current = setTimeout(async () => {
+      if (!isAuthenticated || wordProgressQueue.length === 0 || isSyncing) return;
+
+      setIsSyncing(true);
+      try {
+        const sessionToken = localStorage.getItem('session_token');
+        if (!sessionToken) {
+          throw new Error('No session token found');
+        }
+
+        // Send word progress in batches
+        const batchSize = 10;
+        for (let i = 0; i < wordProgressQueue.length; i += batchSize) {
+          const batch = wordProgressQueue.slice(i, i + batchSize);
+          await Promise.all(
+            batch.map(progress =>
+              fetch('/api/progress/word', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${sessionToken}`
+                },
+                body: JSON.stringify(progress)
+              })
+            )
+          );
+        }
+
+        // Clear the queue after successful sync
+        setWordProgressQueue([]);
+        debug.log('verses', 'Word progress synced successfully');
+      } catch (error) {
+        debug.error('verses', 'Error syncing word progress:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to save progress. Your progress will be saved when you try again.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      } finally {
+        setIsSyncing(false);
+      }
+    }, 1000);
+  }, [wordProgressQueue, isAuthenticated, isSyncing, toast]);
+
+  // Add cleanup for timeout
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Add modal state management
   const [modalState, setModalState] = useState<{
@@ -496,22 +606,42 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     }
   };
 
+  // Update handleStart to use number[] for revealedWords
   const handleStart = (reference: string) => {
     setActiveVerseId(reference);
-    setRevealedWords([]);
     setShowFullVerse({});
+    
+    // Get all recorded words for this verse
+    const verseRecordedWords = recordedWords
+      .filter(word => word.verse_reference === reference)
+      .sort((a, b) => a.word_index - b.word_index);
+
+    // Set revealed words based on recorded progress
+    setRevealedWords(verseRecordedWords.map(word => word.word_index));
+    
     // Focus the input field after a short delay
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
   };
 
+  // Add function to find the first unrevealed word index
+  const findFirstUnrevealedWordIndex = useCallback((words: string[]): number => {
+    for (let i = 0; i < words.length; i++) {
+      if (!revealedWords.includes(i)) {
+        return i;
+      }
+    }
+    return words.length;
+  }, [revealedWords]);
+
+  // Update handleShowHint to reveal the word
   const handleShowHint = (reference: string) => {
     const verse = verses.find(v => v.reference === reference);
     if (!verse) return;
 
     const words = verse.text.split(' ');
-    const nextWordIndex = revealedWords.length;
+    const nextWordIndex = findFirstUnrevealedWordIndex(words);
     
     // Ensure we don't try to reveal beyond the verse length
     if (nextWordIndex >= words.length) {
@@ -519,10 +649,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       return;
     }
 
-    // Create a new array with the next word added
-    const newRevealedWords = [...revealedWords, nextWordIndex];
-    setRevealedWords(newRevealedWords);
-    
     const word = words[nextWordIndex];
     const isLastWord = nextWordIndex === words.length - 1;
     const isSecondToLastWord = nextWordIndex === words.length - 2;
@@ -543,13 +669,17 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       void handleStatusChange(reference, ProgressStatus.InProgress, false);
     }
 
+    // Add the word to revealedWords
+    setRevealedWords(prev => [...prev, nextWordIndex]);
+
     // Keep the input focusable but don't force focus
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
   };
 
-  const handleReset = (reference: string) => {
+  // Update handleReset to use number[] for revealedWords
+  const handleReset = (reference: string, clearProgress: boolean = false) => {
     setRevealedWords([]);
     setShowFullVerse(prev => ({
       ...prev,
@@ -558,10 +688,95 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     setActiveVerseId(null);
     setUserGuess('');
     setGuessFeedback(null);
+    
+    if (clearProgress) {
+      // Only clear recorded words if explicitly requested
+      setRecordedWords(prev => {
+        const newRecordedWords = prev.filter(word => word.verse_reference !== reference);
+        localStorage.setItem('recordedWords', JSON.stringify(newRecordedWords));
+        return newRecordedWords;
+      });
+    }
+    
     // Maintain focus on the verse element
     const verseElement = verseRefs.current[reference];
     if (verseElement) {
       verseElement.focus();
+    }
+  };
+
+  // Update handleGuessSubmit to use first unrevealed word
+  const handleGuessSubmit = (reference: string) => {
+    const verse = verses.find(v => v.reference === reference);
+    if (!verse) return;
+
+    const words = verse.text.split(' ');
+    const nextWordIndex = findFirstUnrevealedWordIndex(words);
+    
+    if (nextWordIndex >= words.length) {
+      setGuessFeedback({
+        isCorrect: false,
+        message: "You've completed this verse!"
+      });
+      return;
+    }
+
+    const correctWord = words[nextWordIndex].toLowerCase().replace(/[.,;:!?'"-]/g, '');
+    const isCorrect = userGuess.toLowerCase().replace(/[.,;:!?'"-]/g, '') === correctWord;
+
+    // Only add to queue if word hasn't been recorded yet
+    if (!isWordRecorded(reference, nextWordIndex)) {
+      const wordProgress: WordProgress = {
+        verse_reference: reference,
+        word_index: nextWordIndex,
+        word: userGuess.toLowerCase(),
+        is_correct: isCorrect,
+        timestamp: Date.now()
+      };
+      setWordProgressQueue(prev => [...prev, wordProgress]);
+      recordWord(reference, nextWordIndex);
+      syncProgress();
+    }
+
+    if (isCorrect) {
+      const newRevealedWords = [...revealedWords, nextWordIndex];
+      setRevealedWords(newRevealedWords);
+      setUserGuess('');
+      setGuessFeedback({
+        isCorrect: true,
+        message: "Correct! Keep going!"
+      });
+
+      // Update status to In Progress on first word if Not Started
+      if (nextWordIndex === 0 && verse.status === ProgressStatus.NotStarted) {
+        void handleStatusChange(reference, ProgressStatus.InProgress, false);
+      }
+
+      // Find the next unrevealed word for the announcement
+      const nextUnrevealedIndex = findFirstUnrevealedWordIndex(words);
+      if (nextUnrevealedIndex < words.length) {
+        setAnnouncedWord(`Correct! The next word starts with "${words[nextUnrevealedIndex][0]}"`);
+        // Keep focus on input for next word
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+      } else {
+        setAnnouncedWord("Congratulations! You've completed the verse!");
+        // Keep focus on input even when complete
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+      }
+    } else {
+      setGuessFeedback({
+        isCorrect: false,
+        message: "Not quite right. Try again or use the hint button."
+      });
+      setUserGuess(''); // Clear the input after incorrect guess
+      // Keep focus on input for retry
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
     }
   };
 
@@ -676,65 +891,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     }
   };
 
-  const handleGuessSubmit = (reference: string) => {
-    const verse = verses.find(v => v.reference === reference);
-    if (!verse) return;
-
-    const words = verse.text.split(' ');
-    const nextWordIndex = revealedWords.length;
-    
-    if (nextWordIndex >= words.length) {
-      setGuessFeedback({
-        isCorrect: false,
-        message: "You've completed this verse!"
-      });
-      return;
-    }
-
-    const correctWord = words[nextWordIndex].toLowerCase();
-    const isCorrect = userGuess.toLowerCase() === correctWord;
-
-    if (isCorrect) {
-      const newRevealedWords = [...revealedWords, nextWordIndex];
-      setRevealedWords(newRevealedWords);
-      setUserGuess('');
-      setGuessFeedback({
-        isCorrect: true,
-        message: "Correct! Keep going!"
-      });
-
-      // Update status to In Progress on first word if Not Started
-      if (nextWordIndex === 0 && verse.status === ProgressStatus.NotStarted) {
-        void handleStatusChange(reference, ProgressStatus.InProgress, false);
-      }
-
-      // Announce the next word if there is one
-      if (nextWordIndex + 1 < words.length) {
-        setAnnouncedWord(`Correct! The next word starts with "${words[nextWordIndex + 1][0]}"`);
-        // Keep focus on input for next word
-        setTimeout(() => {
-          inputRef.current?.focus();
-        }, 100);
-      } else {
-        setAnnouncedWord("Congratulations! You've completed the verse!");
-        // Return focus to verse card when complete
-        const verseElement = verseRefs.current[reference];
-        if (verseElement) {
-          verseElement.focus();
-        }
-      }
-    } else {
-      setGuessFeedback({
-        isCorrect: false,
-        message: "Not quite right. Try again or use the hint button."
-      });
-      // Keep focus on input for retry
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
-    }
-  };
-
+  // Update renderVerseText to highlight the first unrevealed word
   const renderVerseText = (verse: Verse) => {
     const textColor = useColorModeValue('gray.700', 'gray.200');
 
@@ -748,65 +905,86 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
     if (activeVerseId === verse.reference) {
       const words = verse.text.split(' ');
+      const nextWordIndex = findFirstUnrevealedWordIndex(words);
+
       return (
         <VStack align="stretch" spacing={3}>
           <Text fontSize="lg" color={textColor}>
             {words.map((word, index) => {
               const isRevealed = revealedWords.includes(index);
+              const isNextWord = index === nextWordIndex;
               return (
-                <span key={index}>
-                  {isRevealed ? word : '_____'}
+                <React.Fragment key={index}>
+                  <span 
+                    style={{
+                      backgroundColor: isNextWord ? 'rgba(66, 153, 225, 0.2)' : 'transparent',
+                      padding: isNextWord ? '2px 4px' : '0',
+                      borderRadius: isNextWord ? '4px' : '0',
+                      transition: 'background-color 0.2s',
+                      display: 'inline-block'
+                    }}
+                  >
+                    {isRevealed ? word : '_____'}
+                  </span>
                   {index < words.length - 1 ? ' ' : ''}
-                </span>
+                </React.Fragment>
               );
             })}
           </Text>
-          {revealedWords.length < words.length && (
-            <Flex direction="column" align="center" gap={2}>
-              <Flex gap={2} align="center" justify="center" width="100%">
-                <Input
-                  ref={inputRef}
-                  value={userGuess}
-                  onChange={(e) => {
-                    setUserGuess(e.target.value);
+          <Flex direction="column" align="center" gap={2}>
+            <Flex gap={2} align="center" justify="center" width="100%">
+              <Input
+                ref={inputRef}
+                value={userGuess}
+                onChange={(e) => {
+                  // Only allow letters, numbers, and basic punctuation
+                  const sanitizedValue = e.target.value.replace(/[^a-zA-Z0-9.,;:!?'"-]/g, '');
+                  setUserGuess(sanitizedValue);
+                  // Only clear feedback after second letter is typed
+                  if (sanitizedValue.length > 1) {
                     setGuessFeedback(null);
-                  }}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      handleGuessSubmit(verse.reference);
-                    }
-                  }}
-                  onClick={(e) => {
-                    // Stop propagation to prevent verse card focus
-                    e.stopPropagation();
-                  }}
-                  placeholder="Type the next word..."
-                  size="sm"
-                  aria-label="Type your guess for the next word"
-                  autoFocus
-                  tabIndex={0}
-                  maxWidth="200px"
-                  textAlign="center"
-                  _focus={{
-                    outline: 'none',
-                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                  }}
-                  _focusVisible={{
-                    outline: 'none',
-                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                  }}
-                />
-                <Button
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
                     handleGuessSubmit(verse.reference);
-                  }}
-                  aria-label="Submit your guess"
-                >
-                  Submit
-                </Button>
-              </Flex>
+                  }
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                onBlur={() => {
+                  setGuessFeedback(null);
+                }}
+                placeholder="Guess the highlighted blank"
+                size="sm"
+                aria-label="Type your guess for the next word"
+                autoFocus
+                tabIndex={0}
+                maxWidth="250px"
+                textAlign="center"
+                _focus={{
+                  outline: 'none',
+                  boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                }}
+                _focusVisible={{
+                  outline: 'none',
+                  boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                }}
+              />
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleGuessSubmit(verse.reference);
+                }}
+                aria-label="Submit your guess"
+              >
+                Submit
+              </Button>
+            </Flex>
+            <Box height="24px" display="flex" alignItems="center" justifyContent="center">
               {guessFeedback && (
                 <Text
                   color={guessFeedback.isCorrect ? 'green.500' : 'red.500'}
@@ -818,8 +996,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                   {guessFeedback.message}
                 </Text>
               )}
-            </Flex>
-          )}
+            </Box>
+          </Flex>
         </VStack>
       );
     }
@@ -999,7 +1177,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       position="relative"
       role="article"
       aria-labelledby={`verse-${verse.reference}`}
-      tabIndex={0}
+      tabIndex={activeVerseId === verse.reference ? -1 : 0}
       onClick={(e) => {
         // Don't handle clicks on buttons or inputs
         if (e.target instanceof HTMLElement && 
@@ -1007,6 +1185,16 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
              e.target.tagName === 'INPUT' || 
              e.target.closest('button') || 
              e.target.closest('input'))) {
+          return;
+        }
+        
+        // Don't handle clicks when we're in the middle of guessing
+        if (activeVerseId === verse.reference && !showFullVerse[verse.reference]) {
+          return;
+        }
+        
+        // Don't focus the verse card if we're actively memorizing
+        if (activeVerseId === verse.reference) {
           return;
         }
         
