@@ -145,6 +145,20 @@ fi
 
 echo "\n${GREEN}Magic link token: $MAGIC_TOKEN2${NC}"
 
+# Ask if user needs a browser login link
+echo "\n${YELLOW}Would you like a browser login link? (y/n)${NC}"
+read -r NEED_BROWSER_LINK
+
+if [ "$NEED_BROWSER_LINK" = "y" ]; then
+    # Create a browser-friendly login link
+    BROWSER_LINK="http://localhost:5173/auth/verify?token=$MAGIC_TOKEN2"
+    echo "\n${GREEN}Browser Login Link:${NC}"
+    echo "${BLUE}$BROWSER_LINK${NC}"
+    echo "\nOpen this link in your browser to log in"
+    echo "\n${YELLOW}Press Enter when you've used the browser link to continue with the test script...${NC}"
+    read -r
+fi
+
 # 3. Verify Magic Link (Login)
 echo "\n${YELLOW}Verifying magic link...${NC}"
 VERIFY_RESPONSE2=$(curl -s -i "http://localhost:8787/auth/verify?token=$MAGIC_TOKEN2")
