@@ -92,7 +92,108 @@ Implementation plan for adding gamification, detailed progress tracking, and mas
     - [ ] Track daily streak points (50 points)
     - [ ] Test points system with various scenarios
 
-### Phase 4: Testing and Deployment
+#### Mastery Mode UI Implementation
+- [ ] Add Mastery Mode toggle to verse cards
+  - [ ] Design and implement subtle mastery mode button
+    - [ ] Add icon with tooltip
+    - [ ] Only show for verses marked as "In Progress"
+    - [ ] Add smooth transition animation
+  - [ ] Create expanded mastery mode view
+    - [ ] Design collapsible section
+    - [ ] Add attempt counter display
+    - [ ] Show accuracy percentage
+    - [ ] Add "Start Attempt" button
+    - [ ] Include recent attempt history
+  - [ ] Implement mastery mode state management
+    - [ ] Add state for tracking active mastery mode
+    - [ ] Handle mode transitions
+    - [ ] Persist mode preference
+  - [ ] Add mastery mode input interface
+    - [ ] Design full verse input area
+    - [ ] Add character count
+    - [ ] Implement auto-expanding textarea
+    - [ ] Add submit button
+  - [ ] Create attempt feedback display
+    - [ ] Show correct/incorrect words
+    - [ ] Display attempt score
+    - [ ] Show progress towards mastery
+    - [ ] Add encouraging messages
+  - [ ] Implement attempt history
+    - [ ] Design history display
+    - [ ] Show attempt dates
+    - [ ] Display accuracy trends
+    - [ ] Add attempt details view
+  - [ ] Add mastery requirements display
+    - [ ] Show minimum attempts needed
+    - [ ] Display current accuracy
+    - [ ] Track consecutive perfect attempts
+    - [ ] Add progress indicators
+  - [ ] Create mode transition animations
+    - [ ] Design smooth expand/collapse
+    - [ ] Add loading states
+    - [ ] Implement focus management
+  - [ ] Add keyboard shortcuts
+    - [ ] Toggle mastery mode
+    - [ ] Submit attempt
+    - [ ] Navigate history
+    - [ ] Return to practice mode
+
+#### Stats Panel
+- [ ] Design collapsible panel
+- [ ] Create streak badge
+- [ ] Implement stats display
+- [ ] Add progress graphs
+
+#### Mastery System
+- [ ] Design mastery indicators
+- [ ] Create celebration animations
+- [ ] Implement mastery badges
+
+#### Points and Streaks
+- [ ] Design streak display
+- [ ] Create point system UI
+- [ ] Implement milestone celebrations
+
+#### Progressive Disclosure
+- [ ] Design feature unlock system
+- [ ] Create tooltips
+- [ ] Implement advanced stats hiding
+
+#### Initial Introduction Modal to Gamification
+- [ ] Create welcome modal for new features
+- [ ] Focus on "Track your progress and see your growth"
+- [ ] Include "Don't show again" option
+- [ ] Keep introduction light and non-overwhelming
+
+#### Add types for gamification data
+- [ ] Create GamificationContext for state management
+
+#### Add StatsPanel component
+- [ ] Add StatsPanel component
+
+#### Integrate StatsPanel into main app layout
+- [ ] Integrate StatsPanel into main app layout
+
+#### Implement progress tracking UI
+- [ ] Add word-by-word progress tracking
+- [ ] Add verse attempt recording
+- [ ] Add progress visualization
+
+#### Implement gamification UI
+- [ ] Add point system display
+- [ ] Add streak tracking
+- [ ] Add mastery indicators
+
+#### Add loading states and error handling
+- [ ] Add loading states and error handling
+
+#### Test UI components
+- [ ] Test UI components
+
+#### Optimize performance
+- [ ] Optimize performance
+
+## Phase 4: Testing and Deployment
 - [ ] Write unit tests
 - [ ] Write integration tests
 - [ ] Perform load testing
@@ -100,9 +201,142 @@ Implementation plan for adding gamification, detailed progress tracking, and mas
 - [ ] Deploy to production
 - [ ] Monitor performance
 
-### Notes
-- Schema changes (like adding a UNIQUE constraint) should be done in a new, numbered migration (e.g., 0003_add_unique_constraint_to_verses_reference.sql), not by modifying 0000_2_gamification_update.sql. This ensures the live DB is updated safely and reproducibly.
-- All wrangler commands must specify the environment (e.g., --env development) and use the database binding name (DB) instead of the database ID.
+## Point System
+
+### Base Points
+```typescript
+const POINTS = {
+    VERSE_ADDED: 100,        // Big bonus for adding a new verse
+    WORD_CORRECT: 1,         // Base points per correct word
+    STREAK_MULTIPLIER: 0.5,  // 50% bonus per word in streak
+    MASTERY_ACHIEVED: 500,   // Big bonus for mastering a verse
+    DAILY_STREAK: 50,        // Bonus for maintaining daily streak
+};
+```
+
+### Point Events
+1. Verse Added
+2. Word Correct
+3. Streak Bonus
+4. Mastery Achieved
+5. Daily Streak
+
+## Testing Strategy
+
+### Unit Tests
+1. Point calculation tests
+2. Progress tracking tests
+3. Mastery system tests
+4. Database operation tests
+
+### Integration Tests
+1. End-to-end flow tests
+2. API endpoint tests
+3. Database integration tests
+4. UI component tests
+
+### Performance Tests
+1. Database query performance
+2. Point calculation performance
+3. UI rendering performance
+4. API response times
+
+### Edge Cases
+1. Timezone handling
+2. Concurrent updates
+3. Network failures
+4. Data consistency
+5. Performance under load
+
+### Load Testing
+1. Multiple concurrent users
+2. Rapid word input
+3. Point calculation under load
+4. Database performance
+5. UI responsiveness
+
+## Rollback Plan
+
+### Database Rollback
+1. Drop new tables
+2. Restore from backup
+3. Verify data integrity
+
+### Code Rollback
+1. Revert to previous version
+2. Remove new features
+3. Restore old functionality
+
+### Data Migration
+1. Backup all new tables
+2. Export point events
+3. Save user stats
+4. Document current state
+
+### Feature Flags
+1. Implement feature flags for:
+   - Word-by-word tracking
+   - Point system
+   - Mastery system
+   - Analytics
+
+## Monitoring
+
+### Performance Metrics
+1. Database query times
+2. API response times
+3. Point calculation times
+4. UI render times
+
+### Error Tracking
+1. Database errors
+2. API errors
+3. UI errors
+4. Point calculation errors
+
+### Alerts
+1. Point calculation errors
+2. Mastery system issues
+3. Performance degradation
+4. Data inconsistency
+
+### Metrics
+1. Word recognition accuracy
+2. Point calculation time
+3. Mastery achievement rate
+4. User engagement metrics
+
+## Documentation
+
+### Technical Documentation
+1. Database schema
+2. API endpoints
+3. Point system
+4. Mastery system
+
+### User Documentation
+1. New features
+2. Point system
+3. Mastery system
+4. Progress tracking
+
+## Notes
+- Keep this document updated as implementation progresses
+- Add any new considerations or changes
+- Track completed items
+- Note any issues or challenges
+- Consider implementing feature flags for gradual rollout
+- Plan for data migration and backup
+- Consider timezone handling from the start
+- Plan for performance optimization
+- Consider implementing a staging environment
+
+## Status
+- [ ] Phase 1: Database Setup
+- [ ] Phase 2: Core Tracking Implementation
+- [ ] Phase 3: Mastery System
+- [ ] Phase 4: Gamification
+- [ ] Phase 5: Analytics 
 
 ## Scope and Constraints
 
@@ -267,274 +501,6 @@ CREATE TABLE user_stats (
 );
 ```
 
-## Implementation Phases
-
-### Phase 1: Database Setup
-- [x] Create new tables in development
-  - Created all required tables with proper relationships
-  - Added necessary indexes for performance
-- [x] Add indexes for performance
-  - Added indexes for foreign keys
-  - Added indexes for frequently queried columns
-- [x] Create database migration scripts
-  - Created numbered migrations (0000-0003)
-  - Added safe schema changes for production
-- [x] Add database indexes
-  - Added indexes for word_progress
-  - Added indexes for verse_attempts
-  - Added indexes for point_events
-- [x] Test table relationships
-  - Verified all foreign key constraints
-  - Tested with sample data
-  - Confirmed data integrity
-- [x] Verify foreign key constraints
-  - Tested valid and invalid operations
-  - Confirmed constraints work as expected
-- [ ] Create backup of production database (waiting until the new front end is built)
-- [ ] Deploy schema changes to production (waiting until the new front end is built)
-
 ### Notes
 - Schema changes (like adding a UNIQUE constraint) should be done in a new, numbered migration (e.g., 0003_add_unique_constraint_to_verses_reference.sql), not by modifying 0000_2_gamification_update.sql. This ensures the live DB is updated safely and reproducibly.
-- All wrangler commands must specify the environment (e.g., --env development) and use the database binding name (DB) instead of the database ID.
-
-## Phase 2: Backend API Development
-- [x] Implement user authentication endpoints
-- [x] Implement verse management endpoints
-- [x] Implement progress tracking endpoints
-- [x] Implement gamification endpoints
-- [x] Add input validation and error handling
-- [x] Write API documentation
-- [x] Test API endpoints
-
-## Phase 3: Frontend Development
-- [x] Prepare the local/dev server to test front end.
-  - [x] make no changes that will affect front end deployment that currently is working on main
-- [ ] Update UI to support new features
-  - [ ] Design and implement user experience
-    
-    - [ ] Progress Tracking UI
-      - [x] Update verse card with input, and change status indicators to truly reflect attempts
-      - [ ] Wire the api calls to properly score the new various ways a user can make an attempt
-        - [ ] Implement word progress tracking
-          - [ ] Create WordProgress interface for tracking individual word attempts
-          - [ ] Add word progress queue for batching API calls
-          - [ ] Implement debounced sync function for word progress
-          - [ ] Add error handling and retry logic for failed API calls
-          - [ ] Test word progress tracking with various scenarios
-        - [ ] Implement verse attempt recording
-          - [ ] Create VerseAttempt interface for tracking complete attempts
-          - [ ] Add verse attempt queue for batching API calls
-          - [ ] Implement debounced sync function for verse attempts
-          - [ ] Add error handling and retry logic for failed API calls
-          - [ ] Test verse attempt recording with various scenarios
-        - [ ] Add mastery system integration
-          - [ ] Track minimum 5 attempts requirement
-          - [ ] Calculate and track 95% overall accuracy
-          - [ ] Monitor 3 consecutive perfect attempts
-          - [ ] Implement mastery achievement celebration
-          - [ ] Test mastery system with various scenarios
-        - [ ] Implement points system
-          - [ ] Add points tracking for correct words (1 point each)
-          - [ ] Implement streak bonus (50% per word in streak)
-          - [ ] Add mastery achievement points (500 points)
-          - [ ] Track daily streak points (50 points)
-          - [ ] Test points system with various scenarios
-        - [ ] Add progress persistence
-          - [ ] Implement local storage for pending changes
-          - [ ] Add sync on component unmount
-          - [ ] Handle offline/online state changes
-          - [ ] Add progress recovery after errors
-          - [ ] Test progress persistence with various scenarios
-        - [ ] Optimize API performance
-          - [ ] Implement request batching
-          - [ ] Add request debouncing
-          - [ ] Implement rate limiting handling
-          - [ ] Add request caching where appropriate
-          - [ ] Test performance with various scenarios
-      - [ ] Add subtle progress indicators under verses
-      - [x] Implement word-by-word feedback
-      - [ ] Design post-attempt summary
-      - [ ] Create progress visualization
-    - [ ] Stats Panel
-      - [ ] Design collapsible panel
-      - [ ] Create streak badge
-      - [ ] Implement stats display
-      - [ ] Add progress graphs
-    - [ ] Mastery System
-      - [ ] Design mastery indicators
-      - [ ] Create celebration animations
-      - [ ] Implement mastery badges
-    - [ ] Points and Streaks
-      - [ ] Design streak display
-      - [ ] Create point system UI
-      - [ ] Implement milestone celebrations
-    - [ ] Progressive Disclosure
-      - [ ] Design feature unlock system
-      - [ ] Create tooltips
-      - [ ] Implement advanced stats hiding
-    - [ ] Initial Introduction Modal to Gamification
-      - [ ] Create welcome modal for new features
-      - [ ] Focus on "Track your progress and see your growth"
-      - [ ] Include "Don't show again" option
-      - [ ] Keep introduction light and non-overwhelming
-
-  - [ ] Add types for gamification data
-  - [ ] Create GamificationContext for state management
-  - [ ] Add StatsPanel component
-  - [ ] Integrate StatsPanel into main app layout
-- [ ] Implement progress tracking UI
-  - [ ] Add word-by-word progress tracking
-  - [ ] Add verse attempt recording
-  - [ ] Add progress visualization
-- [ ] Implement gamification UI
-  - [ ] Add point system display
-  - [ ] Add streak tracking
-  - [ ] Add mastery indicators
-- [ ] Add loading states and error handling
-- [ ] Test UI components
-- [ ] Optimize performance
-
-## Phase 4: Testing and Deployment
-- [ ] Write unit tests
-- [ ] Write integration tests
-- [ ] Perform load testing
-- [ ] Deploy to staging
-- [ ] Deploy to production
-- [ ] Monitor performance
-
-## Point System
-
-### Base Points
-```typescript
-const POINTS = {
-    VERSE_ADDED: 100,        // Big bonus for adding a new verse
-    WORD_CORRECT: 1,         // Base points per correct word
-    STREAK_MULTIPLIER: 0.5,  // 50% bonus per word in streak
-    MASTERY_ACHIEVED: 500,   // Big bonus for mastering a verse
-    DAILY_STREAK: 50,        // Bonus for maintaining daily streak
-};
-```
-
-### Point Events
-1. Verse Added
-2. Word Correct
-3. Streak Bonus
-4. Mastery Achieved
-5. Daily Streak
-
-## Testing Strategy
-
-### Unit Tests
-1. Point calculation tests
-2. Progress tracking tests
-3. Mastery system tests
-4. Database operation tests
-
-### Integration Tests
-1. End-to-end flow tests
-2. API endpoint tests
-3. Database integration tests
-4. UI component tests
-
-### Performance Tests
-1. Database query performance
-2. Point calculation performance
-3. UI rendering performance
-4. API response times
-
-### Edge Cases
-1. Timezone handling
-2. Concurrent updates
-3. Network failures
-4. Data consistency
-5. Performance under load
-
-### Load Testing
-1. Multiple concurrent users
-2. Rapid word input
-3. Point calculation under load
-4. Database performance
-5. UI responsiveness
-
-## Rollback Plan
-
-### Database Rollback
-1. Drop new tables
-2. Restore from backup
-3. Verify data integrity
-
-### Code Rollback
-1. Revert to previous version
-2. Remove new features
-3. Restore old functionality
-
-### Data Migration
-1. Backup all new tables
-2. Export point events
-3. Save user stats
-4. Document current state
-
-### Feature Flags
-1. Implement feature flags for:
-   - Word-by-word tracking
-   - Point system
-   - Mastery system
-   - Analytics
-
-## Monitoring
-
-### Performance Metrics
-1. Database query times
-2. API response times
-3. Point calculation times
-4. UI render times
-
-### Error Tracking
-1. Database errors
-2. API errors
-3. UI errors
-4. Point calculation errors
-
-### Alerts
-1. Point calculation errors
-2. Mastery system issues
-3. Performance degradation
-4. Data inconsistency
-
-### Metrics
-1. Word recognition accuracy
-2. Point calculation time
-3. Mastery achievement rate
-4. User engagement metrics
-
-## Documentation
-
-### Technical Documentation
-1. Database schema
-2. API endpoints
-3. Point system
-4. Mastery system
-
-### User Documentation
-1. New features
-2. Point system
-3. Mastery system
-4. Progress tracking
-
-## Notes
-- Keep this document updated as implementation progresses
-- Add any new considerations or changes
-- Track completed items
-- Note any issues or challenges
-- Consider implementing feature flags for gradual rollout
-- Plan for data migration and backup
-- Consider timezone handling from the start
-- Plan for performance optimization
-- Consider implementing a staging environment
-
-## Status
-- [ ] Phase 1: Database Setup
-- [ ] Phase 2: Core Tracking Implementation
-- [ ] Phase 3: Mastery System
-- [ ] Phase 4: Gamification
-- [ ] Phase 5: Analytics 
+- All wrangler commands must specify the environment (e.g., --env development) and use the database binding name (DB) instead of the database ID. 
