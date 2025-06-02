@@ -30,6 +30,8 @@ import {
   Td,
   Kbd,
   Input,
+  Textarea,
+  Collapse,
 } from '@chakra-ui/react';
 import { ProgressStatus } from '../utils/progress';
 import { useAuth } from '../hooks/useAuth';
@@ -72,6 +74,27 @@ interface WordProgress {
   word: string;
   is_correct: boolean;
   timestamp: number;
+}
+
+// Add mastery progress interface
+interface MasteryProgress {
+  total_attempts: number;
+  overall_accuracy: number;
+  consecutive_perfect: number;
+  is_mastered: boolean;
+  mastery_date?: number;
+}
+
+// Update MasteryState interface
+interface MasteryState {
+  activeVerse: string | null;
+  attempt: string;
+  isSubmitting: boolean;
+  feedback: {
+    isCorrect: boolean;
+    message: string;
+  } | null;
+  progress: MasteryProgress | null;
 }
 
 export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): JSX.Element => {
@@ -229,6 +252,192 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   // Add input ref for focus management
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Add mastery state
+  const [masteryState, setMasteryState] = useState<MasteryState>({
+    activeVerse: null,
+    attempt: '',
+    isSubmitting: false,
+    feedback: null,
+    progress: null
+  });
+
+  // Add function to get mastery progress message
+  const getMasteryProgressMessage = (progress: MasteryProgress): string => {
+    if (progress.is_mastered) {
+      return "Congratulations! You've mastered this verse!";
+    }
+
+    const messages: string[] = [];
+    
+    if (progress.total_attempts < 5) {
+      messages.push(`You need ${5 - progress.total_attempts} more attempts to qualify for mastery`);
+    }
+    
+    if (progress.overall_accuracy < 0.95) {
+      const accuracyPercent = Math.round(progress.overall_accuracy * 100);
+      messages.push(`Your overall accuracy is ${accuracyPercent}% (need 95%)`);
+    }
+    
+    if (progress.consecutive_perfect < 3) {
+      messages.push(`You have ${progress.consecutive_perfect} consecutive perfect attempts (need 3)`);
+    }
+
+    return messages.join('. ') + '.';
+  };
+
+  // Add function to fetch mastery progress
+  const fetchMasteryProgress = async (reference: string): Promise<MasteryProgress> => {
+    // Check localStorage first
+    const cached = localStorage.getItem(`mastery_progress_${reference}`);
+    if (cached) {
+      const { progress, timestamp } = JSON.parse(cached);
+      // Cache for 5 minutes
+      if (Date.now() - timestamp < 5 * 60 * 1000) {
+        return progress;
+      }
+    }
+
+    try {
+      const response = await fetch(`/api/progress/mastery/${reference}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch mastery progress');
+
+      const progress = await response.json();
+      
+      // Cache the progress
+      localStorage.setItem(`mastery_progress_${reference}`, JSON.stringify({
+        progress,
+        timestamp: Date.now()
+      }));
+
+      return progress;
+    } catch (error) {
+      console.error('Error fetching mastery progress:', error);
+      return {
+        total_attempts: 0,
+        overall_accuracy: 0,
+        consecutive_perfect: 0,
+        is_mastered: false
+      };
+    }
+  };
+
+  // Update handleMasteryToggle to fetch progress
+  const handleMasteryToggle = async (reference: string): Promise<void> => {
+    if (masteryState.activeVerse === reference) {
+      setMasteryState(prev => ({
+        ...prev,
+        activeVerse: null,
+        attempt: '',
+        feedback: null,
+        progress: null
+      }));
+    } else {
+      const progress = await fetchMasteryProgress(reference);
+      setMasteryState(prev => ({
+        ...prev,
+        activeVerse: reference,
+        attempt: '',
+        feedback: null,
+        progress
+      }));
+    }
+  };
+
+  // Update handleMasteryAttempt to update progress
+  const handleMasteryAttempt = async (reference: string) => {
+    const verse = verses.find(v => v.reference === reference);
+    if (!verse) return;
+
+    setMasteryState(prev => ({ ...prev, isSubmitting: true }));
+
+    try {
+      const response = await fetch('/api/progress/verse', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          verse_reference: reference,
+          words_correct: masteryState.attempt.split(' ').filter(word => 
+            verse.text.toLowerCase().includes(word.toLowerCase())
+          ).length,
+          total_words: verse.text.split(' ').length
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to record attempt');
+
+      const result = await response.json();
+      
+      // Fetch updated progress
+      const progress = await fetchMasteryProgress(reference);
+      
+      setMasteryState(prev => ({
+        ...prev,
+        feedback: {
+          isCorrect: result.isCorrect,
+          message: result.message
+        },
+        attempt: '',
+        progress
+      }));
+
+      if (progress.is_mastered) {
+        await onStatusChange(reference, ProgressStatus.Mastered);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to record attempt. Please try again.';
+      setMasteryState(prev => ({
+        ...prev,
+        feedback: {
+          isCorrect: false,
+          message: errorMessage
+        }
+      }));
+    } finally {
+      setMasteryState(prev => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
+  // Update handleMasteryInput to be smarter about paste detection
+  const handleMasteryInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    // Only block paste events that contain multiple words
+    if (e.nativeEvent instanceof ClipboardEvent && 
+        e.nativeEvent.clipboardData && 
+        e.nativeEvent.clipboardData.getData('text').trim().split(/\s+/).length > 1) {
+      e.preventDefault();
+      toast({
+        title: "No copy/paste allowed here!",
+        description: "Gotta use your brain!",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+        position: "top",
+      });
+      return;
+    }
+
+    setMasteryState(prev => ({
+      ...prev,
+      attempt: e.target.value,
+      feedback: null
+    }));
+  };
+
+  // Add mastery key handler
+  const handleMasteryKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, reference: string) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void handleMasteryAttempt(reference);
+    }
+  };
+
   // Expose scrollToVerse through ref
   useImperativeHandle(ref, () => ({
     scrollToVerse: (reference: string) => {
@@ -299,8 +508,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         return;
       }
 
-      // Only handle shortcuts if no modal is open and no input is focused
-      if (modalState.isOpen || document.activeElement?.tagName === 'INPUT') return;
+      // Only handle shortcuts if no modal is open, no input is focused, and mastery mode is not active
+      if (modalState.isOpen || document.activeElement?.tagName === 'INPUT' || masteryState.activeVerse) return;
 
       // Get the currently focused verse element
       const focusedVerse = document.activeElement?.closest('[role="article"]');
@@ -372,7 +581,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeVerseId, showFullVerse, modalState.isOpen, verses, revealedWords]);
+  }, [activeVerseId, showFullVerse, modalState.isOpen, verses, revealedWords, masteryState.activeVerse]);
 
   // Add keyboard shortcut hints to buttons
   const renderKeyboardShortcut = (shortcut: string) => (
@@ -1167,253 +1376,295 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   }, [isDeleteDialogOpen, isShortcutsModalOpen]);
 
   // Update the verse card rendering
-  const renderVerseCard = (verse: Verse) => (
+  const renderVerseCard = (verse: Verse): JSX.Element => {
+    const isInMasteryMode = masteryState.activeVerse === verse.reference;
+    
+    return (
+      <Box
+        ref={el => verseRefs.current[verse.reference] = el}
+        p={4}
+        borderWidth="1px"
+        borderRadius="lg"
+        position="relative"
+        role="article"
+        aria-labelledby={`verse-${verse.reference}`}
+        tabIndex={activeVerseId === verse.reference ? -1 : 0}
+      >
+        <VStack align="stretch" spacing={2}>
+          <Flex justify="space-between" align="center">
+            <Text fontWeight="bold" id={`verse-${verse.reference}`}>
+              {verse.reference}
+            </Text>
+            <Text
+              as="button"
+              color="red.600"
+              fontWeight="bold"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteClick(verse.reference);
+              }}
+              onKeyPress={(e) => {
+                e.stopPropagation();
+                handleDeleteClick(verse.reference);
+              }}
+              _hover={{ 
+                color: 'red.700',
+                textDecoration: 'underline'
+              }}
+              cursor="pointer"
+              aria-label={`Delete verse ${verse.reference}`}
+              role="button"
+              tabIndex={0}
+              aria-describedby={`delete-description-${verse.reference}`}
+              _focus={{
+                outline: 'none',
+                boxShadow: '0 0 0 2px var(--chakra-colors-red-300)',
+                borderRadius: 'md'
+              }}
+              _focusVisible={{
+                outline: 'none',
+                boxShadow: '0 0 0 2px var(--chakra-colors-red-300)',
+                borderRadius: 'md'
+              }}
+            >
+              Delete
+            </Text>
+          </Flex>
+
+          <Collapse in={!isInMasteryMode}>
+            <Box>
+              {renderVerseText(verse)}
+              <Flex gap={2} wrap="wrap" justify="space-between" mt={4}>
+                <Flex gap={2} wrap="wrap">
+                  {activeVerseId !== verse.reference ? (
+                    <Button
+                      size="sm"
+                      variant="solid"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStart(verse.reference);
+                      }}
+                      onKeyPress={(e) => {
+                        e.stopPropagation();
+                        handleStart(verse.reference);
+                      }}
+                      role="button"
+                      aria-label={`Start memorizing ${verse.reference}`}
+                      _focus={{
+                        outline: 'none',
+                        boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                      }}
+                      _focusVisible={{
+                        outline: 'none',
+                        boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                      }}
+                    >
+                      Start Memorizing {renderKeyboardShortcut('S')}
+                    </Button>
+                  ) : (
+                    <>
+                      {!showFullVerse[verse.reference] && revealedWords.length < verse.text.split(' ').length && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShowHint(verse.reference);
+                          }}
+                          onKeyPress={(e) => {
+                            e.stopPropagation();
+                            handleShowHint(verse.reference);
+                          }}
+                          role="button"
+                          aria-label={`Show hint for next word of ${verse.reference}`}
+                          _focus={{
+                            outline: 'none',
+                            boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                          }}
+                          _focusVisible={{
+                            outline: 'none',
+                            boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                          }}
+                        >
+                          Show Hint {renderKeyboardShortcut('S')}
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReset(verse.reference);
+                        }}
+                        onKeyPress={(e) => {
+                          e.stopPropagation();
+                          handleReset(verse.reference);
+                        }}
+                        role="button"
+                        aria-label={`Reset memorization of ${verse.reference}`}
+                        _focus={{
+                          outline: 'none',
+                          boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                        }}
+                        _focusVisible={{
+                          outline: 'none',
+                          boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                        }}
+                      >
+                        Reset {renderKeyboardShortcut('R')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleShowVerse(verse.reference);
+                        }}
+                        onKeyPress={(e) => {
+                          e.stopPropagation();
+                          handleShowVerse(verse.reference);
+                        }}
+                        role="button"
+                        aria-label={showFullVerse[verse.reference] ? `Hide full text of ${verse.reference}` : `Show full text of ${verse.reference}`}
+                        _focus={{
+                          outline: 'none',
+                          boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                        }}
+                        _focusVisible={{
+                          outline: 'none',
+                          boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                        }}
+                      >
+                        {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Full Verse'} {renderKeyboardShortcut('F')}
+                      </Button>
+                    </>
+                  )}
+                </Flex>
+                {showStatusButtons && renderStatusButtons(verse)}
+              </Flex>
+            </Box>
+          </Collapse>
+
+          <Collapse in={isInMasteryMode}>
+            {renderMasteryMode(verse)}
+          </Collapse>
+
+          {verse.status === ProgressStatus.InProgress && !isInMasteryMode && (
+            <Button
+              size="sm"
+              variant="outline"
+              colorScheme="green"
+              onClick={() => handleMasteryToggle(verse.reference)}
+              mt={2}
+            >
+              Enter Mastery Mode
+            </Button>
+          )}
+        </VStack>
+      </Box>
+    );
+  };
+
+  // Update the mastery mode UI in renderVerseCard
+  const renderMasteryMode = (verse: Verse): JSX.Element => (
     <Box
-      key={`${verse.reference}-${verse.lastReviewed}`}
-      ref={el => verseRefs.current[verse.reference] = el}
+      bg={useColorModeValue('green.50', 'green.900')}
       p={4}
+      borderRadius="md"
       borderWidth="1px"
-      borderRadius="lg"
-      position="relative"
-      role="article"
-      aria-labelledby={`verse-${verse.reference}`}
-      tabIndex={activeVerseId === verse.reference ? -1 : 0}
-      onClick={(e) => {
-        // Don't handle clicks on buttons or inputs
-        if (e.target instanceof HTMLElement && 
-            (e.target.tagName === 'BUTTON' || 
-             e.target.tagName === 'INPUT' || 
-             e.target.closest('button') || 
-             e.target.closest('input'))) {
-          return;
-        }
-        
-        // Don't handle clicks when we're in the middle of guessing
-        if (activeVerseId === verse.reference && !showFullVerse[verse.reference]) {
-          return;
-        }
-        
-        // Don't focus the verse card if we're actively memorizing
-        if (activeVerseId === verse.reference) {
-          return;
-        }
-        
-        // Focus the verse card
-        const verseElement = verseRefs.current[verse.reference];
-        if (verseElement) {
-          verseElement.focus();
-        }
-      }}
-      onKeyPress={(e) => handleKeyPress(e, () => {
-        const verseElement = verseRefs.current[verse.reference];
-        if (verseElement) {
-          verseElement.focus();
-        }
-      })}
-      _focus={{
-        outline: 'none',
-        boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-        borderColor: 'blue.500',
-      }}
-      _focusVisible={{
-        outline: 'none',
-        boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-        borderColor: 'blue.500',
-      }}
-      transition="all 0.2s"
-      cursor="pointer"
+      borderColor={useColorModeValue('green.200', 'green.700')}
     >
-      <VStack align="stretch" spacing={2}>
-        <Flex justify="space-between" align="center">
-          <Text fontWeight="bold" id={`verse-${verse.reference}`}>
-            {verse.reference}
-          </Text>
-          <Text
-            as="button"
-            color="red.600"
-            fontWeight="bold"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteClick(verse.reference);
+      <VStack align="stretch" spacing={4}>
+        <Text fontSize="lg" color={useColorModeValue('gray.700', 'gray.200')}>
+          Think you know {verse.reference} by heart? Enter it exactly right below, and you're one step closer to mastery.
+        </Text>
+        
+        {masteryState.progress && (
+          <Box 
+            p={3} 
+            bg={useColorModeValue('white', 'gray.800')} 
+            borderRadius="md"
+            borderWidth="1px"
+            borderColor={useColorModeValue('gray.200', 'gray.600')}
+          >
+            <Text fontSize="sm" color={useColorModeValue('gray.600', 'gray.300')}>
+              {getMasteryProgressMessage(masteryState.progress)}
+            </Text>
+          </Box>
+        )}
+
+        <Box position="relative">
+          <Textarea
+            value={masteryState.attempt}
+            onChange={handleMasteryInput}
+            onKeyDown={(e) => handleMasteryKeyDown(e, verse.reference)}
+            onPaste={(e) => {
+              e.preventDefault();
+              toast({
+                title: "No copy/paste allowed here!",
+                description: "Gotta use your brain!",
+                status: "warning",
+                duration: 3000,
+                isClosable: true,
+                position: "top",
+              });
             }}
-            onKeyPress={(e) => {
-              e.stopPropagation();
-              handleDeleteClick(verse.reference);
+            onFocus={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.setAttribute('autocomplete', 'off');
+              target.setAttribute('autocorrect', 'off');
+              target.setAttribute('autoCapitalize', 'off');
+              target.setAttribute('spellcheck', 'false');
             }}
-            _hover={{ 
-              color: 'red.700',
-              textDecoration: 'underline'
-            }}
-            cursor="pointer"
-            aria-label={`Delete verse ${verse.reference}`}
-            role="button"
-            tabIndex={0}
-            aria-describedby={`delete-description-${verse.reference}`}
+            placeholder="Type the verse from memory..."
+            size="lg"
+            rows={4}
+            isDisabled={masteryState.isSubmitting}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            autoFocus
             _focus={{
               outline: 'none',
-              boxShadow: '0 0 0 2px var(--chakra-colors-red-300)',
-              borderRadius: 'md'
+              boxShadow: '0 0 0 3px var(--chakra-colors-green-300)',
             }}
             _focusVisible={{
               outline: 'none',
-              boxShadow: '0 0 0 2px var(--chakra-colors-red-300)',
-              borderRadius: 'md'
+              boxShadow: '0 0 0 3px var(--chakra-colors-green-300)',
             }}
-          >
-            Delete
-          </Text>
-        </Flex>
-        <Text
-          id={`delete-description-${verse.reference}`}
-          srOnly
-        >
-          Delete this verse. This action cannot be undone. A confirmation dialog will appear.
-        </Text>
-        <Box 
-          minH={{ base: "6em", md: "4em" }}
-          display="flex" 
-          alignItems="center"
-          lineHeight="1.5"
-          role="region"
-          aria-label={`Verse text for ${verse.reference}`}
-          tabIndex={0}
-          aria-live="polite"
-          aria-atomic="true"
-          aria-relevant="text"
-          aria-describedby={`verse-status-${verse.reference}`}
-        >
-          {renderVerseText(verse)}
+          />
         </Box>
-        <Text
-          id={`verse-status-${verse.reference}`}
-          srOnly
-        >
-          {activeVerseId === verse.reference 
-            ? `Memorizing in progress. ${revealedWords.length} of ${verse.text.split(' ').length} words revealed.`
-            : showFullVerse[verse.reference]
-              ? "Full verse text is visible"
-              : "Verse text is hidden. Press S to start memorizing."
-          }
-        </Text>
-        <Flex gap={2} wrap="wrap" justify="space-between">
-          <Flex gap={2} wrap="wrap">
-            {activeVerseId !== verse.reference ? (
-              <Button
-                size="sm"
-                variant="solid"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleStart(verse.reference);
-                }}
-                onKeyPress={(e) => {
-                  e.stopPropagation();
-                  handleStart(verse.reference);
-                }}
-                role="button"
-                aria-label={`Start memorizing ${verse.reference}`}
-                _focus={{
-                  outline: 'none',
-                  boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                }}
-                _focusVisible={{
-                  outline: 'none',
-                  boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                }}
-              >
-                Start Memorizing {renderKeyboardShortcut('S')}
-              </Button>
-            ) : (
-              <>
-                {!showFullVerse[verse.reference] && revealedWords.length < verse.text.split(' ').length && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleShowHint(verse.reference);
-                    }}
-                    onKeyPress={(e) => {
-                      e.stopPropagation();
-                      handleShowHint(verse.reference);
-                    }}
-                    role="button"
-                    aria-label={`Show hint for next word of ${verse.reference}`}
-                    _focus={{
-                      outline: 'none',
-                      boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                    }}
-                    _focusVisible={{
-                      outline: 'none',
-                      boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                    }}
-                  >
-                    Show Hint {renderKeyboardShortcut('S')}
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleReset(verse.reference);
-                  }}
-                  onKeyPress={(e) => {
-                    e.stopPropagation();
-                    handleReset(verse.reference);
-                  }}
-                  role="button"
-                  aria-label={`Reset memorization of ${verse.reference}`}
-                  _focus={{
-                    outline: 'none',
-                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                  }}
-                  _focusVisible={{
-                    outline: 'none',
-                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                  }}
-                >
-                  Reset {renderKeyboardShortcut('R')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleShowVerse(verse.reference);
-                  }}
-                  onKeyPress={(e) => {
-                    e.stopPropagation();
-                    handleShowVerse(verse.reference);
-                  }}
-                  role="button"
-                  aria-label={showFullVerse[verse.reference] ? `Hide full text of ${verse.reference}` : `Show full text of ${verse.reference}`}
-                  _focus={{
-                    outline: 'none',
-                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                  }}
-                  _focusVisible={{
-                    outline: 'none',
-                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                  }}
-                >
-                  {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Full Verse'} {renderKeyboardShortcut('F')}
-                </Button>
-              </>
-            )}
-          </Flex>
-          {showStatusButtons && renderStatusButtons(verse)}
+        {masteryState.feedback && (
+          <Text
+            color={masteryState.feedback.isCorrect ? 'green.500' : 'red.500'}
+            fontSize="sm"
+            role="alert"
+            aria-live="polite"
+          >
+            {masteryState.feedback.message}
+          </Text>
+        )}
+        <Flex gap={2} justify="space-between">
+          <Button
+            colorScheme="green"
+            onClick={() => handleMasteryAttempt(verse.reference)}
+            isLoading={masteryState.isSubmitting}
+            isDisabled={!masteryState.attempt.trim()}
+          >
+            Submit Attempt
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleMasteryToggle(verse.reference)}
+            isDisabled={masteryState.isSubmitting}
+          >
+            Exit Mastery Mode
+          </Button>
         </Flex>
       </VStack>
     </Box>
   );
-
-  // Add back the handleVerseFocus function
-  const handleVerseFocus = (reference: string) => {
-    const verseElement = verseRefs.current[reference];
-    if (verseElement) {
-      verseElement.focus();
-    }
-  };
 
   // Add back the renderDeleteDialog function
   const renderDeleteDialog = () => (
