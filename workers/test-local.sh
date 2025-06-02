@@ -52,6 +52,16 @@ if [ "$DB_CLEAN" != "y" ]; then
     check_status
 fi
 
+# Clear localStorage in the browser
+echo "${YELLOW}Please clear your browser's localStorage:${NC}"
+echo "1. Open your browser's developer tools (F12 or right-click -> Inspect)"
+echo "2. Go to the 'Application' tab"
+echo "3. Select 'Local Storage' on the left"
+echo "4. Right-click on 'http://localhost:5173' and select 'Clear'"
+echo "5. Refresh the page"
+echo "\n${YELLOW}Press Enter when you've cleared localStorage...${NC}"
+read -r
+
 # 1. Run initial schema. Don't try to change this, it's there because we deployed the live app incorrectly with this file.
 echo "${YELLOW}Running initial schema...${NC}"
 npx wrangler d1 execute DB --env development --file=./schema_test.sql

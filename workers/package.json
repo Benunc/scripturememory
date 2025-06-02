@@ -11,6 +11,7 @@
     "test:coverage": "vitest run --coverage",
     "wipe-dev-db": "wrangler d1 execute DB_DEV --command=\"DELETE FROM verses; DELETE FROM sessions; DELETE FROM magic_links; DELETE FROM users;\"",
     "reinit-dev-db": "wrangler d1 execute DB_DEV --file=./schema.sql",
+    "dev:stats": "wrangler d1 execute scripture-memory-dev --env development --command=\"SELECT * FROM user_stats WHERE user_id = 1;",
     "db:prod": "wrangler d1 execute DB --env production --remote",
     "db:prod:users": "wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM users;\"",
     "db:prod:verses": "wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM verses;\"",
