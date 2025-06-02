@@ -38,13 +38,11 @@ export function VerifyToken() {
         debug.log('auth', 'Verification result:', success);
         
         if (success) {
-          debug.log('auth', 'Verification successful, will redirect in 1 second');
+          debug.log('auth', 'Verification successful, reloading page');
           // Replace the current URL with the home page to prevent back navigation
           window.history.replaceState({}, '', '/');
-          setTimeout(() => {
-            debug.log('auth', 'Navigating to home page');
-            navigate('/', { replace: true });
-          }, 1000);
+          // Force a page reload to ensure auth state is properly initialized
+          window.location.reload();
         } else {
           debug.log('auth', 'Verification returned false');
           setVerificationError('Verification failed');
@@ -58,7 +56,7 @@ export function VerifyToken() {
     };
 
     verify();
-  }, [token, navigate, verifyToken]);
+  }, [token, verifyToken]);
 
   debug.log('auth', 'Current state:', { token, verificationError, isVerifying });
 

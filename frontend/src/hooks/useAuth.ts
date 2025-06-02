@@ -83,9 +83,8 @@ export const useAuth = () => {
         localStorage.setItem('session_token', sessionToken);
         localStorage.setItem('user_email', email);
         
-        setToken(sessionToken);
-        setUserEmail(email);
-        setIsAuthenticated(true);
+        // Force an immediate session check
+        await checkSession();
         
         debug.log('auth', 'Session set successfully');
         return true;
