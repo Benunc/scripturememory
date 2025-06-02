@@ -83,6 +83,7 @@ interface MasteryProgress {
   consecutive_perfect: number;
   is_mastered: boolean;
   mastery_date?: number;
+  last_attempt_date?: number;
 }
 
 // Update MasteryState interface
@@ -93,9 +94,286 @@ interface MasteryState {
   feedback: {
     isCorrect: boolean;
     message: string;
+    attempt?: string;  // Store the attempt for display
   } | null;
   progress: MasteryProgress | null;
 }
+
+// Move MasteryMode to be a separate component
+interface MasteryModeProps {
+  verse: Verse;
+  attempt: string;
+  isSubmitting: boolean;
+  feedback: {
+    isCorrect: boolean;
+    message: string;
+    attempt?: string;
+  } | null;
+  progress: MasteryProgress | null;
+  onAttempt: (reference: string) => Promise<void>;
+  onToggle: (reference: string) => Promise<void>;
+  onInput: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>, reference: string) => void;
+  isVisible: boolean; // Add this prop
+}
+
+const MasteryMode: React.FC<MasteryModeProps> = ({ 
+  verse, 
+  attempt,
+  isSubmitting,
+  feedback,
+  progress,
+  onAttempt, 
+  onToggle, 
+  onInput, 
+  onKeyDown,
+  isVisible
+}) => {
+  const [progressMessage, setProgressMessage] = useState<string>('');
+  const toast = useToast();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Focus textarea when component becomes visible
+  useEffect(() => {
+    if (isVisible) {
+      // Small delay to ensure the textarea is rendered and visible
+      const timer = setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+        }
+      }, 300); // Delay to account for collapse animation
+      return () => clearTimeout(timer);
+    }
+  }, [isVisible]); // Re-run when visibility changes
+
+  // Helper function to normalize words
+  const normalizeWord = (word: string): string => {
+    return word.toLowerCase().replace(/[.,;:!?'"-]/g, '');
+  };
+
+  // Helper function to get time until next attempt
+  const getTimeUntilNextAttempt = async (reference: string): Promise<string> => {
+    const lastAttempt = localStorage.getItem(`last_attempt_${reference}`);
+    if (!lastAttempt) {
+      // If no local timestamp, fetch from API
+      if (progress?.last_attempt_date) {
+        localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
+        const now = Date.now();
+        const hoursSinceLastAttempt = (now - progress.last_attempt_date) / (1000 * 60 * 60);
+        const hoursRemaining = Math.ceil(24 - hoursSinceLastAttempt);
+        if (hoursRemaining <= 0) return '';
+        return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
+      }
+      return '';
+    }
+    
+    const lastAttemptTime = parseInt(lastAttempt, 10);
+    const now = Date.now();
+    const hoursSinceLastAttempt = (now - lastAttemptTime) / (1000 * 60 * 60);
+    const hoursRemaining = Math.ceil(24 - hoursSinceLastAttempt);
+    
+    if (hoursRemaining <= 0) return '';
+    return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
+  };
+
+  // Helper function to get mastery progress message
+  const getMasteryProgressMessage = async (progress: MasteryProgress, reference: string): Promise<string> => {
+    if (progress.is_mastered) {
+      return "Congratulations! You've mastered this verse!";
+    }
+
+    const messages: string[] = [];
+    const timeUntilNextAttempt = await getTimeUntilNextAttempt(reference);
+    
+    // Check minimum attempts (5 required)
+    if (progress.total_attempts < 5) {
+      messages.push(`You need ${5 - progress.total_attempts} more attempts to qualify for mastery`);
+    }
+    
+    // Check overall accuracy (95% required)
+    if (progress.overall_accuracy < 0.95) {
+      const accuracyPercent = Math.round(progress.overall_accuracy * 100);
+      const neededPercent = Math.round(0.95 * 100);
+      messages.push(`Your overall accuracy is ${accuracyPercent}% (need ${neededPercent}%)`);
+    }
+    
+    // Check consecutive perfect attempts (3 required)
+    if (progress.consecutive_perfect < 3) {
+      messages.push(`You have ${progress.consecutive_perfect} consecutive perfect attempts (need 3)`);
+    }
+
+    // Add cooldown message if applicable
+    if (timeUntilNextAttempt) {
+      messages.push(`You can make your next attempt in ${timeUntilNextAttempt}`);
+    }
+
+    if (messages.length === 0) {
+      return "You're making great progress! Keep practicing to achieve mastery.";
+    }
+
+    return messages.join('. ') + '.';
+  };
+
+  useEffect(() => {
+    if (progress) {
+      void getMasteryProgressMessage(progress, verse.reference)
+        .then(message => setProgressMessage(message));
+    }
+  }, [progress, verse.reference]);
+
+  return (
+    <Box
+      bg={useColorModeValue('green.50', 'green.900')}
+      p={4}
+      borderRadius="md"
+      borderWidth="1px"
+      borderColor={useColorModeValue('green.200', 'green.700')}
+    >
+      <VStack align="stretch" spacing={4}>
+        <Text fontSize="lg" color={useColorModeValue('gray.700', 'gray.200')}>
+          Think you know {verse.reference} by heart? Enter it exactly right below, and you're one step closer to mastery.
+        </Text>
+        
+        {progress && (
+          <Box 
+            p={3} 
+            bg={useColorModeValue('white', 'gray.800')} 
+            borderRadius="md"
+            borderWidth="1px"
+            borderColor={useColorModeValue('gray.200', 'gray.600')}
+          >
+            <Text fontSize="sm" color={useColorModeValue('gray.600', 'gray.300')}>
+              {progressMessage}
+            </Text>
+          </Box>
+        )}
+
+        <Box position="relative">
+          <Textarea
+            ref={textareaRef}
+            value={attempt}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck="false"
+            autoSave="off"
+            autoFocus={false}
+            form=""
+            name=""
+            inputMode="text"
+            onChange={onInput}
+            onKeyDown={(e) => onKeyDown(e, verse.reference)}
+            onPaste={(e) => {
+              // Only prevent paste if it's a real paste event with more than 2 words
+              if (e.nativeEvent instanceof ClipboardEvent && 
+                  e.nativeEvent.clipboardData && 
+                  e.nativeEvent.clipboardData.getData('text').trim().split(/\s+/).length > 2) {
+                e.preventDefault();
+                toast({
+                  title: "No copy/paste allowed here!",
+                  description: "Gotta use your brain!",
+                  status: "warning",
+                  duration: 3000,
+                  isClosable: true,
+                  position: "top",
+                });
+              }
+            }}
+            placeholder="Type the verse from memory..."
+            size="lg"
+            rows={4}
+            isDisabled={isSubmitting}
+            _focus={{
+              outline: 'none',
+              boxShadow: '0 0 0 3px var(--chakra-colors-green-300)',
+            }}
+            _focusVisible={{
+              outline: 'none',
+              boxShadow: '0 0 0 3px var(--chakra-colors-green-300)',
+            }}
+            sx={{
+              textTransform: 'none',
+              '&::placeholder': {
+                textTransform: 'none'
+              }
+            }}
+          />
+        </Box>
+
+        {feedback && (
+          <Box>
+            {feedback.isCorrect ? (
+              <Text
+                color="green.500"
+                fontSize="sm"
+                role="alert"
+                aria-live="polite"
+              >
+                {feedback.message}
+              </Text>
+            ) : (
+              <Box
+                p={3}
+                bg={useColorModeValue('orange.50', 'orange.900')}
+                borderRadius="md"
+                borderWidth="1px"
+                borderColor={useColorModeValue('orange.200', 'orange.700')}
+              >
+                <Text fontSize="sm" color={useColorModeValue('gray.600', 'gray.300')} mb={2}>
+                  {feedback.message}
+                </Text>
+                {feedback.attempt && (
+                  <Box
+                    p={2}
+                    bg={useColorModeValue('white', 'gray.800')}
+                    borderRadius="md"
+                    borderWidth="1px"
+                    borderColor={useColorModeValue('gray.200', 'gray.600')}
+                  >
+                    {feedback.attempt.split(' ').map((word, index) => {
+                      const isCorrect = verse.text.split(' ').some(
+                        correctWord => normalizeWord(correctWord) === normalizeWord(word)
+                      );
+                      return (
+                        <Text
+                          key={index}
+                          as="span"
+                          color={isCorrect ? 'green.500' : 'red.500'}
+                          fontWeight={isCorrect ? 'normal' : 'bold'}
+                          mr={1}
+                        >
+                          {word}
+                        </Text>
+                      );
+                    })}
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Box>
+        )}
+
+        <Flex gap={2} justify="space-between">
+          <Button
+            colorScheme="green"
+            onClick={() => onAttempt(verse.reference)}
+            isLoading={isSubmitting}
+            isDisabled={!attempt.trim()}
+          >
+            Submit Attempt
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onToggle(verse.reference)}
+            isDisabled={isSubmitting}
+          >
+            Exit Mastery Mode
+          </Button>
+        </Flex>
+      </VStack>
+    </Box>
+  );
+};
 
 export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): JSX.Element => {
   const { verses, loading, error, onStatusChange, onDelete, showStatusButtons = true } = props;
@@ -261,28 +539,52 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     progress: null
   });
 
-  // Add function to get mastery progress message
-  const getMasteryProgressMessage = (progress: MasteryProgress): string => {
-    if (progress.is_mastered) {
-      return "Congratulations! You've mastered this verse!";
+  // Add helper function to check if enough time has passed since last attempt
+  const hasEnoughTimePassed = async (reference: string): Promise<boolean> => {
+    const lastAttempt = localStorage.getItem(`last_attempt_${reference}`);
+    if (!lastAttempt) {
+      // If no local timestamp, fetch from API
+      const progress = await fetchMasteryProgress(reference);
+      if (progress.last_attempt_date) {
+        localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
+        const now = Date.now();
+        const hoursSinceLastAttempt = (now - progress.last_attempt_date) / (1000 * 60 * 60);
+        return hoursSinceLastAttempt >= 24;
+      }
+      return true; // No previous attempts found
     }
+    
+    const lastAttemptTime = parseInt(lastAttempt, 10);
+    const now = Date.now();
+    const hoursSinceLastAttempt = (now - lastAttemptTime) / (1000 * 60 * 60);
+    
+    return hoursSinceLastAttempt >= 24;
+  };
 
-    const messages: string[] = [];
-    
-    if (progress.total_attempts < 5) {
-      messages.push(`You need ${5 - progress.total_attempts} more attempts to qualify for mastery`);
+  // Add helper function to get time until next attempt
+  const getTimeUntilNextAttempt = async (reference: string): Promise<string> => {
+    const lastAttempt = localStorage.getItem(`last_attempt_${reference}`);
+    if (!lastAttempt) {
+      // If no local timestamp, fetch from API
+      const progress = await fetchMasteryProgress(reference);
+      if (progress.last_attempt_date) {
+        localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
+        const now = Date.now();
+        const hoursSinceLastAttempt = (now - progress.last_attempt_date) / (1000 * 60 * 60);
+        const hoursRemaining = Math.ceil(24 - hoursSinceLastAttempt);
+        if (hoursRemaining <= 0) return '';
+        return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
+      }
+      return '';
     }
     
-    if (progress.overall_accuracy < 0.95) {
-      const accuracyPercent = Math.round(progress.overall_accuracy * 100);
-      messages.push(`Your overall accuracy is ${accuracyPercent}% (need 95%)`);
-    }
+    const lastAttemptTime = parseInt(lastAttempt, 10);
+    const now = Date.now();
+    const hoursSinceLastAttempt = (now - lastAttemptTime) / (1000 * 60 * 60);
+    const hoursRemaining = Math.ceil(24 - hoursSinceLastAttempt);
     
-    if (progress.consecutive_perfect < 3) {
-      messages.push(`You have ${progress.consecutive_perfect} consecutive perfect attempts (need 3)`);
-    }
-
-    return messages.join('. ') + '.';
+    if (hoursRemaining <= 0) return '';
+    return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
   };
 
   // Add function to fetch mastery progress
@@ -298,21 +600,41 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     }
 
     try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) {
+        throw new Error('No session token found');
+      }
+
       const response = await fetch(`/api/progress/mastery/${reference}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${sessionToken}`
         }
       });
 
       if (!response.ok) throw new Error('Failed to fetch mastery progress');
 
-      const progress = await response.json();
+      const data = await response.json();
+      
+      // Map API response to our frontend interface
+      const progress: MasteryProgress = {
+        total_attempts: data.totalAttempts || 0,
+        overall_accuracy: data.overallAccuracy || 0,
+        consecutive_perfect: data.perfectAttemptsInRow || 0,
+        is_mastered: data.isMastered || false,
+        mastery_date: data.masteryDate,
+        last_attempt_date: data.lastAttemptDate
+      };
       
       // Cache the progress
       localStorage.setItem(`mastery_progress_${reference}`, JSON.stringify({
         progress,
         timestamp: Date.now()
       }));
+
+      // Also update the last attempt timestamp in localStorage if it exists
+      if (progress.last_attempt_date) {
+        localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
+      }
 
       return progress;
     } catch (error) {
@@ -348,32 +670,90 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     }
   };
 
-  // Update handleMasteryAttempt to update progress
+  // Add helper function to normalize words (remove punctuation and convert to lowercase)
+  const normalizeWord = (word: string): string => {
+    return word.toLowerCase().replace(/[.,;:!?'"-]/g, '');
+  };
+
+  // Update handleMasteryAttempt to store attempt timestamps
   const handleMasteryAttempt = async (reference: string) => {
     const verse = verses.find(v => v.reference === reference);
     if (!verse) return;
 
+    // Check if enough time has passed since last attempt
+    if (!(await hasEnoughTimePassed(reference))) {
+      const timeUntilNextAttempt = await getTimeUntilNextAttempt(reference);
+      setMasteryState(prev => ({
+        ...prev,
+        feedback: {
+          isCorrect: false,
+          message: `You can make your next attempt in ${timeUntilNextAttempt}. Feel free to practice, but it won't count towards mastery until then.`,
+          attempt: masteryState.attempt
+        },
+        attempt: '',
+        isSubmitting: false
+      }));
+      return;
+    }
+
     setMasteryState(prev => ({ ...prev, isSubmitting: true }));
 
     try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) {
+        throw new Error('No session token found');
+      }
+
+      const words = verse.text.split(' ').map(normalizeWord);
+      const userWords = masteryState.attempt.split(' ').filter(word => word.trim());
+      const correctWords = userWords.filter(word => 
+        words.includes(normalizeWord(word))
+      );
+
+      // Calculate accuracy before making the API call
+      const accuracy = correctWords.length / words.length;
+      const accuracyPercent = Math.round(accuracy * 100);
+
+      // Generate feedback message
+      let feedbackMessage = '';
+      if (accuracy === 1) {
+        feedbackMessage = "Perfect! That's exactly right! Come back tomorrow to make your next attempt.";
+        // Store the attempt timestamp
+        localStorage.setItem(`last_attempt_${reference}`, Date.now().toString());
+      } else if (accuracy >= 0.95) {
+        feedbackMessage = `Great job! You got ${accuracyPercent}% correct.`;
+      } else if (accuracy >= 0.8) {
+        feedbackMessage = `Good attempt! You got ${accuracyPercent}% correct.`;
+      } else {
+        feedbackMessage = `Keep practicing! You need at least 80% accuracy to record an attempt.`;
+        setMasteryState(prev => ({
+          ...prev,
+          feedback: {
+            isCorrect: false,
+            message: feedbackMessage,
+            attempt: masteryState.attempt
+          },
+          attempt: '',
+          isSubmitting: false
+        }));
+        return; // Don't record attempts below 80%
+      }
+
+      // Only make the API call if accuracy is >= 80%
       const response = await fetch('/api/progress/verse', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${sessionToken}`
         },
         body: JSON.stringify({
           verse_reference: reference,
-          words_correct: masteryState.attempt.split(' ').filter(word => 
-            verse.text.toLowerCase().includes(word.toLowerCase())
-          ).length,
-          total_words: verse.text.split(' ').length
+          words_correct: correctWords.length,
+          total_words: words.length
         })
       });
 
       if (!response.ok) throw new Error('Failed to record attempt');
-
-      const result = await response.json();
       
       // Fetch updated progress
       const progress = await fetchMasteryProgress(reference);
@@ -381,8 +761,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       setMasteryState(prev => ({
         ...prev,
         feedback: {
-          isCorrect: result.isCorrect,
-          message: result.message
+          isCorrect: accuracy === 1,
+          message: feedbackMessage,
+          attempt: masteryState.attempt
         },
         attempt: '',
         progress
@@ -397,7 +778,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         ...prev,
         feedback: {
           isCorrect: false,
-          message: errorMessage
+          message: errorMessage,
+          attempt: masteryState.attempt
         }
       }));
     } finally {
@@ -405,24 +787,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     }
   };
 
-  // Update handleMasteryInput to be smarter about paste detection
+  // Update handleMasteryInput to remove redundant paste detection
   const handleMasteryInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    // Only block paste events that contain multiple words
-    if (e.nativeEvent instanceof ClipboardEvent && 
-        e.nativeEvent.clipboardData && 
-        e.nativeEvent.clipboardData.getData('text').trim().split(/\s+/).length > 1) {
-      e.preventDefault();
-      toast({
-        title: "No copy/paste allowed here!",
-        description: "Gotta use your brain!",
-        status: "warning",
-        duration: 3000,
-        isClosable: true,
-        position: "top",
-      });
-      return;
-    }
-
     setMasteryState(prev => ({
       ...prev,
       attempt: e.target.value,
@@ -1546,16 +1912,38 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
           </Collapse>
 
           <Collapse in={isInMasteryMode}>
-            {renderMasteryMode(verse)}
+            <MasteryMode
+              verse={verse}
+              attempt={masteryState.attempt}
+              isSubmitting={masteryState.isSubmitting}
+              feedback={masteryState.feedback}
+              progress={masteryState.progress}
+              onAttempt={handleMasteryAttempt}
+              onToggle={handleMasteryToggle}
+              onInput={handleMasteryInput}
+              onKeyDown={handleMasteryKeyDown}
+              isVisible={isInMasteryMode}
+            />
           </Collapse>
 
           {verse.status === ProgressStatus.InProgress && !isInMasteryMode && (
             <Button
               size="sm"
-              variant="outline"
-              colorScheme="green"
+              variant="solid"
+              bg={useColorModeValue('green.50', 'green.900')}
+              color={useColorModeValue('green.700', 'green.100')}
+              borderColor={useColorModeValue('green.200', 'green.700')}
+              borderWidth="1px"
               onClick={() => handleMasteryToggle(verse.reference)}
               mt={2}
+              _hover={{
+                bg: useColorModeValue('green.100', 'green.800'),
+                borderColor: useColorModeValue('green.300', 'green.600'),
+              }}
+              _active={{
+                bg: useColorModeValue('green.200', 'green.700'),
+                borderColor: useColorModeValue('green.400', 'green.500'),
+              }}
             >
               Enter Mastery Mode
             </Button>
@@ -1564,107 +1952,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       </Box>
     );
   };
-
-  // Update the mastery mode UI in renderVerseCard
-  const renderMasteryMode = (verse: Verse): JSX.Element => (
-    <Box
-      bg={useColorModeValue('green.50', 'green.900')}
-      p={4}
-      borderRadius="md"
-      borderWidth="1px"
-      borderColor={useColorModeValue('green.200', 'green.700')}
-    >
-      <VStack align="stretch" spacing={4}>
-        <Text fontSize="lg" color={useColorModeValue('gray.700', 'gray.200')}>
-          Think you know {verse.reference} by heart? Enter it exactly right below, and you're one step closer to mastery.
-        </Text>
-        
-        {masteryState.progress && (
-          <Box 
-            p={3} 
-            bg={useColorModeValue('white', 'gray.800')} 
-            borderRadius="md"
-            borderWidth="1px"
-            borderColor={useColorModeValue('gray.200', 'gray.600')}
-          >
-            <Text fontSize="sm" color={useColorModeValue('gray.600', 'gray.300')}>
-              {getMasteryProgressMessage(masteryState.progress)}
-            </Text>
-          </Box>
-        )}
-
-        <Box position="relative">
-          <Textarea
-            value={masteryState.attempt}
-            onChange={handleMasteryInput}
-            onKeyDown={(e) => handleMasteryKeyDown(e, verse.reference)}
-            onPaste={(e) => {
-              e.preventDefault();
-              toast({
-                title: "No copy/paste allowed here!",
-                description: "Gotta use your brain!",
-                status: "warning",
-                duration: 3000,
-                isClosable: true,
-                position: "top",
-              });
-            }}
-            onFocus={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.setAttribute('autocomplete', 'off');
-              target.setAttribute('autocorrect', 'off');
-              target.setAttribute('autoCapitalize', 'off');
-              target.setAttribute('spellcheck', 'false');
-            }}
-            placeholder="Type the verse from memory..."
-            size="lg"
-            rows={4}
-            isDisabled={masteryState.isSubmitting}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck="false"
-            autoFocus
-            _focus={{
-              outline: 'none',
-              boxShadow: '0 0 0 3px var(--chakra-colors-green-300)',
-            }}
-            _focusVisible={{
-              outline: 'none',
-              boxShadow: '0 0 0 3px var(--chakra-colors-green-300)',
-            }}
-          />
-        </Box>
-        {masteryState.feedback && (
-          <Text
-            color={masteryState.feedback.isCorrect ? 'green.500' : 'red.500'}
-            fontSize="sm"
-            role="alert"
-            aria-live="polite"
-          >
-            {masteryState.feedback.message}
-          </Text>
-        )}
-        <Flex gap={2} justify="space-between">
-          <Button
-            colorScheme="green"
-            onClick={() => handleMasteryAttempt(verse.reference)}
-            isLoading={masteryState.isSubmitting}
-            isDisabled={!masteryState.attempt.trim()}
-          >
-            Submit Attempt
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => handleMasteryToggle(verse.reference)}
-            isDisabled={masteryState.isSubmitting}
-          >
-            Exit Mastery Mode
-          </Button>
-        </Flex>
-      </VStack>
-    </Box>
-  );
 
   // Add back the renderDeleteDialog function
   const renderDeleteDialog = () => (
