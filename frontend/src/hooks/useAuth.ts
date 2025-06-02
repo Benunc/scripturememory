@@ -104,10 +104,10 @@ export const useAuth = () => {
 
   // Sign out
   const signOut = () => {
-    localStorage.removeItem('session_token');
-    localStorage.removeItem('user_email');
-    localStorage.removeItem('pending_email');
-    localStorage.removeItem('pending_token');
+    // Clear all localStorage items
+    localStorage.clear();
+    
+    // Reset state
     setToken(null);
     setUserEmail(null);
     setIsAuthenticated(false);
