@@ -71,27 +71,6 @@ Implementation plan for adding gamification, detailed progress tracking, and mas
 
 ### Phase 3: Frontend Development - Remaining Items
 
-#### Progress Tracking UI
-- [ ] Wire the api calls to properly score the new various ways a user can make an attempt
-  - [ ] Implement verse attempt recording
-    - [ ] Create VerseAttempt interface for tracking complete attempts
-    - [ ] Add verse attempt queue for batching API calls
-    - [ ] Implement debounced sync function for verse attempts
-    - [ ] Add error handling and retry logic for failed API calls
-    - [ ] Test verse attempt recording with various scenarios
-  - [ ] Add mastery system integration
-    - [ ] Track minimum 5 attempts requirement
-    - [ ] Calculate and track 95% overall accuracy
-    - [ ] Monitor 3 consecutive perfect attempts
-    - [ ] Implement mastery achievement celebration
-    - [ ] Test mastery system with various scenarios
-  - [ ] Implement points system
-    - [ ] Add points tracking for correct words (1 point each)
-    - [ ] Implement streak bonus (50% per word in streak)
-    - [ ] Add mastery achievement points (500 points)
-    - [ ] Track daily streak points (50 points)
-    - [ ] Test points system with various scenarios
-
 #### Mastery Mode UI Implementation
 - [ ] Add Mastery Mode toggle to verse cards
   - [ ] Design and implement subtle mastery mode button
