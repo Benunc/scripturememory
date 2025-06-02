@@ -190,16 +190,10 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
       messages.push(`You need ${5 - progress.total_attempts} more attempts to qualify for mastery`);
     }
     
-    // Check overall accuracy (95% required)
-    if (progress.overall_accuracy < 0.95) {
-      const accuracyPercent = Math.round(progress.overall_accuracy * 100);
-      const neededPercent = Math.round(0.95 * 100);
-      messages.push(`Your overall accuracy is ${accuracyPercent}% (need ${neededPercent}%)`);
-    }
-    
     // Check consecutive perfect attempts (3 required)
     if (progress.consecutive_perfect < 3) {
-      messages.push(`You have ${progress.consecutive_perfect} consecutive perfect attempts (need 3)`);
+      const attemptsText = progress.consecutive_perfect === 1 ? 'attempt' : 'attempts';
+      messages.push(`You have ${progress.consecutive_perfect} consecutive perfect ${attemptsText} (you need 3 attempts at least 24 hours apart)`);
     }
 
     // Add cooldown message if applicable
