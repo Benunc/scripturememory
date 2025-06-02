@@ -382,6 +382,35 @@ Content-Type: application/json
 - `401 Unauthorized`: Invalid or missing token
 - `404 Not Found`: Verse not found or unauthorized
 
+#### Check Mastery Progress
+```http
+GET /progress/mastery/:reference
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "total_attempts": 5,
+  "overall_accuracy": 0.95,
+  "consecutive_perfect": 3,
+  "is_mastered": true,
+  "mastery_date": 1234567890
+}
+```
+
+**Features**
+- Returns mastery progress for a specific verse
+- Calculates overall accuracy across all attempts
+- Tracks consecutive perfect attempts
+- Indicates if verse is mastered
+- Includes mastery date if achieved
+
+**Error Responses**
+- `400 Bad Request`: Missing reference
+- `401 Unauthorized`: Invalid or missing token
+- `404 Not Found`: Verse not found or unauthorized
+
 ### Mastery System
 
 Verses can be mastered by meeting these criteria:
