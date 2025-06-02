@@ -299,32 +299,44 @@ export const handleVerses = {
         });
       }
 
+      // Get verse reference from URL
       const url = new URL(request.url);
       const reference = decodeURIComponent(url.pathname.split('/').pop() || '');
       
       if (!reference) {
-        return new Response(JSON.stringify({ error: 'Verse reference is required' }), { 
+        return new Response(JSON.stringify({ error: 'Missing verse reference' }), { 
           status: 400,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      // Check if verse exists
-      const existing = await getDB(env).prepare(
+      const db = getDB(env);
+
+      // Verify verse exists and belongs to user
+      const verse = await db.prepare(
         'SELECT * FROM verses WHERE user_id = ? AND reference = ?'
       ).bind(userId, reference).first();
 
-      if (!existing) {
+      if (!verse) {
         return new Response(JSON.stringify({ error: 'Verse not found' }), { 
           status: 404,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      // Delete verse
-      await getDB(env).prepare(
-        'DELETE FROM verses WHERE user_id = ? AND reference = ?'
-      ).bind(userId, reference).run();
+      // Use D1's batch API for atomic operations
+      await db.batch([
+        // Delete mastery records
+        db.prepare('DELETE FROM mastered_verses WHERE user_id = ? AND verse_reference = ?').bind(userId, reference),
+        db.prepare('DELETE FROM verse_mastery WHERE user_id = ? AND verse_reference = ?').bind(userId, reference),
+
+        // Delete progress records
+        db.prepare('DELETE FROM word_progress WHERE user_id = ? AND verse_reference = ?').bind(userId, reference),
+        db.prepare('DELETE FROM verse_attempts WHERE user_id = ? AND verse_reference = ?').bind(userId, reference),
+
+        // Finally delete the verse
+        db.prepare('DELETE FROM verses WHERE user_id = ? AND reference = ?').bind(userId, reference)
+      ]);
 
       return new Response(null, { status: 204 });
     } catch (error) {

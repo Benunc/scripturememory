@@ -131,15 +131,15 @@ export async function updateStreak(userId: number, env: Env, eventTimestamp?: nu
 // Helper function to check and update mastery
 export async function updateMastery(userId: number, verseReference: string, env: Env): Promise<void> {
   const db = getDB(env);
+  console.log(`[updateMastery] Checking mastery for verse ${verseReference}`);
 
-  // Get all attempts for this verse (up to MIN_ATTEMPTS)
+  // Get all attempts for this verse
   const result = await db.prepare(`
     SELECT words_correct, total_words, created_at
     FROM verse_attempts
     WHERE user_id = ? AND verse_reference = ?
     ORDER BY created_at DESC
-    LIMIT ?
-  `).bind(userId, verseReference, MASTERY.MIN_ATTEMPTS).all();
+  `).bind(userId, verseReference).all();
 
   const attempts = result.results.map(row => ({
     verse_reference: verseReference,
@@ -147,22 +147,44 @@ export async function updateMastery(userId: number, verseReference: string, env:
     total_words: row.total_words as number
   }));
 
-  if (attempts.length < MASTERY.MIN_ATTEMPTS) return;
+  console.log(`[updateMastery] Found ${attempts.length} attempts`);
 
-  // Check if user has achieved mastery
-  const recentAttempts = attempts.slice(0, MASTERY.CONSECUTIVE_CORRECT);
-  const hasConsecutiveCorrect = recentAttempts.every(attempt => 
-    attempt.words_correct === attempt.total_words
-  );
+  if (attempts.length < MASTERY.MIN_ATTEMPTS) {
+    console.log(`[updateMastery] Not enough attempts (${attempts.length} < ${MASTERY.MIN_ATTEMPTS})`);
+    return;
+  }
 
-  if (!hasConsecutiveCorrect) return;
+  // Find the index where we have 3 consecutive perfect attempts
+  let perfectAttemptsStart = -1;
+  for (let i = 0; i <= attempts.length - MASTERY.CONSECUTIVE_CORRECT; i++) {
+    const isConsecutive = attempts.slice(i, i + MASTERY.CONSECUTIVE_CORRECT).every(attempt => 
+      attempt.words_correct === attempt.total_words
+    );
+    if (isConsecutive) {
+      perfectAttemptsStart = i;
+      break;
+    }
+  }
 
-  // Calculate overall accuracy using all attempts
-  const totalCorrect = attempts.reduce((sum, attempt) => sum + attempt.words_correct, 0);
-  const totalWords = attempts.reduce((sum, attempt) => sum + attempt.total_words, 0);
+  console.log(`[updateMastery] Found consecutive perfect attempts starting at index ${perfectAttemptsStart}`);
+
+  if (perfectAttemptsStart === -1) {
+    console.log(`[updateMastery] No consecutive perfect attempts found`);
+    return;
+  }
+
+  // Calculate overall accuracy using all attempts up to and including the perfect attempts
+  const accuracyAttempts = attempts.slice(0, perfectAttemptsStart + MASTERY.CONSECUTIVE_CORRECT);
+  const totalCorrect = accuracyAttempts.reduce((sum, attempt) => sum + attempt.words_correct, 0);
+  const totalWords = accuracyAttempts.reduce((sum, attempt) => sum + attempt.total_words, 0);
   const accuracy = totalCorrect / totalWords;
 
-  if (accuracy < MASTERY.MIN_ACCURACY) return;
+  console.log(`[updateMastery] Accuracy: ${accuracy} (${totalCorrect}/${totalWords})`);
+
+  if (accuracy < MASTERY.MIN_ACCURACY) {
+    console.log(`[updateMastery] Accuracy too low (${accuracy} < ${MASTERY.MIN_ACCURACY})`);
+    return;
+  }
 
   // Check if verse is already mastered
   const isMastered = await db.prepare(`
@@ -170,7 +192,12 @@ export async function updateMastery(userId: number, verseReference: string, env:
     WHERE user_id = ? AND verse_reference = ?
   `).bind(userId, verseReference).first();
 
-  if (isMastered) return;
+  if (isMastered) {
+    console.log(`[updateMastery] Verse already mastered`);
+    return;
+  }
+
+  console.log(`[updateMastery] Awarding mastery!`);
 
   // Record mastery
   await db.prepare(`
@@ -205,6 +232,8 @@ export async function updateMastery(userId: number, verseReference: string, env:
         total_points = total_points + ?
     WHERE user_id = ?
   `).bind(POINTS.MASTERY_ACHIEVED, userId).run();
+
+  console.log(`[updateMastery] Mastery awarded successfully`);
 }
 
 export const handleGamification = {

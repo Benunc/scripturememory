@@ -276,5 +276,102 @@ export const handleProgress = {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  },
+
+  // Get mastery progress for a verse
+  getMasteryProgress: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get verse reference from URL
+      const url = new URL(request.url);
+      const verseReference = decodeURIComponent(url.pathname.split('/').pop() || '');
+      
+      if (!verseReference) {
+        return new Response(JSON.stringify({ error: 'Missing verse reference' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Verify verse exists and belongs to user
+      const verse = await getDB(env).prepare(
+        'SELECT * FROM verses WHERE user_id = ? AND reference = ?'
+      ).bind(userId, verseReference).first();
+
+      if (!verse) {
+        return new Response(JSON.stringify({ error: 'Verse not found or unauthorized' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+      try {
+        // Get all attempts for this verse
+        const attempts = await db.prepare(`
+          SELECT 
+            words_correct,
+            total_words,
+            created_at
+          FROM verse_attempts
+          WHERE user_id = ? AND verse_reference = ?
+          ORDER BY created_at DESC
+        `).bind(userId, verseReference).all();
+
+        // Calculate perfect attempts in a row
+        let perfectAttemptsInRow = 0;
+        let lastAttemptDate = null;
+        let recordedAttempts = 0;
+
+        if (attempts.results.length > 0) {
+          recordedAttempts = attempts.results.length;
+          lastAttemptDate = attempts.results[0].created_at;
+
+          // Count perfect attempts in a row from most recent
+          for (const attempt of attempts.results) {
+            if (attempt.words_correct === attempt.total_words) {
+              perfectAttemptsInRow++;
+            } else {
+              break;
+            }
+          }
+        }
+
+        return new Response(JSON.stringify({
+          perfectAttemptsInRow,
+          recordedAttempts,
+          lastAttemptDate,
+          totalAttempts: attempts.results.length
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        console.error('Error getting mastery progress:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error getting mastery progress:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 }; 

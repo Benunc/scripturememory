@@ -249,40 +249,148 @@ for i in {1..2}; do
   ATTEMPT_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/verse \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $SESSION_TOKEN2" \
-    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":14,\"total_words\":15,\"created_at\":$TIMESTAMP}")
+    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":10,\"total_words\":15,\"created_at\":$TIMESTAMP}")
   check_status
-  echo "${BLUE}Record attempt $i response:${NC}"
+  echo "${BLUE}Record attempt response:${NC}"
   echo "$ATTEMPT_RESPONSE"
-
-  echo "${YELLOW}Checking stats after attempt $i...${NC}"
-  STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$TIMESTAMP" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $SESSION_TOKEN2")
-  check_status
-  echo "${BLUE}Stats after attempt $i:${NC}"
-  echo "$STATS_RESPONSE"
 done
 
-# Then 3 perfect attempts to trigger mastery
-for i in {3..5}; do
+# Add 3 more attempts with some mistakes
+for i in {1..3}; do
   # Each attempt is 1 day apart
-  TIMESTAMP=$((BASE_TIMESTAMP + (i * 86400000)))
+  TIMESTAMP=$((BASE_TIMESTAMP + ((i + 2) * 86400000)))  # Start 2 days after last attempt
+  ATTEMPT_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/verse \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2" \
+    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":10,\"total_words\":15,\"created_at\":$TIMESTAMP}")
+  check_status
+  echo "${BLUE}Record attempt response:${NC}"
+  echo "$ATTEMPT_RESPONSE"
+done
+
+# Add 3 perfect attempts in a row to achieve mastery
+echo "${YELLOW}Adding perfect attempts to achieve mastery...${NC}"
+for i in {1..3}; do
+  # Each attempt is 1 day apart
+  TIMESTAMP=$((BASE_TIMESTAMP + ((i + 5) * 86400000)))  # Start 5 days after last attempt
   ATTEMPT_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/verse \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $SESSION_TOKEN2" \
     -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":15,\"total_words\":15,\"created_at\":$TIMESTAMP}")
   check_status
-  echo "${BLUE}Record attempt $i response:${NC}"
+  echo "${BLUE}Record attempt response:${NC}"
   echo "$ATTEMPT_RESPONSE"
+done
 
-  echo "${YELLOW}Checking stats after attempt $i...${NC}"
+# Add 2 more perfect attempts
+for i in {1..2}; do
+  # Each attempt is 1 day apart
+  TIMESTAMP=$((BASE_TIMESTAMP + ((i + 8) * 86400000)))  # Start 8 days after last attempt
+  ATTEMPT_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/verse \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2" \
+    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":15,\"total_words\":15,\"created_at\":$TIMESTAMP}")
+  check_status
+  echo "${BLUE}Record attempt response:${NC}"
+  echo "$ATTEMPT_RESPONSE"
+done
+
+# Check stats immediately after mastery attempts
+echo "${YELLOW}Checking stats immediately after mastery attempts...${NC}"
+STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$TIMESTAMP" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+check_status
+echo "${BLUE}Stats immediately after mastery attempts:${NC}"
+echo "$STATS_RESPONSE"
+
+# Add a longer delay to ensure mastery check completes
+echo "${YELLOW}Waiting for mastery check to complete...${NC}"
+sleep 10
+
+# Test mastery progress endpoint
+echo "${YELLOW}Testing mastery progress endpoint...${NC}"
+MASTERY_PROGRESS_RESPONSE=$(curl -s -X GET "http://localhost:8787/progress/mastery/Psalm%2023:1" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+check_status
+echo "${BLUE}Mastery progress response:${NC}"
+echo "$MASTERY_PROGRESS_RESPONSE"
+
+# Verify the response contains expected data
+if echo "$MASTERY_PROGRESS_RESPONSE" | grep -q '"perfectAttemptsInRow":5'; then
+  echo "${GREEN}✓ Correct number of perfect attempts in a row${NC}"
+else
+  echo "${RED}✗ Incorrect number of perfect attempts in a row${NC}"
+  echo "${YELLOW}Waiting another 5 seconds and checking again...${NC}"
+  sleep 5
+  MASTERY_PROGRESS_RESPONSE=$(curl -s -X GET "http://localhost:8787/progress/mastery/Psalm%2023:1" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2")
+  echo "${BLUE}Second mastery progress response:${NC}"
+  echo "$MASTERY_PROGRESS_RESPONSE"
+  if echo "$MASTERY_PROGRESS_RESPONSE" | grep -q '"perfectAttemptsInRow":5'; then
+    echo "${GREEN}✓ Correct number of perfect attempts in a row (after retry)${NC}"
+  else
+    echo "${RED}✗ Still incorrect number of perfect attempts in a row${NC}"
+    exit 1
+  fi
+fi
+
+if echo "$MASTERY_PROGRESS_RESPONSE" | grep -q '"recordedAttempts":11'; then
+  echo "${GREEN}✓ Correct total number of recorded attempts${NC}"
+else
+  echo "${RED}✗ Incorrect total number of recorded attempts${NC}"
+  exit 1
+fi
+
+# Verify mastery points were awarded
+echo "${YELLOW}Checking stats after mastery...${NC}"
+STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$TIMESTAMP" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+check_status
+echo "${BLUE}Stats after mastery:${NC}"
+echo "$STATS_RESPONSE"
+
+# Verify verses_mastered and total_points
+if echo "$STATS_RESPONSE" | grep -q '"verses_mastered":1'; then
+  echo "${GREEN}✓ Verse marked as mastered${NC}"
+else
+  echo "${RED}✗ Verse not marked as mastered${NC}"
+  echo "${YELLOW}Waiting another 5 seconds and checking again...${NC}"
+  sleep 5
   STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$TIMESTAMP" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $SESSION_TOKEN2")
-  check_status
-  echo "${BLUE}Stats after attempt $i:${NC}"
+  echo "${BLUE}Second stats check:${NC}"
   echo "$STATS_RESPONSE"
-done
+  if echo "$STATS_RESPONSE" | grep -q '"verses_mastered":1'; then
+    echo "${GREEN}✓ Verse marked as mastered (after retry)${NC}"
+  else
+    echo "${RED}✗ Still not marked as mastered${NC}"
+    exit 1
+  fi
+fi
+
+if echo "$STATS_RESPONSE" | grep -q '"total_points":1186'; then
+  echo "${GREEN}✓ Correct total points (including mastery bonus)${NC}"
+else
+  echo "${RED}✗ Incorrect total points${NC}"
+  echo "${YELLOW}Waiting another 5 seconds and checking again...${NC}"
+  sleep 5
+  STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats?timestamp=$TIMESTAMP" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2")
+  echo "${BLUE}Second stats check:${NC}"
+  echo "$STATS_RESPONSE"
+  if echo "$STATS_RESPONSE" | grep -q '"total_points":1186'; then
+    echo "${GREEN}✓ Correct total points (after retry)${NC}"
+  else
+    echo "${RED}✗ Still incorrect total points${NC}"
+    exit 1
+  fi
+fi
 
 # Add another verse (1 day after last attempt)
 TIMESTAMP=$((BASE_TIMESTAMP + (6 * 86400000)))  # Add 6 days (1 day after last attempt)

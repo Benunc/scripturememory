@@ -59,6 +59,7 @@ router.delete('/verses/:reference', handleVerses.deleteVerse);
 // Progress routes
 router.post('/progress/word', handleProgress.recordWordProgress);
 router.post('/progress/verse', handleProgress.recordVerseAttempt);
+router.get('/progress/mastery/:reference', handleProgress.getMasteryProgress);
 
 // Gamification routes
 router.post('/gamification/points', handleGamification.recordPointEvent);
