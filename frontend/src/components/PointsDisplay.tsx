@@ -53,8 +53,8 @@ export const PointsDisplay: React.FC<PointsDisplayProps> = ({ initialPoints = 0 
     <Tooltip label="View points breakdown" placement="bottom">
       <Box
         position="fixed"
-        top="20px"
-        right="20px"
+        top="58px"
+        right="85px"
         zIndex="1000"
         onClick={handleClick}
         cursor="pointer"
