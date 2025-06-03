@@ -181,7 +181,7 @@ Implementation plan for adding gamification, detailed progress tracking, and mas
 
 ### Real-time Points Display
 - [ ] Create PointsDisplay component
-  - [ ] Design floating points counter for desktop
+  - [ ] Design floating points counter for desktop and mobile
   - [ ] Implement green pulse animation on updates
   - [ ] Add click handler for navigation
   - [ ] Make it sticky/overlay on desktop
