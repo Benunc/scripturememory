@@ -47,7 +47,7 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded, addVerse }) =>
     setIsSubmitting(true);
     try {
       debug.log('verses', 'Attempting to add verse:', { reference, text });
-      await addVerse({ reference, text, status: 'not_started' });
+      await addVerse({ reference, text, status: 'not_started', translation: 'not specified' });
       debug.log('verses', 'Verse added successfully');
       setReference('');
       setText('');
