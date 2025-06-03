@@ -86,6 +86,29 @@ export const handleProgress = {
             SELECT 1 FROM user_stats WHERE user_id = ?
           `).bind(userId).first();
 
+          // Get all word progress for this verse in chronological order
+          const recentProgress = await db.prepare(`
+            SELECT word_index, is_correct, created_at
+            FROM word_progress
+            WHERE user_id = ? AND verse_reference = ?
+            ORDER BY created_at ASC
+          `).bind(userId, verse_reference).all();
+
+          // Count consecutive correct words up to this point
+          let streakLength = 0;
+          for (const progress of recentProgress.results) {
+            if (progress.is_correct === 1) {
+              streakLength++;
+            } else {
+              break;
+            }
+          }
+
+          // Calculate points with streak multiplier
+          // First word = 1 point, each subsequent correct word adds 0.5 to multiplier
+          const multiplier = 1 + ((streakLength - 1) * POINTS.STREAK_MULTIPLIER);
+          const pointsEarned = Math.round(POINTS.WORD_CORRECT * multiplier);
+
           if (!stats) {
             // Create initial stats if they don't exist
             await db.prepare(`
@@ -99,7 +122,7 @@ export const handleProgress = {
                 last_activity_date,
                 created_at
               ) VALUES (?, ?, 0, 0, 0, 0, ?, ?)
-            `).bind(userId, POINTS.WORD_CORRECT, created_at || Date.now(), created_at || Date.now()).run();
+            `).bind(userId, pointsEarned, created_at || Date.now(), created_at || Date.now()).run();
           } else {
             // Update existing stats
             await db.prepare(`
@@ -107,7 +130,7 @@ export const handleProgress = {
               SET total_points = total_points + ?,
                   last_activity_date = ?
               WHERE user_id = ?
-            `).bind(POINTS.WORD_CORRECT, created_at || Date.now(), userId).run();
+            `).bind(pointsEarned, created_at || Date.now(), userId).run();
           }
 
           // Record point event
@@ -121,8 +144,8 @@ export const handleProgress = {
             ) VALUES (?, 'word_correct', ?, ?, ?)
           `).bind(
             userId,
-            POINTS.WORD_CORRECT,
-            JSON.stringify({ verse_reference, word_index, word }),
+            pointsEarned,
+            JSON.stringify({ verse_reference, word_index, word, streak_length: streakLength }),
             created_at || Date.now()
           ).run();
         }

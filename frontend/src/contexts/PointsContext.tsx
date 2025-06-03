@@ -19,11 +19,23 @@ export const usePoints = () => {
 };
 
 export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [points, setPoints] = useState(0);
+  const [points, setPoints] = useState(() => {
+    // Initialize from localStorage if available
+    const storedPoints = localStorage.getItem('points');
+    return storedPoints ? parseInt(storedPoints, 10) : 0;
+  });
   const { isAuthenticated } = useAuth();
+  const [lastRefresh, setLastRefresh] = useState(0);
+  const REFRESH_COOLDOWN = 5000; // 5 seconds between refreshes
 
   const refreshPoints = async () => {
     if (!isAuthenticated) return;
+
+    const now = Date.now();
+    if (now - lastRefresh < REFRESH_COOLDOWN) {
+      debug.log('api', 'Skipping points refresh - in cooldown');
+      return;
+    }
 
     try {
       const sessionToken = localStorage.getItem('session_token');
@@ -46,18 +58,19 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const newPoints = data.total_points || 0;
       setPoints(newPoints);
       localStorage.setItem('points', newPoints.toString());
+      setLastRefresh(now);
     } catch (error) {
       debug.error('api', 'Error fetching points:', error);
     }
   };
 
   const updatePoints = (newPoints: number) => {
+    // Update local state and localStorage immediately
     setPoints(newPoints);
     localStorage.setItem('points', newPoints.toString());
-    // Add a delay before refreshing from server to allow backend to process
-    setTimeout(() => {
-      void refreshPoints();
-    }, 1000); // 1 second delay
+    
+    // Then sync with server in the background
+    void refreshPoints();
   };
 
   // Refresh points when component mounts and when auth state changes
