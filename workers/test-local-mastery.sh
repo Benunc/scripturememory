@@ -172,7 +172,7 @@ if [ -z "$SESSION_TOKEN2" ]; then
     exit 1
 fi
 
-BASE_TIMESTAMP=1713801600
+BASE_TIMESTAMP=$(date -v-4d +%s)
 echo "\n${GREEN}Session token: $SESSION_TOKEN2${NC}"
 
 echo "${YELLOW}Adding new verse...${NC}"
