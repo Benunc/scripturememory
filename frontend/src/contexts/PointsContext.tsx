@@ -8,9 +8,9 @@ interface PointsContextType {
   refreshPoints: () => Promise<void>;
 }
 
-const PointsContext = createContext<PointsContextType | null>(null);
+const PointsContext = createContext<PointsContextType | undefined>(undefined);
 
-const usePoints = () => {
+export const usePoints = () => {
   const context = useContext(PointsContext);
   if (!context) {
     throw new Error('usePoints must be used within a PointsProvider');
@@ -19,11 +19,7 @@ const usePoints = () => {
 };
 
 export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [points, setPoints] = useState(() => {
-    // Initialize from localStorage if available
-    const saved = localStorage.getItem('points');
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  const [points, setPoints] = useState(0);
   const { isAuthenticated } = useAuth();
 
   const refreshPoints = async () => {
@@ -58,8 +54,13 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const updatePoints = (newPoints: number) => {
     setPoints(newPoints);
     localStorage.setItem('points', newPoints.toString());
+    // Add a delay before refreshing from server to allow backend to process
+    setTimeout(() => {
+      void refreshPoints();
+    }, 1000); // 1 second delay
   };
 
+  // Refresh points when component mounts and when auth state changes
   useEffect(() => {
     void refreshPoints();
   }, [isAuthenticated]);
@@ -69,6 +70,4 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       {children}
     </PointsContext.Provider>
   );
-};
-
-export { usePoints }; 
+}; 

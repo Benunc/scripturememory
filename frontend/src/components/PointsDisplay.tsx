@@ -19,7 +19,7 @@ export const PointsDisplay: React.FC<PointsDisplayProps> = ({ initialPoints = 0 
   const [prevPoints, setPrevPoints] = useState(initialPoints);
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const { points } = usePoints();
+  const { points, refreshPoints } = usePoints();
 
   // Color mode values
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -37,9 +37,15 @@ export const PointsDisplay: React.FC<PointsDisplayProps> = ({ initialPoints = 0 
   }, [points, prevPoints]);
 
   // Navigate to points stats page
-  const handleClick = () => {
+  const handleClick = async () => {
+    await refreshPoints();
     navigate('/points');
   };
+
+  // Refresh points when component mounts or when returning to main app
+  useEffect(() => {
+    void refreshPoints();
+  }, []);
 
   if (!isAuthenticated) return null;
 

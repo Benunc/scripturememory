@@ -873,14 +873,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         progress.consecutive_perfect === 2 && 
         !timeUntilNext;
 
-      // If this will trigger mastery, update points immediately
-      if (willTriggerMastery) {
-        const currentPoints = parseInt(localStorage.getItem('points') || '0', 10);
-        const newPoints = currentPoints + 500; // 500 points for mastery
-        localStorage.setItem('points', newPoints.toString());
-        updatePoints(newPoints);
-      }
-
       // Generate feedback message
       let feedbackMessage = '';
       if (accuracy === 1) {
@@ -963,6 +955,10 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
       if (updatedProgress.is_mastered) {
         await onStatusChange(reference, ProgressStatus.Mastered);
+        // Wait for the backend to process mastery and points
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Refresh points from server
+        await refreshPoints();
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to record attempt. Please try again.';

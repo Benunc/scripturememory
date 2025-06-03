@@ -184,34 +184,43 @@ check_status
 echo "${BLUE}Add verse response:${NC}"
 echo "$ADD_VERSE_RESPONSE"
 
-echo "${YELLOW}Adding imperfect attempt to get to 5 total attempts later...${NC}"
+echo "${YELLOW}Adding imperfect attempts to get to 5 total attempts later...${NC}"
 
   TIMESTAMP1=$((BASE_TIMESTAMP + 86400000)) # Start 1 day after last attempt
-  ATTEMPT_RESPONSE2=$(curl -s -X POST http://localhost:8787/progress/verse \
+  ATTEMPT_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/verse \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $SESSION_TOKEN2" \
     -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":14,\"total_words\":15,\"created_at\":$TIMESTAMP1}")
   check_status
   echo "${BLUE}Record attempt response:${NC}"
+  echo "$ATTEMPT_RESPONSE"
+
+  TIMESTAMP2=$((TIMESTAMP1 + 86400000)) # Start 1 day after last attempt
+  ATTEMPT_RESPONSE5=$(curl -s -X POST http://localhost:8787/progress/verse \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2" \
+    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":14,\"total_words\":15,\"created_at\":$TIMESTAMP2}")
+  check_status
+  echo "${BLUE}Record attempt response:${NC}"
   echo "$ATTEMPT_RESPONSE2"
 
-# Add 1 more perfect attempt
+# Add perfect attempt
 
-  TIMESTAMP2=$((TIMESTAMP1 + 86400000))  # 1 day has passed, so we add another day
+  TIMESTAMP3=$((TIMESTAMP2 + 86400000))  # 1 day has passed, so we add another day
   ATTEMPT_RESPONSE3=$(curl -s -X POST http://localhost:8787/progress/verse \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $SESSION_TOKEN2" \
-    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":15,\"total_words\":15,\"created_at\":$TIMESTAMP2}")
+    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":15,\"total_words\":15,\"created_at\":$TIMESTAMP3}")
   check_status
   echo "${BLUE}Record attempt response:${NC}"
   echo "$ATTEMPT_RESPONSE3"
 
 
-  TIMESTAMP3=$((TIMESTAMP2 + ((i + 9) * 86400000)))  # Start 8 days after last attempt
+  TIMESTAMP4=$((TIMESTAMP3 + 86400000))  # one more day
   ATTEMPT_RESPONSE4=$(curl -s -X POST http://localhost:8787/progress/verse \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $SESSION_TOKEN2" \
-    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":15,\"total_words\":15,\"created_at\":$TIMESTAMP3}")
+    -d "{\"verse_reference\":\"Psalm 23:1\",\"words_correct\":15,\"total_words\":15,\"created_at\":$TIMESTAMP4}")
   check_status
   echo "${BLUE}Record attempt response:${NC}"
   echo "$ATTEMPT_RESPONSE4"
