@@ -1438,7 +1438,10 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     
     // Ensure we don't try to reveal beyond the verse length
     if (nextWordIndex >= words.length) {
-      setAnnouncedWord("All words have been revealed");
+      setGuessFeedback({
+        isCorrect: false,
+        message: "Great job! Practice again with the reset button."
+      });
       return;
     }
 
@@ -1482,14 +1485,12 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     setUserGuess('');
     setGuessFeedback(null);
     
-    if (clearProgress) {
-      // Only clear recorded words if explicitly requested
-      setRecordedWords(prev => {
-        const newRecordedWords = prev.filter(word => word.verse_reference !== reference);
-        localStorage.setItem('recordedWords', JSON.stringify(newRecordedWords));
-        return newRecordedWords;
-      });
-    }
+    // Clear recorded words from localStorage for this verse
+    setRecordedWords(prev => {
+      const newRecordedWords = prev.filter(word => word.verse_reference !== reference);
+      localStorage.setItem('recordedWords', JSON.stringify(newRecordedWords));
+      return newRecordedWords;
+    });
     
     // Maintain focus on the verse element
     const verseElement = verseRefs.current[reference];
@@ -1509,7 +1510,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     if (nextWordIndex >= words.length) {
       setGuessFeedback({
         isCorrect: false,
-        message: "You've completed this verse!"
+        message: "Great job! Practice again with the reset button."
       });
       return;
     }
@@ -1555,9 +1556,12 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       const newRevealedWords = [...revealedWords, nextWordIndex];
       setRevealedWords(newRevealedWords);
       setUserGuess('');
+      
+      // Check if this was the last word
+      const isLastWord = nextWordIndex === words.length - 1;
       setGuessFeedback({
         isCorrect: true,
-        message: "Correct! Keep going!"
+        message: isLastWord ? "Great job! Practice again with the reset button." : "Correct! Keep going!"
       });
 
       // Update status to In Progress on first word if Not Started
@@ -1585,11 +1589,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         isCorrect: false,
         message: "Not quite right. Try again or use the hint button."
       });
-      setUserGuess(''); // Clear the input after incorrect guess
-      // Keep focus on input for retry
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
+      // Reset streak on incorrect guess
+      setConsecutiveCorrectGuesses(0);
     }
   };
 
