@@ -180,19 +180,19 @@ Implementation plan for adding gamification, detailed progress tracking, and mas
 ## Points Display Feature
 
 ### Real-time Points Display
-- [ ] Create PointsDisplay component
-  - [ ] Design floating points counter for desktop and mobile
-  - [ ] Implement green pulse animation on updates
-  - [ ] Add click handler for navigation
-  - [ ] Make it sticky/overlay on desktop
-  - [ ] Ensure mobile responsiveness
+- [x] Create PointsDisplay component
+  - [x] Design floating points counter for desktop and mobile
+  - [x] Implement green pulse animation on updates
+  - [x] Add click handler for navigation
+  - [x] Make it sticky/overlay on desktop
+  - [x] Ensure mobile responsiveness
 
 ### Points Stats Page
-- [ ] Create new route `/points`
-- [ ] Design PointsStats page component
-  - [ ] Add back button to return to main app
-  - [ ] Display total points prominently
-  - [ ] Show points breakdown by category:
+- [x] Create new route `/points`
+- [x] Design PointsStats page component
+  - [x] Add back button to return to main app
+  - [x] Display total points prominently
+  - [x] Show points breakdown by category:
     - [ ] Points from adding verses
     - [ ] Points from correct words
     - [ ] Points from streaks

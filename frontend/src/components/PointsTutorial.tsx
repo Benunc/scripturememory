@@ -37,12 +37,11 @@ export const PointsTutorial: React.FC = () => {
           </Heading>
           <UnorderedList spacing={2} color={textColor}>
             <ListItem>1 point for each correct word during memorization practice</ListItem>
-            <ListItem>1 point for each correct word during mastery practice</ListItem>
+            <ListItem>50% bonus points for each word in a streak (e.g., 3rd word in a row = 1.5 points)</ListItem>
             <ListItem>10 points for adding new verses to memorize (limit 3 points-earning verses per day)</ListItem>
             <ListItem>500 points for achieving mastery of a verse</ListItem>
-            <ListItem>50% bonus points for each word in a streak (e.g., 3rd word in a row = 1.5 points)</ListItem>
             <ListItem>50 points for maintaining a daily practice streak (awarded after 2+ days)</ListItem>
-            <ListItem>Points are awarded in real-time as you practice</ListItem>
+            <ListItem>Points are awarded in real-time as you practice, and make </ListItem>
           </UnorderedList>
         </Box>
 
@@ -52,7 +51,7 @@ export const PointsTutorial: React.FC = () => {
           </Heading>
           <UnorderedList spacing={2} color={textColor}>
             <ListItem>Complete 5 total attempts with at least 80% accuracy</ListItem>
-            <ListItem>Get 3 perfect attempts (100% accuracy)</ListItem>
+            <ListItem>Get 3 perfect attempts in a row (100% accuracy)</ListItem>
             <ListItem>Perfect attempts must be at least 24 hours apart</ListItem>
             <ListItem>Once mastered, you'll receive a 500-point bonus!</ListItem>
           </UnorderedList>
@@ -64,9 +63,8 @@ export const PointsTutorial: React.FC = () => {
           </Heading>
           <UnorderedList spacing={2} color={textColor}>
             <ListItem>Practice regularly to build up your points</ListItem>
-            <ListItem>Focus on accuracy over speed</ListItem>
-            <ListItem>Use the mastery mode to track your progress</ListItem>
-            <ListItem>Check back here to see your points grow!</ListItem>
+            <ListItem>Focus on accuracy over speed, there's no time limit.</ListItem>
+            <ListItem>Check back here to see your points, streaks, and mastery grow!</ListItem>
           </UnorderedList>
         </Box>
 

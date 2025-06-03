@@ -350,42 +350,12 @@ export const handleAuth = {
     if (!existingUser) {
       console.log('No existing user found, creating new user');
       // Create new user
-      const result = await db.prepare(`
-        INSERT INTO users (
-          email,
-          created_at,
-          last_login_at,
-          has_donated,
-          total_donations,
-          donation_count,
-          last_donation_date,
-          last_donation_amount,
-          preferred_translation
-        ) VALUES (?, ?, ?, false, 0, 0, NULL, NULL, 'NIV')
-      `).bind(
-        magicLink.email,
-        Date.now(),
-        Date.now()
-      ).run() as D1Result;
-
-      console.log('User creation result:', result);
-
-      // Get the last inserted row ID
-      const lastRowId = result.meta.last_row_id;
-      console.log('Last inserted row ID:', lastRowId);
+      const result = await db.prepare(
+        'INSERT INTO users (email, created_at) VALUES (?, ?)'
+      ).bind(magicLink.email, Date.now()).run();
+      userId = Number(result.meta.last_row_id);
       
-      if (lastRowId === null || lastRowId === undefined) {
-        throw new Error('Failed to get last inserted row ID');
-      }
-      const parsedId = Number(lastRowId);
-      if (isNaN(parsedId)) {
-        throw new Error('Invalid last inserted row ID');
-      }
-      userId = parsedId;
-      console.log('Parsed user ID:', userId);
-      
-      // Create initial user_stats row
-      console.log('Creating initial user stats');
+      // Initialize user stats with streak of 1
       await db.prepare(`
         INSERT INTO user_stats (
           user_id,
@@ -396,9 +366,8 @@ export const handleAuth = {
           total_attempts,
           last_activity_date,
           created_at
-        ) VALUES (?, 0, 0, 0, 0, 0, ?, ?)
+        ) VALUES (?, 0, 1, 1, 0, 0, ?, ?)
       `).bind(userId, Date.now(), Date.now()).run();
-      console.log('User stats created successfully');
 
       // Add sample verses for new users only
       console.log('Starting to add sample verses for new user');
@@ -436,10 +405,84 @@ export const handleAuth = {
       console.log('Finished adding sample verses');
     } else {
       userId = Number(existingUser.id);
-      // Update last login
-      await db.prepare(
-        'UPDATE users SET last_login_at = ? WHERE id = ?'
-      ).bind(Date.now(), userId).run();
+      
+      // Get current stats
+      const stats = await db.prepare(`
+        SELECT last_activity_date, current_streak, longest_streak 
+        FROM user_stats 
+        WHERE user_id = ?
+      `).bind(userId).first() as { last_activity_date: number, current_streak: number, longest_streak: number } | null;
+
+      if (stats) {
+        const lastActivity = new Date(stats.last_activity_date);
+        const currentTime = new Date();
+        const yesterday = new Date(currentTime);
+        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+
+        // If last activity was yesterday or earlier, increment streak
+        if (lastActivity <= yesterday) {
+          const newStreak = stats.current_streak + 1;
+          const longestStreak = Math.max(newStreak, stats.longest_streak);
+
+          await db.prepare(`
+            UPDATE user_stats 
+            SET current_streak = ?,
+                longest_streak = ?,
+                last_activity_date = ?
+            WHERE user_id = ?
+          `).bind(newStreak, longestStreak, Date.now(), userId).run();
+
+          // Award points for maintaining streak if > 1 day
+          if (newStreak > 1) {
+            await db.prepare(`
+              INSERT INTO point_events (
+                user_id,
+                event_type,
+                points,
+                metadata,
+                created_at
+              ) VALUES (?, 'daily_streak', ?, ?, ?)
+            `).bind(
+              userId,
+              50, // DAILY_STREAK points
+              JSON.stringify({ streak_days: newStreak }),
+              Date.now()
+            ).run();
+
+            // Update total points
+            await db.prepare(`
+              UPDATE user_stats 
+              SET total_points = total_points + ?
+              WHERE user_id = ?
+            `).bind(50, userId).run();
+          }
+        } else {
+          // Ensure minimum streak of 1 and update last activity date
+          await db.prepare(`
+            UPDATE user_stats 
+            SET current_streak = CASE 
+                WHEN current_streak = 0 THEN 1 
+                ELSE current_streak 
+              END,
+              last_activity_date = ?
+            WHERE user_id = ?
+          `).bind(Date.now(), userId).run();
+        }
+      } else {
+        // Initialize stats if they don't exist
+        await db.prepare(`
+          INSERT INTO user_stats (
+            user_id,
+            total_points,
+            current_streak,
+            longest_streak,
+            verses_mastered,
+            total_attempts,
+            last_activity_date,
+            created_at
+          ) VALUES (?, 0, 1, 1, 0, 0, ?, ?)
+        `).bind(userId, Date.now(), Date.now()).run();
+      }
     }
 
     // Create session

@@ -61,9 +61,17 @@ The API implements a point system with the following rewards:
 ### Mastery System
 
 Verses can be mastered by meeting these criteria:
-- Minimum 5 attempts
-- 95% overall accuracy
-- 3 consecutive perfect attempts 
+1. Minimum 5 attempts with at least 80% accuracy
+2. 3 consecutive perfect attempts (100% accuracy)
+3. Perfect attempts must be at least 24 hours apart
+
+When mastery is achieved:
+- Verse status is updated to "mastered"
+- User receives 500 points
+- Mastery is recorded in the database
+- User stats are updated
+
+Note: While the API accepts attempts with any accuracy, the frontend enforces a minimum of 80% accuracy before sending attempts to the API. This ensures that only meaningful attempts are recorded towards mastery.
 
 ## Authentication
 
@@ -414,15 +422,17 @@ Authorization: Bearer <token>
 ### Mastery System
 
 Verses can be mastered by meeting these criteria:
-1. Minimum 5 attempts
-2. 95% overall accuracy across all attempts
-3. 3 consecutive perfect attempts
+1. Minimum 5 attempts with at least 80% accuracy
+2. 3 consecutive perfect attempts (100% accuracy)
+3. Perfect attempts must be at least 24 hours apart
 
 When mastery is achieved:
 - Verse status is updated to "mastered"
 - User receives 500 points
 - Mastery is recorded in the database
 - User stats are updated
+
+Note: While the API accepts attempts with any accuracy, the frontend enforces a minimum of 80% accuracy before sending attempts to the API. This ensures that only meaningful attempts are recorded towards mastery.
 
 ### Best Practices
 
