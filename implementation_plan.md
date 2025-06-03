@@ -78,45 +78,44 @@ Implementation plan for adding gamification, detailed progress tracking, and mas
 ### Phase 3: Frontend Development - Remaining Items
 
 #### Mastery Mode UI Implementation
-- [ ] Add Mastery Mode toggle to verse cards
-  - [ ] Design and implement subtle mastery mode button
-    - [ ] Add icon with tooltip
-    - [ ] Only show for verses marked as "In Progress"
-    - [ ] Add smooth transition animation
-  - [ ] Create expanded mastery mode view
-    - [ ] Design collapsible section
-    - [ ] Add attempt counter display
-    - [ ] Show accuracy percentage
-    - [ ] Add "Start Attempt" button
-    - [ ] Include recent attempt history
-  - [ ] Implement mastery mode state management
-    - [ ] Add state for tracking active mastery mode
-    - [ ] Handle mode transitions
-    - [ ] Persist mode preference
-  - [ ] Add mastery mode input interface
-    - [ ] Design full verse input area
-    - [ ] Add character count
-    - [ ] Implement auto-expanding textarea
-    - [ ] Add submit button
-  - [ ] Create attempt feedback display
-    - [ ] Show correct/incorrect words
-    - [ ] Display attempt score
-    - [ ] Show progress towards mastery
-    - [ ] Add encouraging messages
-  - [ ] Implement attempt history
+- [x] Add Mastery Mode toggle to verse cards
+  - [x] Design and implement subtle mastery mode button
+    - [x] Add icon with tooltip
+    - [x] Only show for verses marked as "In Progress"
+    - [x] Add smooth transition animation
+  - [x] Create expanded mastery mode view
+    - [x] Design collapsible section
+    - [x] Add attempt counter display
+    - [x] Show accuracy percentage
+    - [x] Add "Start Attempt" button
+    - [x] Include recent attempt history
+  - [x] Implement mastery mode state management
+    - [x] Add state for tracking active mastery mode
+    - [x] Handle mode transitions
+    - [x] Persist mode preference
+  - [x] Add mastery mode input interface
+    - [x] Design full verse input area
+    - [x] Implement auto-expanding textarea
+    - [x] Add submit button
+  - [x] Create attempt feedback display
+    - [x] Show correct/incorrect words
+    - [x] Display attempt score
+    - [x] Show progress towards mastery
+    - [x] Add encouraging messages
+  - [x] Implement attempt history
     - [ ] Design history display
     - [ ] Show attempt dates
     - [ ] Display accuracy trends
     - [ ] Add attempt details view
-  - [ ] Add mastery requirements display
-    - [ ] Show minimum attempts needed
-    - [ ] Display current accuracy
-    - [ ] Track consecutive perfect attempts
-    - [ ] Add progress indicators
-  - [ ] Create mode transition animations
-    - [ ] Design smooth expand/collapse
-    - [ ] Add loading states
-    - [ ] Implement focus management
+  - [x] Add mastery requirements display
+    - [x] Show minimum attempts needed
+    - [x] Display current accuracy
+    - [x] Track consecutive perfect attempts
+    - [x] Add progress indicators
+  - [x] Create mode transition animations
+    - [x] Design smooth expand/collapse
+    - [x] Add loading states
+    - [x] Implement focus management
   - [ ] Add keyboard shortcuts
     - [ ] Toggle mastery mode
     - [ ] Submit attempt
