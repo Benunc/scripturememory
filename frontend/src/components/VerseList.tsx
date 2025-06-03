@@ -32,6 +32,8 @@ import {
   Input,
   Textarea,
   Collapse,
+  UnorderedList,
+  ListItem,
 } from '@chakra-ui/react';
 import { ProgressStatus } from '../utils/progress';
 import { useAuth } from '../hooks/useAuth';
@@ -129,9 +131,21 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
   onKeyDown,
   isVisible
 }) => {
-  const [progressMessage, setProgressMessage] = useState<string>('');
+  const [progressMessage, setProgressMessage] = useState<JSX.Element | null>(null);
+  const [timeUntilNext, setTimeUntilNext] = useState<string | null>(null);
   const toast = useToast();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Update time until next attempt
+  useEffect(() => {
+    if (progress?.consecutive_perfect > 0) {
+      void getTimeUntilNextAttempt(verse.reference).then(time => {
+        setTimeUntilNext(time || null);
+      });
+    } else {
+      setTimeUntilNext(null);
+    }
+  }, [progress?.consecutive_perfect, verse.reference]);
 
   // Focus textarea when component becomes visible
   useEffect(() => {
@@ -156,7 +170,8 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
     const lastAttempt = localStorage.getItem(`last_attempt_${reference}`);
     if (!lastAttempt) {
       // If no local timestamp, fetch from API
-      if (progress?.last_attempt_date) {
+      const progress = await fetchMasteryProgress(reference);
+      if (progress.last_attempt_date) {
         localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
         const now = Date.now();
         const hoursSinceLastAttempt = (now - progress.last_attempt_date) / (1000 * 60 * 60);
@@ -164,7 +179,7 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
         if (hoursRemaining <= 0) return '';
         return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
       }
-      return '';
+      return ''; // No previous attempts, so no cooldown needed
     }
     
     const lastAttemptTime = parseInt(lastAttempt, 10);
@@ -177,43 +192,60 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
   };
 
   // Helper function to get mastery progress message
-  const getMasteryProgressMessage = async (progress: MasteryProgress, reference: string): Promise<string> => {
+  const getMasteryProgressMessage = (progress: MasteryProgress, reference: string): JSX.Element => {
     if (progress.is_mastered) {
-      return "Congratulations! You've mastered this verse!";
+      return <Text>Congratulations! You've mastered this verse!</Text>;
     }
 
-    const messages: string[] = [];
-    const timeUntilNextAttempt = await getTimeUntilNextAttempt(reference);
-    
-    // Check minimum attempts (5 required)
-    if (progress.total_attempts < 5) {
-      messages.push(`You need ${5 - progress.total_attempts} more attempts to qualify for mastery`);
-    }
-    
-    // Check consecutive perfect attempts (3 required)
-    if (progress.consecutive_perfect < 3) {
-      const attemptsText = progress.consecutive_perfect === 1 ? 'attempt' : 'attempts';
-      messages.push(`You have ${progress.consecutive_perfect} consecutive perfect ${attemptsText} (you need 3 attempts at least 24 hours apart)`);
-    }
+    const isInCooldown = timeUntilNext !== null && timeUntilNext !== '';
 
-    // Add cooldown message if applicable
-    if (timeUntilNextAttempt) {
-      messages.push(`You can make your next attempt in ${timeUntilNextAttempt}`);
-    }
-
-    if (messages.length === 0) {
-      return "You're making great progress! Keep practicing to achieve mastery.";
-    }
-
-    return messages.join('. ') + '.';
+    return (
+      <VStack align="stretch" spacing={2}>
+        <Text fontWeight="bold" textAlign="center">Current mastery status for {reference}:</Text>
+        <Box display="flex" justifyContent="center">
+          <UnorderedList 
+            spacing={2} 
+            styleType="disc" 
+            maxW={{ base: "70%", sm: "60%", md: "50%", lg: "40%" }}
+            width="100%"
+          >
+            <ListItem textAlign="left">
+              You need 5 total attempts at 80% or better accuracy
+              <UnorderedList spacing={1} styleType="circle" ml={6}>
+                <ListItem textAlign="left">
+                  You currently have {progress.total_attempts} {progress.total_attempts === 1 ? 'attempt' : 'attempts'}
+                </ListItem>
+              </UnorderedList>
+            </ListItem>
+            <ListItem textAlign="left">
+              You need 3 perfect attempts, at least 24 hours apart
+              <UnorderedList spacing={1} styleType="circle" ml={6}>
+                <ListItem textAlign="left">
+                  You currently have {progress.consecutive_perfect} perfect {progress.consecutive_perfect === 1 ? 'attempt' : 'attempts'}
+                </ListItem>
+              </UnorderedList>
+            </ListItem>
+            {isInCooldown && (
+              <ListItem textAlign="left" color="orange.500">
+                You can make your next attempt in {timeUntilNext} (24-hour cooldown after perfect attempts)
+              </ListItem>
+            )}
+          </UnorderedList>
+        </Box>
+        <Text mt={2} textAlign="center">
+          {isInCooldown 
+            ? "You can practice now, but attempts won't count towards mastery until the cooldown period ends."
+            : "You can retry immediately after a failed (below 80%) attempt, and the 24 hour timer only starts after a perfect attempt."}
+        </Text>
+      </VStack>
+    );
   };
 
   useEffect(() => {
     if (progress) {
-      void getMasteryProgressMessage(progress, verse.reference)
-        .then(message => setProgressMessage(message));
+      setProgressMessage(getMasteryProgressMessage(progress, verse.reference));
     }
-  }, [progress, verse.reference]);
+  }, [progress, verse.reference, timeUntilNext]);
 
   return (
     <Box
@@ -236,9 +268,7 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
             borderWidth="1px"
             borderColor={useColorModeValue('gray.200', 'gray.600')}
           >
-            <Text fontSize="sm" color={useColorModeValue('gray.600', 'gray.300')}>
-              {progressMessage}
-            </Text>
+            {progressMessage}
           </Box>
         )}
 
@@ -674,20 +704,23 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     const verse = verses.find(v => v.reference === reference);
     if (!verse) return;
 
-    // Check if enough time has passed since last attempt
-    if (!(await hasEnoughTimePassed(reference))) {
-      const timeUntilNextAttempt = await getTimeUntilNextAttempt(reference);
-      setMasteryState(prev => ({
-        ...prev,
-        feedback: {
-          isCorrect: false,
-          message: `You can make your next attempt in ${timeUntilNextAttempt}. Feel free to practice, but it won't count towards mastery until then.`,
-          attempt: masteryState.attempt
-        },
-        attempt: '',
-        isSubmitting: false
-      }));
-      return;
+    // Only check cooldown if the last attempt was perfect
+    const progress = await fetchMasteryProgress(reference);
+    if (progress.consecutive_perfect > 0) {
+      if (!(await hasEnoughTimePassed(reference))) {
+        const timeUntilNextAttempt = await getTimeUntilNextAttempt(reference);
+        setMasteryState(prev => ({
+          ...prev,
+          feedback: {
+            isCorrect: false,
+            message: `You can make your next attempt in ${timeUntilNextAttempt} (24-hour cooldown only applies after perfect attempts). Feel free to practice, but it won't count towards mastery until then.`,
+            attempt: masteryState.attempt
+          },
+          attempt: '',
+          isSubmitting: false
+        }));
+        return;
+      }
     }
 
     setMasteryState(prev => ({ ...prev, isSubmitting: true }));
@@ -712,12 +745,12 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       let feedbackMessage = '';
       if (accuracy === 1) {
         feedbackMessage = "Perfect! That's exactly right! Come back tomorrow to make your next attempt.";
-        // Store the attempt timestamp
+        // Store the attempt timestamp only for perfect attempts
         localStorage.setItem(`last_attempt_${reference}`, Date.now().toString());
       } else if (accuracy >= 0.95) {
-        feedbackMessage = `Great job! You got ${accuracyPercent}% correct.`;
+        feedbackMessage = `Great job! You got ${accuracyPercent}% correct. You can try again immediately!`;
       } else if (accuracy >= 0.8) {
-        feedbackMessage = `Good attempt! You got ${accuracyPercent}% correct.`;
+        feedbackMessage = `Good attempt! You got ${accuracyPercent}% correct. You can try again immediately!`;
       } else {
         feedbackMessage = `Keep practicing! You need at least 80% accuracy to record an attempt.`;
         setMasteryState(prev => ({
@@ -750,7 +783,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       if (!response.ok) throw new Error('Failed to record attempt');
       
       // Fetch updated progress
-      const progress = await fetchMasteryProgress(reference);
+      const updatedProgress = await fetchMasteryProgress(reference);
       
       setMasteryState(prev => ({
         ...prev,
@@ -760,10 +793,10 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
           attempt: masteryState.attempt
         },
         attempt: '',
-        progress
+        progress: updatedProgress
       }));
 
-      if (progress.is_mastered) {
+      if (updatedProgress.is_mastered) {
         await onStatusChange(reference, ProgressStatus.Mastered);
       }
     } catch (err) {
