@@ -243,7 +243,8 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
 
   useEffect(() => {
     if (progress) {
-      setProgressMessage(getMasteryProgressMessage(progress, verse.reference));
+      const message = getMasteryProgressMessage(progress, verse.reference);
+      setProgressMessage(message);
     }
   }, [progress, verse.reference, timeUntilNext]);
 
@@ -621,14 +622,16 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   };
 
   // Add function to fetch mastery progress
-  const fetchMasteryProgress = async (reference: string): Promise<MasteryProgress> => {
-    // Check localStorage first
-    const cached = localStorage.getItem(`mastery_progress_${reference}`);
-    if (cached) {
-      const { progress, timestamp } = JSON.parse(cached);
-      // Cache for 5 minutes
-      if (Date.now() - timestamp < 5 * 60 * 1000) {
-        return progress;
+  const fetchMasteryProgress = async (reference: string, forceRefresh: boolean = false): Promise<MasteryProgress> => {
+    // Check localStorage first, but only if not forcing refresh
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(`mastery_progress_${reference}`);
+      if (cached) {
+        const { progress, timestamp } = JSON.parse(cached);
+        // Cache for 5 minutes
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          return progress;
+        }
       }
     }
 
@@ -708,7 +711,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     return word.toLowerCase().replace(/[.,;:!?'"-]/g, '');
   };
 
-  // Update handleMasteryAttempt to store attempt timestamps
+  // Update handleMasteryAttempt to update progress immediately
   const handleMasteryAttempt = async (reference: string) => {
     const verse = verses.find(v => v.reference === reference);
     if (!verse) return;
@@ -791,9 +794,22 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
       if (!response.ok) throw new Error('Failed to record attempt');
       
-      // Fetch updated progress
-      const updatedProgress = await fetchMasteryProgress(reference);
-      
+      // Update progress state immediately
+      const currentProgress = masteryState.progress || {
+        total_attempts: 0,
+        overall_accuracy: 0,
+        consecutive_perfect: 0,
+        is_mastered: false
+      };
+
+      const updatedProgress = {
+        ...currentProgress,
+        total_attempts: currentProgress.total_attempts + 1,
+        consecutive_perfect: accuracy === 1 ? currentProgress.consecutive_perfect + 1 : 0,
+        last_attempt_date: Date.now()
+      };
+
+      // Update mastery state with new progress immediately
       setMasteryState(prev => ({
         ...prev,
         feedback: {
@@ -803,6 +819,12 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         },
         attempt: '',
         progress: updatedProgress
+      }));
+
+      // Cache the updated progress
+      localStorage.setItem(`mastery_progress_${reference}`, JSON.stringify({
+        progress: updatedProgress,
+        timestamp: Date.now()
       }));
 
       if (updatedProgress.is_mastered) {
