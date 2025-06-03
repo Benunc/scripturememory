@@ -249,11 +249,11 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
 
   return (
     <Box
-      bg={useColorModeValue('green.50', 'green.900')}
+      bg={useColorModeValue('blue.50', 'blue.900')}
       p={4}
       borderRadius="md"
       borderWidth="1px"
-      borderColor={useColorModeValue('green.200', 'green.700')}
+      borderColor={useColorModeValue('blue.200', 'blue.700')}
     >
       <VStack align="stretch" spacing={4}>
         <Text fontSize="lg" color={useColorModeValue('gray.700', 'gray.200')}>
@@ -309,11 +309,11 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
             isDisabled={isSubmitting}
             _focus={{
               outline: 'none',
-              boxShadow: '0 0 0 3px var(--chakra-colors-green-300)',
+              boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
             }}
             _focusVisible={{
               outline: 'none',
-              boxShadow: '0 0 0 3px var(--chakra-colors-green-300)',
+              boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
             }}
             sx={{
               textTransform: 'none',
@@ -327,14 +327,23 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
         {feedback && (
           <Box>
             {feedback.isCorrect ? (
-              <Text
-                color="green.500"
-                fontSize="sm"
-                role="alert"
-                aria-live="polite"
+              <Box
+                p={3}
+                bg={useColorModeValue('green.500', 'green.600')}
+                borderRadius="md"
+                borderWidth="1px"
+                borderColor={useColorModeValue('green.600', 'green.700')}
               >
-                {feedback.message}
-              </Text>
+                <Text
+                  color="white"
+                  fontSize="sm"
+                  fontWeight="bold"
+                  role="alert"
+                  aria-live="polite"
+                >
+                  {feedback.message}
+                </Text>
+              </Box>
             ) : (
               <Box
                 p={3}
@@ -1957,19 +1966,19 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
             <Button
               size="sm"
               variant="solid"
-              bg={useColorModeValue('green.50', 'green.900')}
-              color={useColorModeValue('green.700', 'green.100')}
-              borderColor={useColorModeValue('green.200', 'green.700')}
+              bg={useColorModeValue('blue.50', 'blue.900')}
+              color={useColorModeValue('blue.700', 'blue.100')}
+              borderColor={useColorModeValue('blue.200', 'blue.700')}
               borderWidth="1px"
               onClick={() => handleMasteryToggle(verse.reference)}
               mt={2}
               _hover={{
-                bg: useColorModeValue('green.100', 'green.800'),
-                borderColor: useColorModeValue('green.300', 'green.600'),
+                bg: useColorModeValue('blue.100', 'blue.800'),
+                borderColor: useColorModeValue('blue.300', 'blue.600'),
               }}
               _active={{
-                bg: useColorModeValue('green.200', 'green.700'),
-                borderColor: useColorModeValue('green.400', 'green.500'),
+                bg: useColorModeValue('blue.200', 'blue.700'),
+                borderColor: useColorModeValue('blue.400', 'blue.500'),
               }}
             >
               Enter Mastery Mode
