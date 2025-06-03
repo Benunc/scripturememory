@@ -177,6 +177,89 @@ Implementation plan for adding gamification, detailed progress tracking, and mas
 #### Optimize performance
 - [ ] Optimize performance
 
+## Points Display Feature
+
+### Real-time Points Display
+- [ ] Create PointsDisplay component
+  - [ ] Design floating points counter for desktop
+  - [ ] Implement green pulse animation on updates
+  - [ ] Add click handler for navigation
+  - [ ] Make it sticky/overlay on desktop
+  - [ ] Ensure mobile responsiveness
+
+### Points Stats Page
+- [ ] Create new route `/points`
+- [ ] Design PointsStats page component
+  - [ ] Add back button to return to main app
+  - [ ] Display total points prominently
+  - [ ] Show points breakdown by category:
+    - [ ] Points from adding verses
+    - [ ] Points from correct words
+    - [ ] Points from streaks
+    - [ ] Points from mastery achievements
+  - [ ] Add visualizations for:
+    - [ ] Current streak
+    - [ ] Longest streak
+    - [ ] Verses mastered
+    - [ ] Total attempts
+  - [ ] Include points explanation section
+
+### API Integration
+- [ ] Create points context for state management
+  - [ ] Track total points
+  - [ ] Handle real-time updates
+  - [ ] Cache points data
+- [ ] Implement points fetching
+  - [ ] Use `/gamification/stats` endpoint
+  - [ ] Add error handling
+  - [ ] Add loading states
+- [ ] Add points update listeners
+  - [ ] Subscribe to verse additions
+  - [ ] Subscribe to progress updates
+  - [ ] Subscribe to mastery achievements
+
+### Technical Requirements
+1. **State Management**
+   - Create PointsContext
+   - Implement real-time updates
+   - Handle caching and persistence
+
+2. **UI Components**
+   - Floating points display
+   - Stats page layout
+   - Back navigation
+   - Loading states
+   - Error handling
+
+3. **Animations**
+   - Green pulse effect
+   - Smooth transitions
+   - Loading indicators
+
+4. **Mobile Considerations**
+   - Responsive layout
+   - Touch-friendly interactions
+   - Appropriate spacing
+
+### Testing Strategy
+1. **Unit Tests**
+   - Points calculation
+   - State management
+   - Component rendering
+   - Animation triggers
+
+2. **Integration Tests**
+   - API integration
+   - Navigation flow
+   - Real-time updates
+   - Error scenarios
+
+3. **UI Tests**
+   - Animation smoothness
+   - Mobile responsiveness
+   - Accessibility
+   - Performance
+
 ## Phase 4: Testing and Deployment
 - [ ] Write unit tests
 - [ ] Write integration tests
