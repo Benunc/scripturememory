@@ -136,6 +136,20 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
   const toast = useToast();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Move all color mode hooks to the top
+  const masteryBg = useColorModeValue('blue.50', 'blue.900');
+  const masteryBorderColor = useColorModeValue('blue.200', 'blue.700');
+  const masteryTextColor = useColorModeValue('gray.700', 'gray.200');
+  const masteryBoxBg = useColorModeValue('white', 'gray.800');
+  const masteryBoxBorderColor = useColorModeValue('gray.200', 'gray.600');
+  const successBg = useColorModeValue('green.500', 'green.600');
+  const successBorderColor = useColorModeValue('green.600', 'green.700');
+  const warningBg = useColorModeValue('orange.50', 'orange.900');
+  const warningBorderColor = useColorModeValue('orange.200', 'orange.700');
+  const warningTextColor = useColorModeValue('gray.600', 'gray.300');
+  const warningBoxBg = useColorModeValue('white', 'gray.800');
+  const warningBoxBorderColor = useColorModeValue('gray.200', 'gray.600');
+
   // Update time until next attempt
   useEffect(() => {
     if (progress?.consecutive_perfect > 0) {
@@ -250,24 +264,24 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
 
   return (
     <Box
-      bg={useColorModeValue('blue.50', 'blue.900')}
+      bg={masteryBg}
       p={4}
       borderRadius="md"
       borderWidth="1px"
-      borderColor={useColorModeValue('blue.200', 'blue.700')}
+      borderColor={masteryBorderColor}
     >
       <VStack align="stretch" spacing={4}>
-        <Text fontSize="lg" color={useColorModeValue('gray.700', 'gray.200')}>
+        <Text fontSize="lg" color={masteryTextColor}>
           Think you know {verse.reference} by heart? Enter it exactly right below, and you're one step closer to mastery.
         </Text>
         
         {progress && (
           <Box 
             p={3} 
-            bg={useColorModeValue('white', 'gray.800')} 
+            bg={masteryBoxBg} 
             borderRadius="md"
             borderWidth="1px"
-            borderColor={useColorModeValue('gray.200', 'gray.600')}
+            borderColor={masteryBoxBorderColor}
           >
             {progressMessage}
           </Box>
@@ -330,10 +344,10 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
             {feedback.isCorrect ? (
               <Box
                 p={3}
-                bg={useColorModeValue('green.500', 'green.600')}
+                bg={successBg}
                 borderRadius="md"
                 borderWidth="1px"
-                borderColor={useColorModeValue('green.600', 'green.700')}
+                borderColor={successBorderColor}
               >
                 <Text
                   color="white"
@@ -348,21 +362,21 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
             ) : (
               <Box
                 p={3}
-                bg={useColorModeValue('orange.50', 'orange.900')}
+                bg={warningBg}
                 borderRadius="md"
                 borderWidth="1px"
-                borderColor={useColorModeValue('orange.200', 'orange.700')}
+                borderColor={warningBorderColor}
               >
-                <Text fontSize="sm" color={useColorModeValue('gray.600', 'gray.300')} mb={2}>
+                <Text fontSize="sm" color={warningTextColor} mb={2}>
                   {feedback.message}
                 </Text>
                 {feedback.attempt && (
                   <Box
                     p={2}
-                    bg={useColorModeValue('white', 'gray.800')}
+                    bg={warningBoxBg}
                     borderRadius="md"
                     borderWidth="1px"
-                    borderColor={useColorModeValue('gray.200', 'gray.600')}
+                    borderColor={warningBoxBorderColor}
                   >
                     {feedback.attempt.split(' ').map((word, index) => {
                       const isCorrect = verse.text.split(' ').some(
@@ -417,6 +431,36 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   const [announcedWord, setAnnouncedWord] = useState<string>('');
   const toast = useToast();
   const { userEmail, isAuthenticated } = useAuth();
+
+  // Move all color mode hooks to component level
+  const textColor = useColorModeValue('gray.700', 'gray.200');
+  const inputBg = useColorModeValue('white', 'gray.800');
+  const inputBorderColor = useColorModeValue('gray.200', 'gray.600');
+  const inputFocusShadow = '0 0 0 3px var(--chakra-colors-blue-300)';
+  const dialogBg = useColorModeValue('white', 'gray.800');
+  const dialogColor = useColorModeValue('gray.800', 'white');
+  const dialogOverlayBg = 'blackAlpha.300';
+  const dialogContentBg = useColorModeValue('white', 'gray.800');
+  const dialogContentColor = useColorModeValue('gray.800', 'white');
+  const dialogDetailsBg = useColorModeValue('gray.50', 'gray.700');
+  const successBg = useColorModeValue('green.500', 'green.600');
+  const successBorderColor = useColorModeValue('green.600', 'green.700');
+  const warningBg = useColorModeValue('orange.50', 'orange.900');
+  const warningBorderColor = useColorModeValue('orange.200', 'orange.700');
+  const warningTextColor = useColorModeValue('gray.600', 'gray.300');
+  const warningBoxBg = useColorModeValue('white', 'gray.800');
+  const warningBoxBorderColor = useColorModeValue('gray.200', 'gray.600');
+  const masteryButtonBg = useColorModeValue('blue.50', 'blue.900');
+  const masteryButtonColor = useColorModeValue('blue.700', 'blue.100');
+  const masteryButtonBorderColor = useColorModeValue('blue.200', 'blue.700');
+  const masteryButtonHoverBg = useColorModeValue('blue.100', 'blue.800');
+  const masteryButtonHoverBorderColor = useColorModeValue('blue.300', 'blue.600');
+  const masteryButtonActiveBg = useColorModeValue('blue.200', 'blue.700');
+  const masteryButtonActiveBorderColor = useColorModeValue('blue.400', 'blue.500');
+  const errorBg = useColorModeValue('red.50', 'red.900');
+  const shortcutsModalBg = useColorModeValue('white', 'gray.800');
+  const shortcutsModalColor = useColorModeValue('gray.800', 'white');
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [verseToDelete, setVerseToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1526,8 +1570,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
   // Update renderVerseText to highlight the first unrevealed word
   const renderVerseText = (verse: Verse) => {
-    const textColor = useColorModeValue('gray.700', 'gray.200');
-
     if (showFullVerse[verse.reference]) {
       return (
         <Text fontSize="lg" color={textColor}>
@@ -1570,10 +1612,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                 ref={inputRef}
                 value={userGuess}
                 onChange={(e) => {
-                  // Only allow letters, numbers, and basic punctuation
                   const sanitizedValue = e.target.value.replace(/[^a-zA-Z0-9.,;:!?'"-]/g, '');
                   setUserGuess(sanitizedValue);
-                  // Only clear feedback after second letter is typed
                   if (sanitizedValue.length > 1) {
                     setGuessFeedback(null);
                   }
@@ -1597,13 +1637,15 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                 tabIndex={0}
                 maxWidth="250px"
                 textAlign="center"
+                bg={inputBg}
+                borderColor={inputBorderColor}
                 _focus={{
                   outline: 'none',
-                  boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                  boxShadow: inputFocusShadow,
                 }}
                 _focusVisible={{
                   outline: 'none',
-                  boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                  boxShadow: inputFocusShadow,
                 }}
               />
               <Button
@@ -1664,7 +1706,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     const colorScheme = getColorScheme(status);
 
     return (
-      <Box position="relative">
+      <Box key={`${reference}-${status}`} position="relative">
         <Button
           size="sm"
           colorScheme={colorScheme}
@@ -1744,10 +1786,17 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       aria-label={`Progress status for ${verse.reference}`}
       aria-describedby={`status-description-${verse.reference}`}
     >
-      {renderStatusButton(verse.reference, ProgressStatus.NotStarted, "Not Started", "1")}
-      {renderStatusButton(verse.reference, ProgressStatus.InProgress, "In Progress", "2")}
-      {renderStatusButton(verse.reference, ProgressStatus.Mastered, "Mastered", "3")}
+      {[
+        { status: ProgressStatus.NotStarted, label: "Not Started", shortcut: "1" },
+        { status: ProgressStatus.InProgress, label: "In Progress", shortcut: "2" },
+        { status: ProgressStatus.Mastered, label: "Mastered", shortcut: "3" }
+      ].map(({ status, label, shortcut }) => (
+        <Box key={`${verse.reference}-${status}`}>
+          {renderStatusButton(verse.reference, status, label, shortcut)}
+        </Box>
+      ))}
       <Text
+        key={`status-description-${verse.reference}`}
         id={`status-description-${verse.reference}`}
         srOnly
       >
@@ -1805,6 +1854,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     
     return (
       <Box
+        key={verse.reference}
         ref={el => verseRefs.current[verse.reference] = el}
         p={4}
         borderWidth="1px"
@@ -1988,19 +2038,19 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
             <Button
               size="sm"
               variant="solid"
-              bg={useColorModeValue('blue.50', 'blue.900')}
-              color={useColorModeValue('blue.700', 'blue.100')}
-              borderColor={useColorModeValue('blue.200', 'blue.700')}
+              bg={masteryButtonBg}
+              color={masteryButtonColor}
+              borderColor={masteryButtonBorderColor}
               borderWidth="1px"
               onClick={() => handleMasteryToggle(verse.reference)}
               mt={2}
               _hover={{
-                bg: useColorModeValue('blue.100', 'blue.800'),
-                borderColor: useColorModeValue('blue.300', 'blue.600'),
+                bg: masteryButtonHoverBg,
+                borderColor: masteryButtonHoverBorderColor,
               }}
               _active={{
-                bg: useColorModeValue('blue.200', 'blue.700'),
-                borderColor: useColorModeValue('blue.400', 'blue.500'),
+                bg: masteryButtonActiveBg,
+                borderColor: masteryButtonActiveBorderColor,
               }}
             >
               Enter Mastery Mode
@@ -2023,7 +2073,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       closeOnEsc={true}
     >
       <AlertDialogOverlay
-        bg="blackAlpha.300"
+        bg={dialogOverlayBg}
         backdropFilter="blur(10px)"
         animation="fadeIn 0.2s ease-out"
         sx={{
@@ -2035,8 +2085,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       >
         <AlertDialogContent
           ref={modalRef}
-          bg={useColorModeValue('white', 'gray.800')}
-          color={useColorModeValue('gray.800', 'white')}
+          bg={dialogContentBg}
+          color={dialogContentColor}
           animation="slideIn 0.2s ease-out"
           sx={{
             '@keyframes slideIn': {
@@ -2060,7 +2110,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                 <Box 
                   mt={4} 
                   p={3} 
-                  bg={useColorModeValue('gray.50', 'gray.700')} 
+                  bg={dialogDetailsBg}
                   borderRadius="md"
                   role="region"
                   aria-label="Verse details"
@@ -2145,8 +2195,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       />
       <ModalContent
         ref={modalRef}
-        bg={useColorModeValue('white', 'gray.800')}
-        color={useColorModeValue('gray.800', 'white')}
+        bg={shortcutsModalBg}
+        color={shortcutsModalColor}
         animation="slideIn 0.2s ease-out"
         sx={{
           '@keyframes slideIn': {
@@ -2293,7 +2343,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         borderWidth="1px"
         borderColor="red.500"
         borderRadius="md"
-        bg={useColorModeValue('red.50', 'red.900')}
+        bg={errorBg}
       >
         <VStack align="stretch" spacing={3}>
           <Text color="red.500" fontWeight="bold">
