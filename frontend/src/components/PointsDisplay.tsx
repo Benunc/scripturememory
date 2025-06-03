@@ -50,7 +50,7 @@ export const PointsDisplay: React.FC<PointsDisplayProps> = ({ initialPoints = 0 
   if (!isAuthenticated) return null;
 
   return (
-    <Tooltip label="View points breakdown" placement="bottom">
+    <Tooltip label="Learn more about points" placement="bottom">
       <Box
         position="fixed"
         top="58px"
@@ -59,7 +59,7 @@ export const PointsDisplay: React.FC<PointsDisplayProps> = ({ initialPoints = 0 
         onClick={handleClick}
         cursor="pointer"
         role="button"
-        aria-label="View points breakdown"
+        aria-label="Learn more about points"
         tabIndex={0}
         onKeyPress={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
