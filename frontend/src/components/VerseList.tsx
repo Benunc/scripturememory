@@ -263,7 +263,25 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
   // Helper function to get mastery progress message
   const getMasteryProgressMessage = (progress: MasteryProgress, reference: string): JSX.Element => {
     if (progress.is_mastered) {
-      return <Text>Congratulations! You've mastered this verse!</Text>;
+      const masteryDate = progress.mastery_date ? new Date(progress.mastery_date).toLocaleDateString() : 'recently';
+      return (
+        <Text
+          fontSize="xl"
+          fontWeight="bold"
+          color="green.500"
+          textAlign="center"
+          animation="pulse 2s infinite"
+          sx={{
+            '@keyframes pulse': {
+              '0%': { transform: 'scale(1)' },
+              '50%': { transform: 'scale(1.05)' },
+              '100%': { transform: 'scale(1)' }
+            }
+          }}
+        >
+          🎉 YOU DID IT! You mastered this verse on {masteryDate} after successfully reciting it from memory 3 times in a row perfectly! 🎉
+        </Text>
+      );
     }
 
     const isInCooldown = timeUntilNext !== null && timeUntilNext !== '';
@@ -846,10 +864,31 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       const accuracy = correctWords.length / words.length;
       const accuracyPercent = Math.round(accuracy * 100);
 
+      // Get timeUntilNext from state
+      const timeUntilNext = masteryState.progress && masteryState.progress.consecutive_perfect > 0 ? 
+        await getTimeUntilNextAttempt(reference) : null;
+
+      // Check if this perfect attempt will trigger mastery
+      const willTriggerMastery = accuracy === 1 && 
+        progress.consecutive_perfect === 2 && 
+        !timeUntilNext;
+
+      // If this will trigger mastery, update points immediately
+      if (willTriggerMastery) {
+        const currentPoints = parseInt(localStorage.getItem('points') || '0', 10);
+        const newPoints = currentPoints + 500; // 500 points for mastery
+        localStorage.setItem('points', newPoints.toString());
+        updatePoints(newPoints);
+      }
+
       // Generate feedback message
       let feedbackMessage = '';
       if (accuracy === 1) {
-        feedbackMessage = "Perfect! That's exactly right! Come back tomorrow to make your next attempt.";
+        if (willTriggerMastery) {
+          feedbackMessage = "Perfect! You've mastered this verse! 🎉";
+        } else {
+          feedbackMessage = "Perfect! That's exactly right! Come back tomorrow to make your next attempt.";
+        }
         // Store the attempt timestamp only for perfect attempts
         localStorage.setItem(`last_attempt_${reference}`, Date.now().toString());
       } else if (accuracy >= 0.95) {
@@ -872,7 +911,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       }
 
       // Only make the API call if accuracy is >= 80%
-      const response = await fetch('/progress/verse', {
+      const response = await fetch('/api/progress/verse', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -899,7 +938,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         ...currentProgress,
         total_attempts: currentProgress.total_attempts + 1,
         consecutive_perfect: accuracy === 1 ? currentProgress.consecutive_perfect + 1 : 0,
-        last_attempt_date: Date.now()
+        last_attempt_date: Date.now(),
+        is_mastered: willTriggerMastery || currentProgress.is_mastered,
+        mastery_date: willTriggerMastery ? Date.now() : currentProgress.mastery_date
       };
 
       // Update mastery state with new progress immediately
