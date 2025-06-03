@@ -34,9 +34,37 @@ import {
   Collapse,
   UnorderedList,
   ListItem,
+  IconButton,
+  Tooltip,
+  useDisclosure,
+  useBreakpointValue,
+  Divider,
+  useOutsideClick,
+  useUpdateEffect,
+  useEventListener,
+  useMergeRefs,
+  useControllableState,
+  useCallbackRef,
+  useId,
+  useBoolean,
+  useClipboard,
+  useDisclosure as useDisclosureHook,
+  useToast as useToastHook,
+  useColorMode as useColorModeHook,
+  useBreakpointValue as useBreakpointValueHook,
+  useOutsideClick as useOutsideClickHook,
+  useEventListener as useEventListenerHook,
+  useMergeRefs as useMergeRefsHook,
+  useControllableState as useControllableStateHook,
+  useCallbackRef as useCallbackRefHook,
+  useId as useIdHook,
+  useBoolean as useBooleanHook,
+  useClipboard as useClipboardHook,
 } from '@chakra-ui/react';
+import { ChevronDownIcon, ChevronUpIcon, DeleteIcon, EditIcon, InfoIcon, RepeatIcon, StarIcon, TimeIcon } from '@chakra-ui/icons';
 import { ProgressStatus } from '../utils/progress';
 import { useAuth } from '../hooks/useAuth';
+import { usePoints } from '../contexts/PointsContext';
 import { debug, handleError } from '../utils/debug';
 import { useVerses } from '../hooks/useVerses';
 import { Footer } from './Footer';
@@ -152,7 +180,7 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
 
   // Update time until next attempt
   useEffect(() => {
-    if (progress?.consecutive_perfect > 0) {
+    if (progress && progress.consecutive_perfect > 0) {
       void getTimeUntilNextAttempt(verse.reference).then(time => {
         setTimeUntilNext(time || null);
       });
@@ -184,16 +212,43 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
     const lastAttempt = localStorage.getItem(`last_attempt_${reference}`);
     if (!lastAttempt) {
       // If no local timestamp, fetch from API
-      const progress = await fetchMasteryProgress(reference);
-      if (progress.last_attempt_date) {
-        localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
-        const now = Date.now();
-        const hoursSinceLastAttempt = (now - progress.last_attempt_date) / (1000 * 60 * 60);
-        const hoursRemaining = Math.ceil(24 - hoursSinceLastAttempt);
-        if (hoursRemaining <= 0) return '';
-        return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
+      try {
+        const sessionToken = localStorage.getItem('session_token');
+        if (!sessionToken) {
+          throw new Error('No session token found');
+        }
+
+        const response = await fetch(`/api/progress/mastery/${reference}`, {
+          headers: {
+            'Authorization': `Bearer ${sessionToken}`
+          }
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch mastery progress');
+
+        const data = await response.json();
+        const progress: MasteryProgress = {
+          total_attempts: data.totalAttempts || 0,
+          overall_accuracy: data.overallAccuracy || 0,
+          consecutive_perfect: data.perfectAttemptsInRow || 0,
+          is_mastered: data.isMastered || false,
+          mastery_date: data.masteryDate,
+          last_attempt_date: data.lastAttemptDate
+        };
+
+        if (progress.last_attempt_date) {
+          localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
+          const now = Date.now();
+          const hoursSinceLastAttempt = (now - progress.last_attempt_date) / (1000 * 60 * 60);
+          const hoursRemaining = Math.ceil(24 - hoursSinceLastAttempt);
+          if (hoursRemaining <= 0) return '';
+          return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
+        }
+        return '';
+      } catch (error) {
+        console.error('Error fetching mastery progress:', error);
+        return '';
       }
-      return ''; // No previous attempts, so no cooldown needed
     }
     
     const lastAttemptTime = parseInt(lastAttempt, 10);
@@ -431,6 +486,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   const [announcedWord, setAnnouncedWord] = useState<string>('');
   const toast = useToast();
   const { userEmail, isAuthenticated } = useAuth();
+  const { refreshPoints, updatePoints } = usePoints();
 
   // Move all color mode hooks to component level
   const textColor = useColorModeValue('gray.700', 'gray.200');
@@ -519,41 +575,34 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
           throw new Error('No session token found');
         }
 
-        // Send word progress in batches
-        const batchSize = 10;
-        for (let i = 0; i < wordProgressQueue.length; i += batchSize) {
-          const batch = wordProgressQueue.slice(i, i + batchSize);
-          await Promise.all(
-            batch.map(progress =>
-              fetch('/api/progress/word', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${sessionToken}`
-                },
-                body: JSON.stringify(progress)
-              })
-            )
-          );
+        // Send each word progress individually
+        for (const progress of wordProgressQueue) {
+          const response = await fetch('/api/progress/word', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionToken}`
+            },
+            body: JSON.stringify(progress)
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to sync progress');
+          }
         }
 
         // Clear the queue after successful sync
         setWordProgressQueue([]);
-        debug.log('verses', 'Word progress synced successfully');
+        
+        // Refresh points after syncing
+        await refreshPoints();
       } catch (error) {
-        debug.error('verses', 'Error syncing word progress:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to save progress. Your progress will be saved when you try again.',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        });
+        debug.error('api', 'Error syncing progress:', error);
       } finally {
         setIsSyncing(false);
       }
-    }, 1000);
-  }, [wordProgressQueue, isAuthenticated, isSyncing, toast]);
+    }, 1000); // 1 second debounce
+  }, [isAuthenticated, wordProgressQueue, isSyncing, refreshPoints]);
 
   // Add cleanup for timeout
   useEffect(() => {
@@ -823,7 +872,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       }
 
       // Only make the API call if accuracy is >= 80%
-      const response = await fetch('/api/progress/verse', {
+      const response = await fetch('/progress/verse', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1412,6 +1461,14 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       };
       setWordProgressQueue(prev => [...prev, wordProgress]);
       recordWord(reference, nextWordIndex);
+      
+      // Update points immediately if correct
+      if (isCorrect) {
+        const currentPoints = parseInt(localStorage.getItem('points') || '0', 10);
+        const newPoints = currentPoints + 1; // 1 point per correct word
+        updatePoints(newPoints);
+      }
+      
       syncProgress();
     }
 

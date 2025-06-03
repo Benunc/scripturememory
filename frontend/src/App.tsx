@@ -12,6 +12,7 @@ import logo from '/assets/images/ScriptureMemory.svg'
 import { useVerses } from './hooks/useVerses'
 import { ChakraProvider, ColorModeScript, useColorMode } from '@chakra-ui/react';
 import { AuthProvider } from './contexts/AuthContext';
+import { PointsProvider } from './contexts/PointsContext';
 import { Register } from './pages/Register';
 import { Donate } from './pages/Donate';
 import { SignIn } from './components/SignIn';
@@ -21,6 +22,8 @@ import { ThankYou } from './pages/ThankYou';
 import { About } from './pages/About';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { runTestSuite } from './utils/testSuite';
+import { PointsStats } from './pages/PointsStats';
+import { PointsDisplay } from './components/PointsDisplay';
 
 // Add type for Google client
 declare global {
@@ -72,17 +75,20 @@ export function App() {
       <ChakraProvider theme={theme}>
         <ColorModeManager />
         <AuthProvider>
-          <Router>
-            <Routes>
-              <Route path="/" element={<MainApp />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/donate" element={<Donate />} />
-              <Route path="/thank-you" element={<ThankYou />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/privacy" element={<PrivacyPolicy />} />
-              <Route path="/auth/verify" element={<VerifyToken />} />
-            </Routes>
-          </Router>
+          <PointsProvider>
+            <Router>
+              <Routes>
+                <Route path="/" element={<MainApp />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/donate" element={<Donate />} />
+                <Route path="/thank-you" element={<ThankYou />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/auth/verify" element={<VerifyToken />} />
+                <Route path="/points" element={<PointsStats />} />
+              </Routes>
+            </Router>
+          </PointsProvider>
         </AuthProvider>
       </ChakraProvider>
     </>

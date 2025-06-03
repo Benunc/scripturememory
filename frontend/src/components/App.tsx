@@ -9,6 +9,7 @@ import { Footer } from './Footer';
 import { validateEnvVariables } from '../utils/auth';
 import { ProgressStatus } from '../utils/progress';
 import { SignIn } from './SignIn';
+import { PointsDisplay } from './PointsDisplay';
 import logo from '/assets/images/ScriptureMemory.svg';
 import { Verse } from '../types/verse';
 import { debug } from '../utils/debug';
@@ -312,6 +313,7 @@ export function MainApp() {
       </Box>
 
       <Footer />
+      {isAuthenticated && <PointsDisplay />}
     </Box>
   );
 } 
