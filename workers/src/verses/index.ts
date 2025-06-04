@@ -3,7 +3,7 @@ import { Env, Verse } from '../types';
 
 // Point system constants
 const POINTS = {
-  VERSE_ADDED: 100,        // Big bonus for adding a new verse
+  VERSE_ADDED: 10,         // Points for adding a new verse (limited to 3 per day)
   WORD_CORRECT: 1,         // Base points per correct word
   STREAK_MULTIPLIER: 0.5,  // 50% bonus per word in streak
   MASTERY_ACHIEVED: 500,   // Big bonus for mastering a verse

@@ -29,6 +29,19 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded, addVerse }) =>
   const { userEmail } = useAuth();
   const { updatePoints } = usePoints();
 
+  const getDailyVerseCount = () => {
+    const today = new Date().toDateString();
+    const dailyVerses = JSON.parse(localStorage.getItem(`daily_verses_${today}`) || '[]');
+    return dailyVerses.length;
+  };
+
+  const recordDailyVerse = (reference: string) => {
+    const today = new Date().toDateString();
+    const dailyVerses = JSON.parse(localStorage.getItem(`daily_verses_${today}`) || '[]');
+    dailyVerses.push(reference);
+    localStorage.setItem(`daily_verses_${today}`, JSON.stringify(dailyVerses));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     debug.log('verses', 'Form submission started');
     e.preventDefault();
@@ -52,21 +65,34 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded, addVerse }) =>
       await addVerse({ reference, text, status: 'not_started', translation: 'not specified' });
       debug.log('verses', 'Verse added successfully');
       
-      // Update points immediately in localStorage
-      const currentPoints = parseInt(localStorage.getItem('points') || '0', 10);
-      const newPoints = currentPoints + 100; // 100 points for adding a verse
-      updatePoints(newPoints);
+      const dailyVerseCount = getDailyVerseCount();
+      if (dailyVerseCount < 3) {
+        // Update points immediately in localStorage
+        const currentPoints = parseInt(localStorage.getItem('points') || '0', 10);
+        const newPoints = currentPoints + 10; // 10 points for adding a verse
+        updatePoints(newPoints);
+        
+        toast({
+          title: 'Success',
+          description: `Your verse has been added successfully (+10 points!) (${3 - dailyVerseCount} more verses today will earn points)`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: 'Your verse has been added successfully! (Daily point limit reached)',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
       
+      recordDailyVerse(reference);
       setReference('');
       setText('');
       onVerseAdded(reference);
-      toast({
-        title: 'Success',
-        description: 'Your verse has been added successfully (+100 points!)',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
     } catch (error) {
       debug.error('verses', 'Error adding verse:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to add verse. Please try again.';

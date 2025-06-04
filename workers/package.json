@@ -23,17 +23,15 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250529.0",
-    "@miniflare/shared": "^3.20250408.2",
-    "@types/better-sqlite3": "^7.6.9",
+    "@miniflare/shared": "^2.14.4",
     "@types/node-fetch": "^2.6.11",
     "@vitest/coverage-v8": "^1.6.1",
-    "better-sqlite3": "^9.4.3",
-    "miniflare": "^3.20250408.2",
+    "miniflare": "^3.20241031.0",
     "node-fetch": "^2.7.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3",
     "vitest": "^1.6.1",
-    "vitest-environment-miniflare": "^3.20250408.2",
+    "vitest-environment-miniflare": "2.14.4",
     "wrangler": "^4.16.1"
   }
 }
