@@ -65,6 +65,7 @@ export const PointsStats: React.FC = () => {
           throw new Error('No session token found');
         }
 
+        debug.log('api', 'Fetching points stats...');
         const response = await fetch('/api/gamification/stats', {
           headers: {
             'Authorization': `Bearer ${sessionToken}`
@@ -72,20 +73,26 @@ export const PointsStats: React.FC = () => {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to fetch points stats');
+          const errorData = await response.json().catch(() => null);
+          debug.error('api', 'Failed to fetch points stats:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData
+          });
+          throw new Error(`Failed to fetch points stats: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
         debug.log('api', 'Received points stats:', data);
         
         if (!data || typeof data !== 'object') {
-          throw new Error('Invalid response format');
+          throw new Error('Invalid response format from server');
         }
 
         setStats(data);
       } catch (error) {
         debug.error('api', 'Error fetching points stats:', error);
-        setError('Failed to load points statistics. Please try refreshing the page.');
+        setError(error instanceof Error ? error.message : 'Failed to load points statistics. Please try refreshing the page.');
       } finally {
         setLoading(false);
       }
