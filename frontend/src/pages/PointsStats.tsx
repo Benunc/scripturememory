@@ -66,7 +66,7 @@ export const PointsStats: React.FC = () => {
         }
 
         debug.log('api', 'Fetching points stats...');
-        const response = await fetch('/gamification/stats', {
+        const response = await fetch('https://scripture-memory.ben-2e6.workers.dev/gamification/stats', {
           headers: {
             'Authorization': `Bearer ${sessionToken}`
           }
