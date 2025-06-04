@@ -1,6 +1,7 @@
 import { Router } from 'itty-router';
 import { Env, MagicLink, D1Result } from '../types';
 import { generateToken, verifyToken } from './token';
+import { getUserId } from '../utils/db';
 
 // Rate limiting
 const RATE_LIMIT = 5; // requests per minute
@@ -349,64 +350,139 @@ export const handleAuth = {
     if (!existingUser) {
       console.log('No existing user found, creating new user');
       // Create new user
-      const result = await db.prepare(`
-        INSERT INTO users (
-          email,
-          created_at,
-          last_login_at,
-          has_donated,
-          total_donations,
-          donation_count,
-          last_donation_date,
-          last_donation_amount,
-          preferred_translation
-        ) VALUES (?, ?, ?, false, 0, 0, NULL, NULL, 'NIV')
-      `).bind(
-        magicLink.email,
-        Date.now(),
-        Date.now()
-      ).run() as D1Result;
-
-      // Get the last inserted row ID
-      const lastRowId = result.meta.last_row_id;
-      if (lastRowId === null || lastRowId === undefined) {
-        throw new Error('Failed to get last inserted row ID');
-      }
-      const parsedId = Number(lastRowId);
-      if (isNaN(parsedId)) {
-        throw new Error('Invalid last inserted row ID');
-      }
-      userId = parsedId;
+      const result = await db.prepare(
+        'INSERT INTO users (email, created_at) VALUES (?, ?)'
+      ).bind(magicLink.email, Date.now()).run();
+      userId = Number(result.meta.last_row_id);
       
-      // Initialize user's verses with sample verses
+      // Initialize user stats with streak of 1
+      await db.prepare(`
+        INSERT INTO user_stats (
+          user_id,
+          total_points,
+          current_streak,
+          longest_streak,
+          verses_mastered,
+          total_attempts,
+          last_activity_date,
+          created_at
+        ) VALUES (?, 0, 1, 1, 0, 0, ?, ?)
+      `).bind(userId, Date.now(), Date.now()).run();
+
+      // Add sample verses for new users only
+      console.log('Starting to add sample verses for new user');
       const sampleVerses = [
         { reference: 'John 3:16', text: 'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.' },
         { reference: 'Philippians 4:13', text: 'I can do all things through Christ who strengthens me.' },
         { reference: 'Jeremiah 29:11', text: 'For I know the plans I have for you," declares the LORD, "plans to prosper you and not to harm you, plans to give you hope and a future.' }
       ];
 
+      // Insert sample verses
       for (const verse of sampleVerses) {
-        await db.prepare(`
-          INSERT INTO verses (
-            user_id,
-            reference,
-            text,
-            translation,
-            created_at
-          ) VALUES (?, ?, ?, 'NIV', ?)
-        `).bind(
-          userId,
-          verse.reference,
-          verse.text,
-          Date.now()
-        ).run();
+        console.log('Inserting verse:', verse.reference);
+        try {
+          await db.prepare(`
+            INSERT INTO verses (
+              user_id,
+              reference,
+              text,
+              translation,
+              created_at
+            ) VALUES (?, ?, ?, ?, ?)
+          `).bind(
+            userId,
+            verse.reference,
+            verse.text,
+            'NIV',
+            Date.now()
+          ).run();
+          console.log('Successfully inserted verse:', verse.reference);
+        } catch (error) {
+          console.error('Error inserting verse:', verse.reference, error);
+          throw error;
+        }
       }
+      console.log('Finished adding sample verses');
     } else {
       userId = Number(existingUser.id);
-      // Update last login
-      await db.prepare(
-        'UPDATE users SET last_login_at = ? WHERE id = ?'
-      ).bind(Date.now(), userId).run();
+      
+      // Get current stats
+      const stats = await db.prepare(`
+        SELECT last_activity_date, current_streak, longest_streak 
+        FROM user_stats 
+        WHERE user_id = ?
+      `).bind(userId).first() as { last_activity_date: number, current_streak: number, longest_streak: number } | null;
+
+      if (stats) {
+        const lastActivity = new Date(stats.last_activity_date);
+        const currentTime = new Date();
+        const yesterday = new Date(currentTime);
+        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+
+        // If last activity was yesterday or earlier, increment streak
+        if (lastActivity <= yesterday) {
+          const newStreak = stats.current_streak + 1;
+          const longestStreak = Math.max(newStreak, stats.longest_streak);
+
+          await db.prepare(`
+            UPDATE user_stats 
+            SET current_streak = ?,
+                longest_streak = ?,
+                last_activity_date = ?
+            WHERE user_id = ?
+          `).bind(newStreak, longestStreak, Date.now(), userId).run();
+
+          // Award points for maintaining streak if > 1 day
+          if (newStreak > 1) {
+            await db.prepare(`
+              INSERT INTO point_events (
+                user_id,
+                event_type,
+                points,
+                metadata,
+                created_at
+              ) VALUES (?, 'daily_streak', ?, ?, ?)
+            `).bind(
+              userId,
+              50, // DAILY_STREAK points
+              JSON.stringify({ streak_days: newStreak }),
+              Date.now()
+            ).run();
+
+            // Update total points
+            await db.prepare(`
+              UPDATE user_stats 
+              SET total_points = total_points + ?
+              WHERE user_id = ?
+            `).bind(50, userId).run();
+          }
+        } else {
+          // Ensure minimum streak of 1 and update last activity date
+          await db.prepare(`
+            UPDATE user_stats 
+            SET current_streak = CASE 
+                WHEN current_streak = 0 THEN 1 
+                ELSE current_streak 
+              END,
+              last_activity_date = ?
+            WHERE user_id = ?
+          `).bind(Date.now(), userId).run();
+        }
+      } else {
+        // Initialize stats if they don't exist
+        await db.prepare(`
+          INSERT INTO user_stats (
+            user_id,
+            total_points,
+            current_streak,
+            longest_streak,
+            verses_mastered,
+            total_attempts,
+            last_activity_date,
+            created_at
+          ) VALUES (?, 0, 1, 1, 0, 0, ?, ?)
+        `).bind(userId, Date.now(), Date.now()).run();
+      }
     }
 
     // Create session
@@ -435,5 +511,62 @@ export const handleAuth = {
         ...Object.fromEntries(headers)
       }
     });
+  },
+
+  // Delete user and all associated data
+  deleteUser: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Use D1's batch API for atomic operations
+      // Order matters - delete child records before parent records
+      await db.batch([
+        // First delete all point events and progress tracking
+        db.prepare('DELETE FROM point_events WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM word_progress WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM verse_attempts WHERE user_id = ?').bind(userId),
+        
+        // Delete mastery records (both tables)
+        db.prepare('DELETE FROM mastered_verses WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM verse_mastery WHERE user_id = ?').bind(userId),
+        
+        // Now we can delete verses
+        db.prepare('DELETE FROM verses WHERE user_id = ?').bind(userId),
+        
+        // Delete remaining user data
+        db.prepare('DELETE FROM user_stats WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM magic_links WHERE email = (SELECT email FROM users WHERE id = ?)').bind(userId),
+        
+        // Finally delete the user
+        db.prepare('DELETE FROM users WHERE id = ?').bind(userId)
+      ]);
+
+      return new Response(null, { status: 204 });
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 }; 

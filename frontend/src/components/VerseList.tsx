@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
 import {
   Box,
   Text,
@@ -29,18 +29,59 @@ import {
   Th,
   Td,
   Kbd,
+  Input,
+  Textarea,
+  Collapse,
+  UnorderedList,
+  ListItem,
+  IconButton,
+  Tooltip,
+  useDisclosure,
+  useBreakpointValue,
+  Divider,
+  useOutsideClick,
+  useUpdateEffect,
+  useEventListener,
+  useMergeRefs,
+  useControllableState,
+  useCallbackRef,
+  useId,
+  useBoolean,
+  useClipboard,
+  useDisclosure as useDisclosureHook,
+  useToast as useToastHook,
+  useColorMode as useColorModeHook,
+  useBreakpointValue as useBreakpointValueHook,
+  useOutsideClick as useOutsideClickHook,
+  useEventListener as useEventListenerHook,
+  useMergeRefs as useMergeRefsHook,
+  useControllableState as useControllableStateHook,
+  useCallbackRef as useCallbackRefHook,
+  useId as useIdHook,
+  useBoolean as useBooleanHook,
+  useClipboard as useClipboardHook,
 } from '@chakra-ui/react';
+import { ChevronDownIcon, ChevronUpIcon, DeleteIcon, EditIcon, InfoIcon, RepeatIcon, StarIcon, TimeIcon } from '@chakra-ui/icons';
 import { ProgressStatus } from '../utils/progress';
 import { useAuth } from '../hooks/useAuth';
+import { usePoints } from '../contexts/PointsContext';
 import { debug, handleError } from '../utils/debug';
 import { useVerses } from '../hooks/useVerses';
 import { Footer } from './Footer';
+import { getApiUrl } from '../utils/api';
 
 interface Verse {
   reference: string;
   text: string;
   status: ProgressStatus;
   lastReviewed: string;
+}
+
+// Add interface for tracking recorded words
+interface RecordedWord {
+  verse_reference: string;
+  word_index: number;
+  timestamp: number;
 }
 
 export interface VerseListRef {
@@ -56,7 +97,412 @@ interface VerseListProps {
   showStatusButtons?: boolean;
 }
 
-export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) => {
+// Add WordProgress interface
+interface WordProgress {
+  verse_reference: string;
+  word_index: number;
+  word: string;
+  is_correct: boolean;
+  timestamp: number;
+}
+
+// Add mastery progress interface
+interface MasteryProgress {
+  total_attempts: number;
+  overall_accuracy: number;
+  consecutive_perfect: number;
+  is_mastered: boolean;
+  mastery_date?: number;
+  last_attempt_date?: number;
+}
+
+// Update MasteryState interface
+interface MasteryState {
+  activeVerse: string | null;
+  attempt: string;
+  isSubmitting: boolean;
+  feedback: {
+    isCorrect: boolean;
+    message: string;
+    attempt?: string;  // Store the attempt for display
+  } | null;
+  progress: MasteryProgress | null;
+}
+
+// Move MasteryMode to be a separate component
+interface MasteryModeProps {
+  verse: Verse;
+  attempt: string;
+  isSubmitting: boolean;
+  feedback: {
+    isCorrect: boolean;
+    message: string;
+    attempt?: string;
+  } | null;
+  progress: MasteryProgress | null;
+  onAttempt: (reference: string) => Promise<void>;
+  onToggle: (reference: string) => Promise<void>;
+  onInput: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>, reference: string) => void;
+  isVisible: boolean; // Add this prop
+}
+
+// Add at the top with other constants
+const POINTS = {
+  WORD_CORRECT: 1,
+  STREAK_MULTIPLIER: 0.5
+};
+
+const MasteryMode: React.FC<MasteryModeProps> = ({ 
+  verse, 
+  attempt,
+  isSubmitting,
+  feedback,
+  progress,
+  onAttempt, 
+  onToggle, 
+  onInput, 
+  onKeyDown,
+  isVisible
+}) => {
+  const [progressMessage, setProgressMessage] = useState<JSX.Element | null>(null);
+  const [timeUntilNext, setTimeUntilNext] = useState<string | null>(null);
+  const toast = useToast();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Move all color mode hooks to the top
+  const masteryBg = useColorModeValue('blue.50', 'blue.900');
+  const masteryBorderColor = useColorModeValue('blue.200', 'blue.700');
+  const masteryTextColor = useColorModeValue('gray.700', 'gray.200');
+  const masteryBoxBg = useColorModeValue('white', 'gray.800');
+  const masteryBoxBorderColor = useColorModeValue('gray.200', 'gray.600');
+  const successBg = useColorModeValue('green.500', 'green.600');
+  const successBorderColor = useColorModeValue('green.600', 'green.700');
+  const warningBg = useColorModeValue('orange.50', 'orange.900');
+  const warningBorderColor = useColorModeValue('orange.200', 'orange.700');
+  const warningTextColor = useColorModeValue('gray.600', 'gray.300');
+  const warningBoxBg = useColorModeValue('white', 'gray.800');
+  const warningBoxBorderColor = useColorModeValue('gray.200', 'gray.600');
+
+  // Update time until next attempt
+  useEffect(() => {
+    if (progress && progress.consecutive_perfect > 0) {
+      void getTimeUntilNextAttempt(verse.reference).then(time => {
+        setTimeUntilNext(time || null);
+      });
+    } else {
+      setTimeUntilNext(null);
+    }
+  }, [progress?.consecutive_perfect, verse.reference]);
+
+  // Focus textarea when component becomes visible
+  useEffect(() => {
+    if (isVisible) {
+      // Small delay to ensure the textarea is rendered and visible
+      const timer = setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+        }
+      }, 300); // Delay to account for collapse animation
+      return () => clearTimeout(timer);
+    }
+  }, [isVisible]); // Re-run when visibility changes
+
+  // Helper function to normalize words
+  const normalizeWord = (word: string): string => {
+    return word.toLowerCase().replace(/[.,;:!?'"-]/g, '');
+  };
+
+  // Helper function to get time until next attempt
+  const getTimeUntilNextAttempt = async (reference: string): Promise<string> => {
+    const lastAttempt = localStorage.getItem(`last_attempt_${reference}`);
+    if (!lastAttempt) {
+      // If no local timestamp, fetch from API
+      try {
+        const sessionToken = localStorage.getItem('session_token');
+        if (!sessionToken) {
+          throw new Error('No session token found');
+        }
+
+        const response = await fetch(`/api/progress/mastery/${reference}`, {
+          headers: {
+            'Authorization': `Bearer ${sessionToken}`
+          }
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch mastery progress');
+
+        const data = await response.json();
+        const progress: MasteryProgress = {
+          total_attempts: data.totalAttempts || 0,
+          overall_accuracy: data.overallAccuracy || 0,
+          consecutive_perfect: data.perfectAttemptsInRow || 0,
+          is_mastered: data.isMastered || false,
+          mastery_date: data.masteryDate,
+          last_attempt_date: data.lastAttemptDate
+        };
+
+        if (progress.last_attempt_date) {
+          localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
+          const now = Date.now();
+          const hoursSinceLastAttempt = (now - progress.last_attempt_date) / (1000 * 60 * 60);
+          const hoursRemaining = Math.ceil(24 - hoursSinceLastAttempt);
+          if (hoursRemaining <= 0) return '';
+          return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
+        }
+        return '';
+      } catch (error) {
+        console.error('Error fetching mastery progress:', error);
+        return '';
+      }
+    }
+    
+    const lastAttemptTime = parseInt(lastAttempt, 10);
+    const now = Date.now();
+    const hoursSinceLastAttempt = (now - lastAttemptTime) / (1000 * 60 * 60);
+    const hoursRemaining = Math.ceil(24 - hoursSinceLastAttempt);
+    
+    if (hoursRemaining <= 0) return '';
+    return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
+  };
+
+  // Helper function to get mastery progress message
+  const getMasteryProgressMessage = (progress: MasteryProgress, reference: string): JSX.Element => {
+    if (progress.is_mastered) {
+      const masteryDate = progress.mastery_date ? new Date(progress.mastery_date).toLocaleDateString() : 'recently';
+      return (
+        <Text
+          fontSize="xl"
+          fontWeight="bold"
+          color="green.500"
+          textAlign="center"
+          animation="pulse 2s infinite"
+          sx={{
+            '@keyframes pulse': {
+              '0%': { transform: 'scale(1)' },
+              '50%': { transform: 'scale(1.05)' },
+              '100%': { transform: 'scale(1)' }
+            }
+          }}
+        >
+          🎉 YOU DID IT! You mastered this verse on {masteryDate} after successfully reciting it from memory 3 times in a row perfectly! 🎉
+        </Text>
+      );
+    }
+
+    const isInCooldown = timeUntilNext !== null && timeUntilNext !== '';
+
+    return (
+      <VStack align="stretch" spacing={2}>
+        <Text fontWeight="bold" textAlign="center">Current mastery status for {reference}:</Text>
+        <Box display="flex" justifyContent="center">
+          <UnorderedList 
+            spacing={2} 
+            styleType="disc" 
+            maxW={{ base: "70%", sm: "60%", md: "50%", lg: "40%" }}
+            width="100%"
+          >
+            <ListItem textAlign="left">
+              You need 5 total attempts at 80% or better accuracy
+              <UnorderedList spacing={1} styleType="circle" ml={6}>
+                <ListItem textAlign="left">
+                  You currently have {progress.total_attempts} {progress.total_attempts === 1 ? 'attempt' : 'attempts'}
+                </ListItem>
+              </UnorderedList>
+            </ListItem>
+            <ListItem textAlign="left">
+              You need 3 perfect attempts, at least 24 hours apart
+              <UnorderedList spacing={1} styleType="circle" ml={6}>
+                <ListItem textAlign="left">
+                  You currently have {progress.consecutive_perfect} perfect {progress.consecutive_perfect === 1 ? 'attempt' : 'attempts'}
+                </ListItem>
+              </UnorderedList>
+            </ListItem>
+            {isInCooldown && (
+              <ListItem textAlign="left" color="orange.500">
+                You can make your next attempt in {timeUntilNext} (24-hour cooldown after perfect attempts)
+              </ListItem>
+            )}
+          </UnorderedList>
+        </Box>
+        <Text mt={2} textAlign="center">
+          {isInCooldown 
+            ? "You can practice now, but attempts won't count towards mastery until the cooldown period ends."
+            : "You can retry immediately after a failed (below 80%) attempt, and the 24 hour timer only starts after a perfect attempt."}
+        </Text>
+      </VStack>
+    );
+  };
+
+  useEffect(() => {
+    if (progress) {
+      const message = getMasteryProgressMessage(progress, verse.reference);
+      setProgressMessage(message);
+    }
+  }, [progress, verse.reference, timeUntilNext]);
+
+  return (
+    <Box
+      bg={masteryBg}
+      p={4}
+      borderRadius="md"
+      borderWidth="1px"
+      borderColor={masteryBorderColor}
+    >
+      <VStack align="stretch" spacing={4}>
+        <Text fontSize="lg" color={masteryTextColor}>
+          Think you know {verse.reference} by heart? Enter it exactly right below, and you're one step closer to mastery.
+        </Text>
+        
+        {progress && (
+          <Box 
+            p={3} 
+            bg={masteryBoxBg} 
+            borderRadius="md"
+            borderWidth="1px"
+            borderColor={masteryBoxBorderColor}
+          >
+            {progressMessage}
+          </Box>
+        )}
+
+        <Box position="relative">
+          <Textarea
+            ref={textareaRef}
+            value={attempt}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck="false"
+            autoSave="off"
+            autoFocus={false}
+            form=""
+            name=""
+            inputMode="text"
+            onChange={onInput}
+            onKeyDown={(e) => onKeyDown(e, verse.reference)}
+            onPaste={(e) => {
+              // Only prevent paste if it's a real paste event with more than 2 words
+              if (e.nativeEvent instanceof ClipboardEvent && 
+                  e.nativeEvent.clipboardData && 
+                  e.nativeEvent.clipboardData.getData('text').trim().split(/\s+/).length > 2) {
+                e.preventDefault();
+                toast({
+                  title: "No copy/paste allowed here!",
+                  description: "Gotta use your brain!",
+                  status: "warning",
+                  duration: 3000,
+                  isClosable: true,
+                  position: "top",
+                });
+              }
+            }}
+            placeholder="Type the verse from memory..."
+            size="lg"
+            rows={4}
+            isDisabled={isSubmitting}
+            _focus={{
+              outline: 'none',
+              boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+            }}
+            _focusVisible={{
+              outline: 'none',
+              boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+            }}
+            sx={{
+              textTransform: 'none',
+              '&::placeholder': {
+                textTransform: 'none'
+              }
+            }}
+          />
+        </Box>
+
+        {feedback && (
+          <Box>
+            {feedback.isCorrect ? (
+              <Box
+                p={3}
+                bg={successBg}
+                borderRadius="md"
+                borderWidth="1px"
+                borderColor={successBorderColor}
+              >
+                <Text
+                  color="white"
+                  fontSize="sm"
+                  fontWeight="bold"
+                  role="alert"
+                  aria-live="polite"
+                >
+                  {feedback.message}
+                </Text>
+              </Box>
+            ) : (
+              <Box
+                p={3}
+                bg={warningBg}
+                borderRadius="md"
+                borderWidth="1px"
+                borderColor={warningBorderColor}
+              >
+                <Text fontSize="sm" color={warningTextColor} mb={2}>
+                  {feedback.message}
+                </Text>
+                {feedback.attempt && (
+                  <Box
+                    p={2}
+                    bg={warningBoxBg}
+                    borderRadius="md"
+                    borderWidth="1px"
+                    borderColor={warningBoxBorderColor}
+                  >
+                    {feedback.attempt.split(' ').map((word, index) => {
+                      const isCorrect = verse.text.split(' ').some(
+                        correctWord => normalizeWord(correctWord) === normalizeWord(word)
+                      );
+                      return (
+                        <Text
+                          key={index}
+                          as="span"
+                          color={isCorrect ? 'green.500' : 'red.500'}
+                          fontWeight={isCorrect ? 'normal' : 'bold'}
+                          mr={1}
+                        >
+                          {word}
+                        </Text>
+                      );
+                    })}
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Box>
+        )}
+
+        <Flex gap={2} justify="space-between">
+          <Button
+            colorScheme="green"
+            onClick={() => onAttempt(verse.reference)}
+            isLoading={isSubmitting}
+            isDisabled={!attempt.trim()}
+          >
+            Submit Attempt
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onToggle(verse.reference)}
+            isDisabled={isSubmitting}
+          >
+            Exit Mastery Mode
+          </Button>
+        </Flex>
+      </VStack>
+    </Box>
+  );
+};
+
+export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): JSX.Element => {
   const { verses, loading, error, onStatusChange, onDelete, showStatusButtons = true } = props;
   const [activeVerseId, setActiveVerseId] = useState<string | null>(null);
   const [revealedWords, setRevealedWords] = useState<number[]>([]);
@@ -64,6 +510,37 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
   const [announcedWord, setAnnouncedWord] = useState<string>('');
   const toast = useToast();
   const { userEmail, isAuthenticated } = useAuth();
+  const { refreshPoints, updatePoints } = usePoints();
+
+  // Move all color mode hooks to component level
+  const textColor = useColorModeValue('gray.700', 'gray.200');
+  const inputBg = useColorModeValue('white', 'gray.800');
+  const inputBorderColor = useColorModeValue('gray.200', 'gray.600');
+  const inputFocusShadow = '0 0 0 3px var(--chakra-colors-blue-300)';
+  const dialogBg = useColorModeValue('white', 'gray.800');
+  const dialogColor = useColorModeValue('gray.800', 'white');
+  const dialogOverlayBg = 'blackAlpha.300';
+  const dialogContentBg = useColorModeValue('white', 'gray.800');
+  const dialogContentColor = useColorModeValue('gray.800', 'white');
+  const dialogDetailsBg = useColorModeValue('gray.50', 'gray.700');
+  const successBg = useColorModeValue('green.500', 'green.600');
+  const successBorderColor = useColorModeValue('green.600', 'green.700');
+  const warningBg = useColorModeValue('orange.50', 'orange.900');
+  const warningBorderColor = useColorModeValue('orange.200', 'orange.700');
+  const warningTextColor = useColorModeValue('gray.600', 'gray.300');
+  const warningBoxBg = useColorModeValue('white', 'gray.800');
+  const warningBoxBorderColor = useColorModeValue('gray.200', 'gray.600');
+  const masteryButtonBg = useColorModeValue('blue.50', 'blue.900');
+  const masteryButtonColor = useColorModeValue('blue.700', 'blue.100');
+  const masteryButtonBorderColor = useColorModeValue('blue.200', 'blue.700');
+  const masteryButtonHoverBg = useColorModeValue('blue.100', 'blue.800');
+  const masteryButtonHoverBorderColor = useColorModeValue('blue.300', 'blue.600');
+  const masteryButtonActiveBg = useColorModeValue('blue.200', 'blue.700');
+  const masteryButtonActiveBorderColor = useColorModeValue('blue.400', 'blue.500');
+  const errorBg = useColorModeValue('red.50', 'red.900');
+  const shortcutsModalBg = useColorModeValue('white', 'gray.800');
+  const shortcutsModalColor = useColorModeValue('gray.800', 'white');
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [verseToDelete, setVerseToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -73,6 +550,110 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
   const [lastFocusedElement, setLastFocusedElement] = useState<HTMLElement | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const [focusedVerseIndex, setFocusedVerseIndex] = useState<number>(-1);
+
+  // Add word progress state
+  const [wordProgressQueue, setWordProgressQueue] = useState<WordProgress[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const syncTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Add state for tracking recorded words (only from correct guesses)
+  const [recordedWords, setRecordedWords] = useState<RecordedWord[]>(() => {
+    // Initialize from localStorage if available
+    const saved = localStorage.getItem('recordedWords');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Add function to check if word has been recorded
+  const isWordRecorded = useCallback((reference: string, wordIndex: number): boolean => {
+    return recordedWords.some(
+      word => word.verse_reference === reference && word.word_index === wordIndex
+    );
+  }, [recordedWords]);
+
+  // Add function to record a word
+  const recordWord = useCallback((reference: string, wordIndex: number) => {
+    setRecordedWords(prev => {
+      const newRecordedWords = [
+        ...prev,
+        { verse_reference: reference, word_index: wordIndex, timestamp: Date.now() }
+      ];
+      // Save to localStorage
+      localStorage.setItem('recordedWords', JSON.stringify(newRecordedWords));
+      return newRecordedWords;
+    });
+  }, []);
+
+  // Update syncProgress to batch updates
+  const syncProgress = useCallback(() => {
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    syncTimeoutRef.current = setTimeout(async () => {
+      if (!isAuthenticated || wordProgressQueue.length === 0 || isSyncing) return;
+
+      setIsSyncing(true);
+      try {
+        const sessionToken = localStorage.getItem('session_token');
+        if (!sessionToken) {
+          throw new Error('No session token found');
+        }
+
+        // Sort queue by timestamp to ensure correct order
+        const sortedQueue = [...wordProgressQueue].sort((a, b) => a.timestamp - b.timestamp);
+        
+        // Process in batches of 3
+        for (let i = 0; i < sortedQueue.length; i += 3) {
+          const batch = sortedQueue.slice(i, i + 3);
+          
+          // Send batch
+          for (const progress of batch) {
+            const response = await fetch('/api/progress/word', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionToken}`
+              },
+              body: JSON.stringify(progress)
+            });
+
+            if (!response.ok) {
+              throw new Error('Failed to sync progress');
+            }
+          }
+
+          // Add a delay between batches equal to the debounce time
+          if (i + 3 < sortedQueue.length) {
+            await new Promise(resolve => setTimeout(resolve, 3500));
+          }
+        }
+
+        // Clear the queue after successful sync
+        setWordProgressQueue([]);
+        
+        // Only refresh points from API every 5 minutes
+        const lastPointsRefresh = localStorage.getItem('last_points_refresh');
+        const now = Date.now();
+        if (!lastPointsRefresh || (now - parseInt(lastPointsRefresh)) > 5 * 60 * 1000) {
+          await refreshPoints();
+          localStorage.setItem('last_points_refresh', now.toString());
+        }
+      } catch (error) {
+        debug.error('api', 'Error syncing progress:', error);
+      } finally {
+        setIsSyncing(false);
+      }
+    }, 3500); // 3.5 second debounce
+  }, [isAuthenticated, wordProgressQueue, isSyncing, refreshPoints]);
+
+  // Add cleanup for timeout
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Add modal state management
   const [modalState, setModalState] = useState<{
@@ -107,6 +688,336 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
   const TIMEOUT_DURATION = 3 * 60 * 60 * 1000; // 3 hours
   const WARNING_DURATION = 2 * 60 * 1000; // 2 minutes
+
+  // Add user guess state management
+  const [userGuess, setUserGuess] = useState<string>('');
+  const [guessFeedback, setGuessFeedback] = useState<{
+    isCorrect: boolean;
+    message: string;
+  } | null>(null);
+
+  // Add input ref for focus management
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Add mastery state
+  const [masteryState, setMasteryState] = useState<MasteryState>({
+    activeVerse: null,
+    attempt: '',
+    isSubmitting: false,
+    feedback: null,
+    progress: null
+  });
+
+  // Add state for tracking consecutive correct guesses
+  const [consecutiveCorrectGuesses, setConsecutiveCorrectGuesses] = useState<number>(0);
+
+  // Add helper function to check if enough time has passed since last attempt
+  const hasEnoughTimePassed = async (reference: string): Promise<boolean> => {
+    const lastAttempt = localStorage.getItem(`last_attempt_${reference}`);
+    if (!lastAttempt) {
+      // If no local timestamp, fetch from API
+      const progress = await fetchMasteryProgress(reference);
+      if (progress.last_attempt_date) {
+        localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
+        const now = Date.now();
+        const hoursSinceLastAttempt = (now - progress.last_attempt_date) / (1000 * 60 * 60);
+        return hoursSinceLastAttempt >= 24;
+      }
+      return true; // No previous attempts found
+    }
+    
+    const lastAttemptTime = parseInt(lastAttempt, 10);
+    const now = Date.now();
+    const hoursSinceLastAttempt = (now - lastAttemptTime) / (1000 * 60 * 60);
+    
+    return hoursSinceLastAttempt >= 24;
+  };
+
+  // Add helper function to get time until next attempt
+  const getTimeUntilNextAttempt = async (reference: string): Promise<string> => {
+    const lastAttempt = localStorage.getItem(`last_attempt_${reference}`);
+    if (!lastAttempt) {
+      // If no local timestamp, fetch from API
+      const progress = await fetchMasteryProgress(reference);
+      if (progress.last_attempt_date) {
+        localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
+        const now = Date.now();
+        const hoursSinceLastAttempt = (now - progress.last_attempt_date) / (1000 * 60 * 60);
+        const hoursRemaining = Math.ceil(24 - hoursSinceLastAttempt);
+        if (hoursRemaining <= 0) return '';
+        return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
+      }
+      return '';
+    }
+    
+    const lastAttemptTime = parseInt(lastAttempt, 10);
+    const now = Date.now();
+    const hoursSinceLastAttempt = (now - lastAttemptTime) / (1000 * 60 * 60);
+    const hoursRemaining = Math.ceil(24 - hoursSinceLastAttempt);
+    
+    if (hoursRemaining <= 0) return '';
+    return `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
+  };
+
+  // Add function to fetch mastery progress
+  const fetchMasteryProgress = async (reference: string, forceRefresh: boolean = false): Promise<MasteryProgress> => {
+    // Check localStorage first, but only if not forcing refresh
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(`mastery_progress_${reference}`);
+      if (cached) {
+        const { progress, timestamp } = JSON.parse(cached);
+        // Cache for 5 minutes
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          return progress;
+        }
+      }
+    }
+
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) {
+        throw new Error('No session token found');
+      }
+
+      const response = await fetch(`/api/progress/mastery/${reference}`, {
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch mastery progress');
+
+      const data = await response.json();
+      
+      // Map API response to our frontend interface
+      const progress: MasteryProgress = {
+        total_attempts: data.totalAttempts || 0,
+        overall_accuracy: data.overallAccuracy || 0,
+        consecutive_perfect: data.perfectAttemptsInRow || 0,
+        is_mastered: data.isMastered || false,
+        mastery_date: data.masteryDate,
+        last_attempt_date: data.lastAttemptDate
+      };
+      
+      // Cache the progress
+      localStorage.setItem(`mastery_progress_${reference}`, JSON.stringify({
+        progress,
+        timestamp: Date.now()
+      }));
+
+      // Also update the last attempt timestamp in localStorage if it exists
+      if (progress.last_attempt_date) {
+        localStorage.setItem(`last_attempt_${reference}`, progress.last_attempt_date.toString());
+      }
+
+      return progress;
+    } catch (error) {
+      console.error('Error fetching mastery progress:', error);
+      return {
+        total_attempts: 0,
+        overall_accuracy: 0,
+        consecutive_perfect: 0,
+        is_mastered: false
+      };
+    }
+  };
+
+  // Update handleMasteryToggle to fetch progress
+  const handleMasteryToggle = async (reference: string): Promise<void> => {
+    if (masteryState.activeVerse === reference) {
+      setMasteryState(prev => ({
+        ...prev,
+        activeVerse: null,
+        attempt: '',
+        feedback: null,
+        progress: null
+      }));
+    } else {
+      const progress = await fetchMasteryProgress(reference);
+      setMasteryState(prev => ({
+        ...prev,
+        activeVerse: reference,
+        attempt: '',
+        feedback: null,
+        progress
+      }));
+    }
+  };
+
+  // Add helper function to normalize words (remove punctuation and convert to lowercase)
+  const normalizeWord = (word: string): string => {
+    return word.toLowerCase().replace(/[.,;:!?'"-]/g, '');
+  };
+
+  // Update handleMasteryAttempt to update progress immediately
+  const handleMasteryAttempt = async (reference: string) => {
+    const verse = verses.find(v => v.reference === reference);
+    if (!verse) return;
+
+    // Only check cooldown if the last attempt was perfect
+    const progress = await fetchMasteryProgress(reference);
+    if (progress.consecutive_perfect > 0) {
+      if (!(await hasEnoughTimePassed(reference))) {
+        const timeUntilNextAttempt = await getTimeUntilNextAttempt(reference);
+        setMasteryState(prev => ({
+          ...prev,
+          feedback: {
+            isCorrect: false,
+            message: `You can make your next attempt in ${timeUntilNextAttempt} (24-hour cooldown only applies after perfect attempts). Feel free to practice, but it won't count towards mastery until then.`,
+            attempt: masteryState.attempt
+          },
+          attempt: '',
+          isSubmitting: false
+        }));
+        return;
+      }
+    }
+
+    setMasteryState(prev => ({ ...prev, isSubmitting: true }));
+
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) {
+        throw new Error('No session token found');
+      }
+
+      const words = verse.text.split(' ').map(normalizeWord);
+      const userWords = masteryState.attempt.split(' ').filter(word => word.trim());
+      const correctWords = userWords.filter(word => 
+        words.includes(normalizeWord(word))
+      );
+
+      // Calculate accuracy before making the API call
+      const accuracy = correctWords.length / words.length;
+      const accuracyPercent = Math.round(accuracy * 100);
+
+      // Get timeUntilNext from state
+      const timeUntilNext = masteryState.progress && masteryState.progress.consecutive_perfect > 0 ? 
+        await getTimeUntilNextAttempt(reference) : null;
+
+      // Check if this perfect attempt will trigger mastery
+      const willTriggerMastery = accuracy === 1 && 
+        progress.consecutive_perfect === 2 && 
+        !timeUntilNext;
+
+      // Generate feedback message
+      let feedbackMessage = '';
+      if (accuracy === 1) {
+        if (willTriggerMastery) {
+          feedbackMessage = "Perfect! You've mastered this verse! 🎉";
+        } else {
+          feedbackMessage = "Perfect! That's exactly right! Come back tomorrow to make your next attempt.";
+        }
+        // Store the attempt timestamp only for perfect attempts
+        localStorage.setItem(`last_attempt_${reference}`, Date.now().toString());
+      } else if (accuracy >= 0.95) {
+        feedbackMessage = `Great job! You got ${accuracyPercent}% correct. You can try again immediately!`;
+      } else if (accuracy >= 0.8) {
+        feedbackMessage = `Good attempt! You got ${accuracyPercent}% correct. You can try again immediately!`;
+      } else {
+        feedbackMessage = `Keep practicing! You need at least 80% accuracy to record an attempt.`;
+        setMasteryState(prev => ({
+          ...prev,
+          feedback: {
+            isCorrect: false,
+            message: feedbackMessage,
+            attempt: masteryState.attempt
+          },
+          attempt: '',
+          isSubmitting: false
+        }));
+        return; // Don't record attempts below 80%
+      }
+
+      // Only make the API call if accuracy is >= 80%
+      const response = await fetch('/api/progress/verse', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          verse_reference: reference,
+          words_correct: correctWords.length,
+          total_words: words.length
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to record attempt');
+      
+      // Update progress state immediately
+      const currentProgress = masteryState.progress || {
+        total_attempts: 0,
+        overall_accuracy: 0,
+        consecutive_perfect: 0,
+        is_mastered: false
+      };
+
+      const updatedProgress = {
+        ...currentProgress,
+        total_attempts: currentProgress.total_attempts + 1,
+        consecutive_perfect: accuracy === 1 ? currentProgress.consecutive_perfect + 1 : 0,
+        last_attempt_date: Date.now(),
+        is_mastered: willTriggerMastery || currentProgress.is_mastered,
+        mastery_date: willTriggerMastery ? Date.now() : currentProgress.mastery_date
+      };
+
+      // Update mastery state with new progress immediately
+      setMasteryState(prev => ({
+        ...prev,
+        feedback: {
+          isCorrect: accuracy === 1,
+          message: feedbackMessage,
+          attempt: masteryState.attempt
+        },
+        attempt: '',
+        progress: updatedProgress
+      }));
+
+      // Cache the updated progress
+      localStorage.setItem(`mastery_progress_${reference}`, JSON.stringify({
+        progress: updatedProgress,
+        timestamp: Date.now()
+      }));
+
+      if (updatedProgress.is_mastered) {
+        await onStatusChange(reference, ProgressStatus.Mastered);
+        // Wait for the backend to process mastery and points
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Refresh points from server
+        await refreshPoints();
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to record attempt. Please try again.';
+      setMasteryState(prev => ({
+        ...prev,
+        feedback: {
+          isCorrect: false,
+          message: errorMessage,
+          attempt: masteryState.attempt
+        }
+      }));
+    } finally {
+      setMasteryState(prev => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
+  // Update handleMasteryInput to remove redundant paste detection
+  const handleMasteryInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMasteryState(prev => ({
+      ...prev,
+      attempt: e.target.value,
+      feedback: null
+    }));
+  };
+
+  // Add mastery key handler
+  const handleMasteryKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, reference: string) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void handleMasteryAttempt(reference);
+    }
+  };
 
   // Expose scrollToVerse through ref
   useImperativeHandle(ref, () => ({
@@ -178,8 +1089,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
         return;
       }
 
-      // Only handle shortcuts if no modal is open and no input is focused
-      if (modalState.isOpen || document.activeElement?.tagName === 'INPUT') return;
+      // Only handle shortcuts if no modal is open, no input is focused, and mastery mode is not active
+      if (modalState.isOpen || document.activeElement?.tagName === 'INPUT' || masteryState.activeVerse) return;
 
       // Get the currently focused verse element
       const focusedVerse = document.activeElement?.closest('[role="article"]');
@@ -194,7 +1105,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
           if (activeVerseId !== verseReference) {
             e.preventDefault();
             handleStart(verseReference);
-            setAnnouncedWord('Started memorizing. Press S to show next word.');
+            setAnnouncedWord('Started memorizing. Type the next word.');
           } else if (!showFullVerse[verseReference]) {
             e.preventDefault();
             const verse = verses.find(v => v.reference === verseReference);
@@ -251,7 +1162,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeVerseId, showFullVerse, modalState.isOpen, verses, revealedWords]);
+  }, [activeVerseId, showFullVerse, modalState.isOpen, verses, revealedWords, masteryState.activeVerse]);
 
   // Add keyboard shortcut hints to buttons
   const renderKeyboardShortcut = (shortcut: string) => (
@@ -485,36 +1396,55 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     }
   };
 
+  // Update handleStart to use number[] for revealedWords
   const handleStart = (reference: string) => {
     setActiveVerseId(reference);
-    setRevealedWords([]);
     setShowFullVerse({});
-    // Focus the "Show Next Word" button after a short delay
+    
+    // Get all recorded words for this verse
+    const verseRecordedWords = recordedWords
+      .filter(word => word.verse_reference === reference)
+      .sort((a, b) => a.word_index - b.word_index);
+
+    // Set revealed words based on recorded progress
+    setRevealedWords(verseRecordedWords.map(word => word.word_index));
+    
+    // Focus the input field after a short delay
     setTimeout(() => {
-      const nextWordButton = document.querySelector(`[aria-label="Show next word of ${reference}"]`) as HTMLButtonElement;
-      if (nextWordButton) {
-        nextWordButton.focus();
-      }
+      inputRef.current?.focus();
     }, 100);
   };
 
+  // Add function to find the first unrevealed word index
+  const findFirstUnrevealedWordIndex = useCallback((words: string[]): number => {
+    for (let i = 0; i < words.length; i++) {
+      if (!revealedWords.includes(i)) {
+        return i;
+      }
+    }
+    return words.length;
+  }, [revealedWords]);
+
+  // Update handleShowHint to reveal the word
   const handleShowHint = (reference: string) => {
     const verse = verses.find(v => v.reference === reference);
     if (!verse) return;
 
     const words = verse.text.split(' ');
-    const nextWordIndex = revealedWords.length;
+    const nextWordIndex = findFirstUnrevealedWordIndex(words);
+    
+    // Reset streak when using hint
+    setConsecutiveCorrectGuesses(0);
     
     // Ensure we don't try to reveal beyond the verse length
     if (nextWordIndex >= words.length) {
-      setAnnouncedWord("All words have been revealed");
+      setGuessFeedback({
+        isCorrect: false,
+        message: "Great job! Practice again with the reset button."
+      });
       return;
     }
 
-    // Create a new array with the next word added
-    const newRevealedWords = [...revealedWords, nextWordIndex];
-    setRevealedWords(newRevealedWords);
-    
     const word = words[nextWordIndex];
     const isLastWord = nextWordIndex === words.length - 1;
     const isSecondToLastWord = nextWordIndex === words.length - 2;
@@ -535,6 +1465,33 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       void handleStatusChange(reference, ProgressStatus.InProgress, false);
     }
 
+    // Add the word to revealedWords
+    setRevealedWords(prev => [...prev, nextWordIndex]);
+
+    // Keep the input focusable but don't force focus
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+  };
+
+  // Update handleReset to use number[] for revealedWords
+  const handleReset = (reference: string, clearProgress: boolean = false) => {
+    setRevealedWords([]);
+    setShowFullVerse(prev => ({
+      ...prev,
+      [reference]: false,
+    }));
+    setActiveVerseId(null);
+    setUserGuess('');
+    setGuessFeedback(null);
+    
+    // Clear recorded words from localStorage for this verse
+    setRecordedWords(prev => {
+      const newRecordedWords = prev.filter(word => word.verse_reference !== reference);
+      localStorage.setItem('recordedWords', JSON.stringify(newRecordedWords));
+      return newRecordedWords;
+    });
+    
     // Maintain focus on the verse element
     const verseElement = verseRefs.current[reference];
     if (verseElement) {
@@ -542,17 +1499,98 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     }
   };
 
-  const handleReset = (reference: string) => {
-    setRevealedWords([]);
-    setShowFullVerse(prev => ({
-      ...prev,
-      [reference]: false,
-    }));
-    setActiveVerseId(null);
-    // Maintain focus on the verse element
-    const verseElement = verseRefs.current[reference];
-    if (verseElement) {
-      verseElement.focus();
+  // Update handleGuessSubmit to only use local points
+  const handleGuessSubmit = (reference: string) => {
+    const verse = verses.find(v => v.reference === reference);
+    if (!verse) return;
+
+    const words = verse.text.split(' ');
+    const nextWordIndex = findFirstUnrevealedWordIndex(words);
+    
+    if (nextWordIndex >= words.length) {
+      setGuessFeedback({
+        isCorrect: false,
+        message: "Great job! Practice again with the reset button."
+      });
+      return;
+    }
+
+    const correctWord = words[nextWordIndex].toLowerCase().replace(/[.,;:!?'"-]/g, '');
+    const isCorrect = userGuess.toLowerCase().replace(/[.,;:!?'"-]/g, '') === correctWord;
+
+    // Only add to queue if word hasn't been recorded yet
+    if (!isWordRecorded(reference, nextWordIndex)) {
+      const wordProgress: WordProgress = {
+        verse_reference: reference,
+        word_index: nextWordIndex,
+        word: userGuess.toLowerCase(),
+        is_correct: isCorrect,
+        timestamp: Date.now()
+      };
+      setWordProgressQueue(prev => [...prev, wordProgress]);
+      recordWord(reference, nextWordIndex);
+      
+      // Update points immediately if correct
+      if (isCorrect) {
+        const currentPoints = parseInt(localStorage.getItem('points') || '0', 10);
+        // Increment consecutive correct guesses
+        setConsecutiveCorrectGuesses(prev => prev + 1);
+        // Calculate points based on streak of correct guesses
+        // Match backend calculation: multiplier = 1 + ((streakLength - 1) * STREAK_MULTIPLIER)
+        const multiplier = 1 + ((consecutiveCorrectGuesses) * POINTS.STREAK_MULTIPLIER);
+        const pointsEarned = Math.round(POINTS.WORD_CORRECT * multiplier);
+        const newPoints = currentPoints + pointsEarned;
+        
+        // Update local storage and UI immediately
+        localStorage.setItem('points', newPoints.toString());
+        updatePoints(newPoints);
+      } else {
+        // Reset streak on incorrect guess
+        setConsecutiveCorrectGuesses(0);
+      }
+      
+      syncProgress();
+    }
+
+    if (isCorrect) {
+      const newRevealedWords = [...revealedWords, nextWordIndex];
+      setRevealedWords(newRevealedWords);
+      setUserGuess('');
+      
+      // Check if this was the last word
+      const isLastWord = nextWordIndex === words.length - 1;
+      setGuessFeedback({
+        isCorrect: true,
+        message: isLastWord ? "Great job! Practice again with the reset button." : "Correct! Keep going!"
+      });
+
+      // Update status to In Progress on first word if Not Started
+      if (nextWordIndex === 0 && verse.status === ProgressStatus.NotStarted) {
+        void handleStatusChange(reference, ProgressStatus.InProgress, false);
+      }
+
+      // Find the next unrevealed word for the announcement
+      const nextUnrevealedIndex = findFirstUnrevealedWordIndex(words);
+      if (nextUnrevealedIndex < words.length) {
+        setAnnouncedWord(`Correct! The next word starts with "${words[nextUnrevealedIndex][0]}"`);
+        // Keep focus on input for next word
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+      } else {
+        setAnnouncedWord("Congratulations! You've completed the verse!");
+        // Keep focus on input even when complete
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+      }
+    } else {
+      setGuessFeedback({
+        isCorrect: false,
+        message: "Not quite right. Try again or use the hint button."
+      });
+      // Reset streak on incorrect guess
+      setConsecutiveCorrectGuesses(0);
     }
   };
 
@@ -667,9 +1705,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     }
   };
 
+  // Update renderVerseText to highlight the first unrevealed word
   const renderVerseText = (verse: Verse) => {
-    const textColor = useColorModeValue('gray.700', 'gray.200');
-
     if (showFullVerse[verse.reference]) {
       return (
         <Text fontSize="lg" color={textColor}>
@@ -680,18 +1717,100 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
 
     if (activeVerseId === verse.reference) {
       const words = verse.text.split(' ');
+      const nextWordIndex = findFirstUnrevealedWordIndex(words);
+
       return (
-        <Text fontSize="lg" color={textColor}>
-          {words.map((word, index) => {
-            const isRevealed = revealedWords.includes(index);
-            return (
-              <span key={index}>
-                {isRevealed ? word : '_____'}
-                {index < words.length - 1 ? ' ' : ''}
-              </span>
-            );
-          })}
-        </Text>
+        <VStack align="stretch" spacing={3}>
+          <Text fontSize="lg" color={textColor}>
+            {words.map((word, index) => {
+              const isRevealed = revealedWords.includes(index);
+              const isNextWord = index === nextWordIndex;
+              return (
+                <React.Fragment key={index}>
+                  <span 
+                    style={{
+                      backgroundColor: isNextWord ? 'rgba(66, 153, 225, 0.2)' : 'transparent',
+                      padding: isNextWord ? '2px 4px' : '0',
+                      borderRadius: isNextWord ? '4px' : '0',
+                      transition: 'background-color 0.2s',
+                      display: 'inline-block'
+                    }}
+                  >
+                    {isRevealed ? word : '_____'}
+                  </span>
+                  {index < words.length - 1 ? ' ' : ''}
+                </React.Fragment>
+              );
+            })}
+          </Text>
+          <Flex direction="column" align="center" gap={2}>
+            <Flex gap={2} align="center" justify="center" width="100%">
+              <Input
+                ref={inputRef}
+                value={userGuess}
+                onChange={(e) => {
+                  const sanitizedValue = e.target.value.replace(/[^a-zA-Z0-9.,;:!?'"-]/g, '');
+                  setUserGuess(sanitizedValue);
+                  if (sanitizedValue.length > 1) {
+                    setGuessFeedback(null);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleGuessSubmit(verse.reference);
+                  }
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                onBlur={() => {
+                  setGuessFeedback(null);
+                }}
+                placeholder="Guess the highlighted blank"
+                size="sm"
+                aria-label="Type your guess for the next word"
+                autoFocus
+                tabIndex={0}
+                maxWidth="250px"
+                textAlign="center"
+                bg={inputBg}
+                borderColor={inputBorderColor}
+                _focus={{
+                  outline: 'none',
+                  boxShadow: inputFocusShadow,
+                }}
+                _focusVisible={{
+                  outline: 'none',
+                  boxShadow: inputFocusShadow,
+                }}
+              />
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleGuessSubmit(verse.reference);
+                }}
+                aria-label="Submit your guess"
+              >
+                Submit
+              </Button>
+            </Flex>
+            <Box height="24px" display="flex" alignItems="center" justifyContent="center">
+              {guessFeedback && (
+                <Text
+                  color={guessFeedback.isCorrect ? 'green.500' : 'red.500'}
+                  fontSize="sm"
+                  role="alert"
+                  aria-live="polite"
+                  textAlign="center"
+                >
+                  {guessFeedback.message}
+                </Text>
+              )}
+            </Box>
+          </Flex>
+        </VStack>
       );
     }
 
@@ -706,8 +1825,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
   const renderStatusButton = (reference: string, status: ProgressStatus, label: string, shortcut: string) => {
     const buttonState = statusButtonStates[reference] || { isLoading: false, error: null, lastUpdated: 0 };
     const isCurrentStatus = verses.find(v => v.reference === reference)?.status === status;
-    const hasError = !!buttonState.error;
-    const isLoading = buttonState.isLoading;
 
     // Map status to color scheme with improved contrast
     const getColorScheme = (status: ProgressStatus) => {
@@ -726,43 +1843,48 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     const colorScheme = getColorScheme(status);
 
     return (
-      <Box position="relative">
+      <Box key={`${reference}-${status}`} position="relative">
         <Button
           size="sm"
           colorScheme={colorScheme}
           variant={isCurrentStatus ? 'solid' : 'outline'}
-          onClick={() => handleManualStatusChange(reference, status)}
-          onKeyPress={(e) => handleKeyPress(e, () => handleManualStatusChange(reference, status))}
-          role="radio"
-          aria-label={label}
-          aria-checked={isCurrentStatus}
-          aria-describedby={`status-description-${reference} ${hasError ? `status-error-${reference}` : ''}`}
-          tabIndex={isCurrentStatus ? 0 : -1}
-          isLoading={isLoading}
-          loadingText="Updating..."
-          aria-busy={isLoading}
-          isDisabled={hasError}
+          role="status"
+          aria-label={`Current status: ${label}`}
+          tabIndex={-1}
+          isDisabled={true}
+          opacity={1}
+          _disabled={{
+            opacity: 1,
+            bg: isCurrentStatus ? `${colorScheme}.500` : 'transparent',
+            color: isCurrentStatus ? 'white' : `${colorScheme}.500`,
+            borderColor: `${colorScheme}.500`,
+            cursor: 'default'
+          }}
           _hover={{
-            transform: 'translateY(-1px)',
-            boxShadow: '0 0 0 2px var(--chakra-colors-' + colorScheme + '-500)',
+            bg: isCurrentStatus ? `${colorScheme}.500` : 'transparent',
+            color: isCurrentStatus ? 'white' : `${colorScheme}.500`,
+            borderColor: `${colorScheme}.500`,
+            cursor: 'default'
           }}
           _active={{
-            transform: 'translateY(0)',
-            boxShadow: 'none'
+            bg: isCurrentStatus ? `${colorScheme}.500` : 'transparent',
+            color: isCurrentStatus ? 'white' : `${colorScheme}.500`,
+            borderColor: `${colorScheme}.500`,
+            transform: 'none'
           }}
           _focus={{
-            boxShadow: '0 0 0 3px var(--chakra-colors-' + colorScheme + '-300)',
+            boxShadow: 'none',
             outline: 'none'
           }}
           _focusVisible={{
-            boxShadow: '0 0 0 3px var(--chakra-colors-' + colorScheme + '-300)',
+            boxShadow: 'none',
             outline: 'none'
           }}
           transition="all 0.2s"
           position="relative"
           overflow="hidden"
         >
-          {label} {renderKeyboardShortcut(shortcut)}
+          {label}
           {isCurrentStatus && (
             <Box
               position="absolute"
@@ -782,27 +1904,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
             />
           )}
         </Button>
-        {hasError && (
-          <Text
-            id={`status-error-${reference}`}
-            color="red.600"
-            fontSize="xs"
-            mt={1}
-            role="alert"
-            aria-live="assertive"
-            fontWeight="medium"
-          >
-            {buttonState.error}
-          </Text>
-        )}
         <Text
           id={`status-description-${reference}`}
           srOnly
         >
-          {isCurrentStatus 
-            ? `Current status: ${label}. Press ${shortcut} to keep this status.`
-            : `Press ${shortcut} to set status to ${label}.`
-          }
+          Current status: {label}. Status is automatically updated based on your progress.
         </Text>
       </Box>
     );
@@ -813,18 +1919,25 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     <Flex 
       gap={2} 
       wrap="wrap" 
-      role="radiogroup" 
+      role="status" 
       aria-label={`Progress status for ${verse.reference}`}
       aria-describedby={`status-description-${verse.reference}`}
     >
-      {renderStatusButton(verse.reference, ProgressStatus.NotStarted, "Not Started", "1")}
-      {renderStatusButton(verse.reference, ProgressStatus.InProgress, "In Progress", "2")}
-      {renderStatusButton(verse.reference, ProgressStatus.Mastered, "Mastered", "3")}
+      {[
+        { status: ProgressStatus.NotStarted, label: "Not Started", shortcut: "1" },
+        { status: ProgressStatus.InProgress, label: "In Progress", shortcut: "2" },
+        { status: ProgressStatus.Mastered, label: "Mastered", shortcut: "3" }
+      ].map(({ status, label, shortcut }) => (
+        <Box key={`${verse.reference}-${status}`}>
+          {renderStatusButton(verse.reference, status, label, shortcut)}
+        </Box>
+      ))}
       <Text
+        key={`status-description-${verse.reference}`}
         id={`status-description-${verse.reference}`}
         srOnly
       >
-        Select the current progress status for memorizing this verse. Use number keys 1, 2, or 3 to quickly change status.
+        Current progress status for memorizing this verse. Status is automatically updated based on your progress.
       </Text>
     </Flex>
   );
@@ -872,15 +1985,220 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     };
   }, [isDeleteDialogOpen, isShortcutsModalOpen]);
 
-  // Focus management for verse cards
-  const handleVerseFocus = (reference: string) => {
-    const verseElement = verseRefs.current[reference];
-    if (verseElement) {
-      verseElement.focus();
-    }
+  // Update the verse card rendering
+  const renderVerseCard = (verse: Verse): JSX.Element => {
+    const isInMasteryMode = masteryState.activeVerse === verse.reference;
+    
+    return (
+      <Box
+        key={verse.reference}
+        ref={el => verseRefs.current[verse.reference] = el}
+        p={4}
+        borderWidth="1px"
+        borderRadius="lg"
+        position="relative"
+        role="article"
+        aria-labelledby={`verse-${verse.reference}`}
+        tabIndex={activeVerseId === verse.reference ? -1 : 0}
+      >
+        <VStack align="stretch" spacing={2}>
+          <Flex justify="space-between" align="center">
+            <Text fontWeight="bold" id={`verse-${verse.reference}`}>
+              {verse.reference}
+            </Text>
+            <Text
+              as="button"
+              color="red.600"
+              fontWeight="bold"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteClick(verse.reference);
+              }}
+              onKeyPress={(e) => {
+                e.stopPropagation();
+                handleDeleteClick(verse.reference);
+              }}
+              _hover={{ 
+                color: 'red.700',
+                textDecoration: 'underline'
+              }}
+              cursor="pointer"
+              aria-label={`Delete verse ${verse.reference}`}
+              role="button"
+              tabIndex={0}
+              aria-describedby={`delete-description-${verse.reference}`}
+              _focus={{
+                outline: 'none',
+                boxShadow: '0 0 0 2px var(--chakra-colors-red-300)',
+                borderRadius: 'md'
+              }}
+              _focusVisible={{
+                outline: 'none',
+                boxShadow: '0 0 0 2px var(--chakra-colors-red-300)',
+                borderRadius: 'md'
+              }}
+            >
+              Delete
+            </Text>
+          </Flex>
+
+          <Collapse in={!isInMasteryMode}>
+            <Box>
+              {renderVerseText(verse)}
+              <Flex gap={2} wrap="wrap" justify="space-between" mt={4}>
+                <Flex gap={2} wrap="wrap">
+                  {activeVerseId !== verse.reference ? (
+                    <Button
+                      size="sm"
+                      variant="solid"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStart(verse.reference);
+                      }}
+                      onKeyPress={(e) => {
+                        e.stopPropagation();
+                        handleStart(verse.reference);
+                      }}
+                      role="button"
+                      aria-label={`Start memorizing ${verse.reference}`}
+                      _focus={{
+                        outline: 'none',
+                        boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                      }}
+                      _focusVisible={{
+                        outline: 'none',
+                        boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                      }}
+                    >
+                      Start Memorizing {renderKeyboardShortcut('S')}
+                    </Button>
+                  ) : (
+                    <>
+                      {!showFullVerse[verse.reference] && revealedWords.length < verse.text.split(' ').length && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShowHint(verse.reference);
+                          }}
+                          onKeyPress={(e) => {
+                            e.stopPropagation();
+                            handleShowHint(verse.reference);
+                          }}
+                          role="button"
+                          aria-label={`Show hint for next word of ${verse.reference}`}
+                          _focus={{
+                            outline: 'none',
+                            boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                          }}
+                          _focusVisible={{
+                            outline: 'none',
+                            boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                          }}
+                        >
+                          Show Hint {renderKeyboardShortcut('S')}
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReset(verse.reference);
+                        }}
+                        onKeyPress={(e) => {
+                          e.stopPropagation();
+                          handleReset(verse.reference);
+                        }}
+                        role="button"
+                        aria-label={`Reset memorization of ${verse.reference}`}
+                        _focus={{
+                          outline: 'none',
+                          boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                        }}
+                        _focusVisible={{
+                          outline: 'none',
+                          boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                        }}
+                      >
+                        Reset {renderKeyboardShortcut('R')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleShowVerse(verse.reference);
+                        }}
+                        onKeyPress={(e) => {
+                          e.stopPropagation();
+                          handleShowVerse(verse.reference);
+                        }}
+                        role="button"
+                        aria-label={showFullVerse[verse.reference] ? `Hide full text of ${verse.reference}` : `Show full text of ${verse.reference}`}
+                        _focus={{
+                          outline: 'none',
+                          boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                        }}
+                        _focusVisible={{
+                          outline: 'none',
+                          boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                        }}
+                      >
+                        {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Full Verse'} {renderKeyboardShortcut('F')}
+                      </Button>
+                    </>
+                  )}
+                </Flex>
+                {showStatusButtons && renderStatusButtons(verse)}
+              </Flex>
+            </Box>
+          </Collapse>
+
+          <Collapse in={isInMasteryMode}>
+            <MasteryMode
+              verse={verse}
+              attempt={masteryState.attempt}
+              isSubmitting={masteryState.isSubmitting}
+              feedback={masteryState.feedback}
+              progress={masteryState.progress}
+              onAttempt={handleMasteryAttempt}
+              onToggle={handleMasteryToggle}
+              onInput={handleMasteryInput}
+              onKeyDown={handleMasteryKeyDown}
+              isVisible={isInMasteryMode}
+            />
+          </Collapse>
+
+          {verse.status === ProgressStatus.InProgress && !isInMasteryMode && (
+            <Button
+              size="sm"
+              variant="solid"
+              bg={masteryButtonBg}
+              color={masteryButtonColor}
+              borderColor={masteryButtonBorderColor}
+              borderWidth="1px"
+              onClick={() => handleMasteryToggle(verse.reference)}
+              mt={2}
+              _hover={{
+                bg: masteryButtonHoverBg,
+                borderColor: masteryButtonHoverBorderColor,
+              }}
+              _active={{
+                bg: masteryButtonActiveBg,
+                borderColor: masteryButtonActiveBorderColor,
+              }}
+            >
+              Enter Mastery Mode
+            </Button>
+          )}
+        </VStack>
+      </Box>
+    );
   };
 
-  // Update the delete dialog with improved accessibility and animations
+  // Add back the renderDeleteDialog function
   const renderDeleteDialog = () => (
     <AlertDialog
       isOpen={modalState.isOpen && modalState.type === 'delete'}
@@ -892,7 +2210,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       closeOnEsc={true}
     >
       <AlertDialogOverlay
-        bg="blackAlpha.300"
+        bg={dialogOverlayBg}
         backdropFilter="blur(10px)"
         animation="fadeIn 0.2s ease-out"
         sx={{
@@ -904,8 +2222,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       >
         <AlertDialogContent
           ref={modalRef}
-          bg={useColorModeValue('white', 'gray.800')}
-          color={useColorModeValue('gray.800', 'white')}
+          bg={dialogContentBg}
+          color={dialogContentColor}
           animation="slideIn 0.2s ease-out"
           sx={{
             '@keyframes slideIn': {
@@ -929,7 +2247,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
                 <Box 
                   mt={4} 
                   p={3} 
-                  bg={useColorModeValue('gray.50', 'gray.700')} 
+                  bg={dialogDetailsBg}
                   borderRadius="md"
                   role="region"
                   aria-label="Verse details"
@@ -991,7 +2309,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     </AlertDialog>
   );
 
-  // Update the shortcuts modal with improved accessibility and animations
+  // Add back the renderShortcutsModal function
   const renderShortcutsModal = () => (
     <Modal 
       isOpen={modalState.isOpen && modalState.type === 'shortcuts'} 
@@ -1014,8 +2332,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
       />
       <ModalContent
         ref={modalRef}
-        bg={useColorModeValue('white', 'gray.800')}
-        color={useColorModeValue('gray.800', 'white')}
+        bg={shortcutsModalBg}
+        color={shortcutsModalColor}
         animation="slideIn 0.2s ease-out"
         sx={{
           '@keyframes slideIn': {
@@ -1110,217 +2428,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
     </Modal>
   );
 
-  // Update verse card to handle focus
-  const renderVerseCard = (verse: Verse) => (
-    <Box
-      key={`${verse.reference}-${verse.lastReviewed}`}
-      ref={el => verseRefs.current[verse.reference] = el}
-      p={4}
-      borderWidth="1px"
-      borderRadius="lg"
-      position="relative"
-      role="article"
-      aria-labelledby={`verse-${verse.reference}`}
-      tabIndex={0}
-      onClick={() => handleVerseFocus(verse.reference)}
-      onKeyPress={(e) => handleKeyPress(e, () => handleVerseFocus(verse.reference))}
-      _focus={{
-        outline: 'none',
-        boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-        borderColor: 'blue.500',
-      }}
-      _focusVisible={{
-        outline: 'none',
-        boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-        borderColor: 'blue.500',
-      }}
-      transition="all 0.2s"
-      cursor="pointer"
-    >
-      <VStack align="stretch" spacing={2}>
-        <Flex justify="space-between" align="center">
-          <Text fontWeight="bold" id={`verse-${verse.reference}`}>
-            {verse.reference}
-          </Text>
-          <Text
-            as="button"
-            color="red.600"
-            fontWeight="bold"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteClick(verse.reference);
-            }}
-            onKeyPress={(e) => {
-              e.stopPropagation();
-              handleDeleteClick(verse.reference);
-            }}
-            _hover={{ 
-              color: 'red.700',
-              textDecoration: 'underline'
-            }}
-            cursor="pointer"
-            aria-label={`Delete verse ${verse.reference}`}
-            role="button"
-            tabIndex={0}
-            aria-describedby={`delete-description-${verse.reference}`}
-            _focus={{
-              outline: 'none',
-              boxShadow: '0 0 0 2px var(--chakra-colors-red-300)',
-              borderRadius: 'md'
-            }}
-            _focusVisible={{
-              outline: 'none',
-              boxShadow: '0 0 0 2px var(--chakra-colors-red-300)',
-              borderRadius: 'md'
-            }}
-          >
-            Delete
-          </Text>
-        </Flex>
-        <Text
-          id={`delete-description-${verse.reference}`}
-          srOnly
-        >
-          Delete this verse. This action cannot be undone. A confirmation dialog will appear.
-        </Text>
-        <Box 
-          minH={{ base: "6em", md: "4em" }}
-          display="flex" 
-          alignItems="center"
-          lineHeight="1.5"
-          role="region"
-          aria-label={`Verse text for ${verse.reference}`}
-          tabIndex={0}
-          aria-live="polite"
-          aria-atomic="true"
-          aria-relevant="text"
-          aria-describedby={`verse-status-${verse.reference}`}
-        >
-          {renderVerseText(verse)}
-        </Box>
-        <Text
-          id={`verse-status-${verse.reference}`}
-          srOnly
-        >
-          {activeVerseId === verse.reference 
-            ? `Memorizing in progress. ${revealedWords.length} of ${verse.text.split(' ').length} words revealed.`
-            : showFullVerse[verse.reference]
-              ? "Full verse text is visible"
-              : "Verse text is hidden. Press S to start memorizing."
-          }
-        </Text>
-        <Flex gap={2} wrap="wrap" justify="space-between">
-          <Flex gap={2} wrap="wrap">
-            {activeVerseId !== verse.reference ? (
-              <Button
-                size="sm"
-                variant="solid"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleStart(verse.reference);
-                }}
-                onKeyPress={(e) => {
-                  e.stopPropagation();
-                  handleStart(verse.reference);
-                }}
-                role="button"
-                aria-label={`Start memorizing ${verse.reference}`}
-                _focus={{
-                  outline: 'none',
-                  boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                }}
-                _focusVisible={{
-                  outline: 'none',
-                  boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                }}
-              >
-                Start Memorizing {renderKeyboardShortcut('S')}
-              </Button>
-            ) : (
-              <>
-                {!showFullVerse[verse.reference] && revealedWords.length < verse.text.split(' ').length && (
-                  <Button
-                    size="sm"
-                    variant="solid"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleShowHint(verse.reference);
-                    }}
-                    onKeyPress={(e) => {
-                      e.stopPropagation();
-                      handleShowHint(verse.reference);
-                    }}
-                    role="button"
-                    aria-label={`Show next word of ${verse.reference}`}
-                    _focus={{
-                      outline: 'none',
-                      boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                    }}
-                    _focusVisible={{
-                      outline: 'none',
-                      boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                    }}
-                  >
-                    Show Next Word {renderKeyboardShortcut('S')}
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleReset(verse.reference);
-                  }}
-                  onKeyPress={(e) => {
-                    e.stopPropagation();
-                    handleReset(verse.reference);
-                  }}
-                  role="button"
-                  aria-label={`Reset memorization of ${verse.reference}`}
-                  _focus={{
-                    outline: 'none',
-                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                  }}
-                  _focusVisible={{
-                    outline: 'none',
-                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                  }}
-                >
-                  Reset {renderKeyboardShortcut('R')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleShowVerse(verse.reference);
-                  }}
-                  onKeyPress={(e) => {
-                    e.stopPropagation();
-                    handleShowVerse(verse.reference);
-                  }}
-                  role="button"
-                  aria-label={showFullVerse[verse.reference] ? `Hide full text of ${verse.reference}` : `Show full text of ${verse.reference}`}
-                  _focus={{
-                    outline: 'none',
-                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                  }}
-                  _focusVisible={{
-                    outline: 'none',
-                    boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
-                  }}
-                >
-                  {showFullVerse[verse.reference] ? 'Hide Verse' : 'Show Full Verse'} {renderKeyboardShortcut('F')}
-                </Button>
-              </>
-            )}
-          </Flex>
-          {showStatusButtons && renderStatusButtons(verse)}
-        </Flex>
-      </VStack>
-    </Box>
-  );
-
   if (loading) {
     return (
       <Box 
@@ -1373,7 +2480,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref) =
         borderWidth="1px"
         borderColor="red.500"
         borderRadius="md"
-        bg={useColorModeValue('red.50', 'red.900')}
+        bg={errorBg}
       >
         <VStack align="stretch" spacing={3}>
           <Text color="red.500" fontWeight="bold">

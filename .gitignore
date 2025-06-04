@@ -1,15 +1,20 @@
 # Dependencies
 node_modules/
+**/node_modules/
 .pnp
 .pnp.js
 
 # Testing
 coverage/
+**/coverage/
 
 # Production
 build/
 dist/
+**/dist/
 .wrangler/
+**/.wrangler/
+**/.mf/
 
 # Misc
 .DS_Store
@@ -23,9 +28,6 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Database migrations
-workers/migrations/*.sql
 
 # TypeScript
 *.tsbuildinfo
@@ -62,6 +64,4 @@ dist-ssr
 
 # Cloudflare Workers
 .dev.vars
-
-# Implementation plan
-implementation_plan.md
+**/.cache/

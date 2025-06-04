@@ -12,6 +12,7 @@ import {
   Heading,
 } from '@chakra-ui/react';
 import { useAuth } from '../hooks/useAuth';
+import { usePoints } from '../contexts/PointsContext';
 import { debug, handleError } from '../utils/debug';
 import { Verse } from '../types';
 
@@ -26,6 +27,7 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded, addVerse }) =>
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
   const { userEmail } = useAuth();
+  const { updatePoints } = usePoints();
 
   const handleSubmit = async (e: React.FormEvent) => {
     debug.log('verses', 'Form submission started');
@@ -47,14 +49,20 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded, addVerse }) =>
     setIsSubmitting(true);
     try {
       debug.log('verses', 'Attempting to add verse:', { reference, text });
-      await addVerse({ reference, text, status: 'not_started' });
+      await addVerse({ reference, text, status: 'not_started', translation: 'not specified' });
       debug.log('verses', 'Verse added successfully');
+      
+      // Update points immediately in localStorage
+      const currentPoints = parseInt(localStorage.getItem('points') || '0', 10);
+      const newPoints = currentPoints + 100; // 100 points for adding a verse
+      updatePoints(newPoints);
+      
       setReference('');
       setText('');
       onVerseAdded(reference);
       toast({
         title: 'Success',
-        description: 'Your verse has been added successfully',
+        description: 'Your verse has been added successfully (+100 points!)',
         status: 'success',
         duration: 3000,
         isClosable: true,

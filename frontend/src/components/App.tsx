@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack, Flex, Divider, Link } from '@chakra-ui/react';
+import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack, Flex, Divider, Link, Menu, MenuButton, MenuList, MenuItem, IconButton, useBreakpointValue, keyframes } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { AddVerse } from './AddVerse';
 import { VerseList } from './VerseList';
@@ -9,9 +9,11 @@ import { Footer } from './Footer';
 import { validateEnvVariables } from '../utils/auth';
 import { ProgressStatus } from '../utils/progress';
 import { SignIn } from './SignIn';
+import { PointsDisplay } from './PointsDisplay';
 import logo from '/assets/images/ScriptureMemory.svg';
 import { Verse } from '../types/verse';
 import { debug } from '../utils/debug';
+import { HamburgerIcon } from '@chakra-ui/icons';
 
 const SAMPLE_VERSES: Verse[] = [
   {
@@ -34,6 +36,12 @@ const SAMPLE_VERSES: Verse[] = [
   }
 ];
 
+const pulseAnimation = keyframes`
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+`;
+
 export function MainApp() {
   const { isAuthenticated, userEmail, signOut } = useAuthContext();
   const { verses, loading, error, updateVerse, deleteVerse, addVerse } = useVerses();
@@ -42,6 +50,7 @@ export function MainApp() {
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const verseListRef = useRef<{ scrollToVerse: (reference: string) => void }>(null);
   const navigate = useNavigate();
+  const isMobile = useBreakpointValue({ base: true, md: false });
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -121,15 +130,16 @@ export function MainApp() {
 
         <Box p={8}>
           <VStack spacing={8} align="center">
-            <img src={logo} alt="Scripture Memory" style={{ maxWidth: '300px' }} />
+            <img src={logo} alt="Scripture Memory" style={{ maxWidth: '300px', width: '100%' }} />
             <Heading size="xl" textAlign="center">Welcome to Scripture Memory</Heading>
             <Text fontSize="lg" textAlign="center" color="gray.600">
               Start your journey of memorizing God's Word
             </Text>
-            <HStack spacing={4}>
+            <VStack spacing={4} w="100%" maxW="300px">
               <Button
                 colorScheme="blue"
                 size="lg"
+                w="100%"
                 onClick={() => navigate('/register')}
               >
                 Create Account
@@ -139,6 +149,7 @@ export function MainApp() {
                 variant="outline"
                 colorScheme="blue"
                 bg="transparent"
+                w="100%"
                 _hover={{
                   bg: 'whiteAlpha.200',
                   borderColor: 'blue.400',
@@ -159,6 +170,8 @@ export function MainApp() {
                 colorScheme="green"
                 bg="green.100"
                 color="green.700"
+                w="100%"
+                animation={`${pulseAnimation} 2s ease-in-out infinite`}
                 _hover={{
                   bg: 'green.200',
                   transform: 'translateY(-1px)',
@@ -172,7 +185,7 @@ export function MainApp() {
               >
                 Support Us
               </Button>
-            </HStack>
+            </VStack>
           </VStack>
         </Box>
 
@@ -231,20 +244,57 @@ export function MainApp() {
             <img src={logo} alt="Scripture Memory" style={{ height: '40px' }} />
             <Heading size="md">Scripture Memory</Heading>
           </HStack>
-          <HStack spacing={4}>
-            <Button
-              variant="ghost"
-              onClick={() => navigate('/donate')}
-              colorScheme="green"
-            >
-              Support Us
-            </Button>
-            <Text>{userEmail}</Text>
-            <Avatar size="sm" name={userEmail || undefined} />
-            <Button variant="ghost" onClick={signOut}>
-              Sign Out
-            </Button>
-          </HStack>
+          {isMobile ? (
+            <Menu>
+              <MenuButton
+                as={IconButton}
+                icon={<HamburgerIcon />}
+                variant="ghost"
+                aria-label="Menu"
+              />
+              <MenuList>
+                <MenuItem>
+                  <VStack align="start" spacing={1}>
+                    <Text fontSize="sm" color="gray.500">You are signed in as</Text>
+                    <HStack spacing={2}>
+                      <Avatar size="sm" name={userEmail || undefined} />
+                      <Text>{userEmail}</Text>
+                    </HStack>
+                  </VStack>
+                </MenuItem>
+                <MenuItem onClick={() => navigate('/donate')}>
+                  <Button
+                    variant="ghost"
+                    colorScheme="green"
+                    w="100%"
+                    justifyContent="flex-start"
+                    animation={`${pulseAnimation} 2s ease-in-out infinite`}
+                    pl={0}
+                  >
+                    Support Us
+                  </Button>
+                </MenuItem>
+                <MenuItem onClick={signOut} pl={3}>
+                  Sign Out
+                </MenuItem>
+              </MenuList>
+            </Menu>
+          ) : (
+            <HStack spacing={4}>
+              <Button
+                variant="ghost"
+                onClick={() => navigate('/donate')}
+                colorScheme="green"
+              >
+                Support Us
+              </Button>
+              <Text>{userEmail}</Text>
+              <Avatar size="sm" name={userEmail || undefined} />
+              <Button variant="ghost" onClick={signOut}>
+                Sign Out
+              </Button>
+            </HStack>
+          )}
         </Flex>
       </Box>
 
@@ -263,6 +313,7 @@ export function MainApp() {
       </Box>
 
       <Footer />
+      {isAuthenticated && <PointsDisplay />}
     </Box>
   );
 } 

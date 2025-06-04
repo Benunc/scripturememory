@@ -27,21 +27,11 @@ export const useAuth = () => {
     }
   }, []);
 
-  // Check for magic link token in URL
+  // Check session on mount
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const token = url.searchParams.get('token');
-    if (token) {
-      // If we have a token in the URL, verify it immediately
-      verifyToken(token).then(() => {
-        // If verification succeeds, redirect to the main page
-        window.location.href = '/';
-      }).catch((error) => {
-        debug.error('auth', 'Error verifying token:', error);
-        // If verification fails, show error and stay on the page
-      });
-    }
-  }, []);
+    debug.log('auth', 'useAuth hook mounted');
+    checkSession();
+  }, [checkSession]);
 
   // Sign in with magic link
   const signIn = async (email: string, isRegistration: boolean, turnstileToken: string) => {
@@ -93,9 +83,8 @@ export const useAuth = () => {
         localStorage.setItem('session_token', sessionToken);
         localStorage.setItem('user_email', email);
         
-        setToken(sessionToken);
-        setUserEmail(email);
-        setIsAuthenticated(true);
+        // Force an immediate session check
+        await checkSession();
         
         debug.log('auth', 'Session set successfully');
         return true;
@@ -114,20 +103,14 @@ export const useAuth = () => {
 
   // Sign out
   const signOut = () => {
-    localStorage.removeItem('session_token');
-    localStorage.removeItem('user_email');
-    localStorage.removeItem('pending_email');
-    localStorage.removeItem('pending_token');
+    // Clear all localStorage items
+    localStorage.clear();
+    
+    // Reset state
     setToken(null);
     setUserEmail(null);
     setIsAuthenticated(false);
   };
-
-  // Check session on mount
-  useEffect(() => {
-    debug.log('auth', 'useAuth hook mounted');
-    checkSession();
-  }, [checkSession]);
 
   return {
     isAuthenticated,

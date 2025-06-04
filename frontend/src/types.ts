@@ -5,4 +5,5 @@ export interface Verse {
   text: string;
   status: ProgressStatus;
   lastReviewed: string;
+  translation: string;
 } 
