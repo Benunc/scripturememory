@@ -25,7 +25,7 @@ fi
 
 # List pending migrations
 echo -e "\n${YELLOW}Checking pending migrations...${NC}"
-npx wrangler d1 migrations list scripture-memory --env production
+npx wrangler d1 migrations list scripture-memory --env production --remote
 
 # Confirm before proceeding
 echo -e "\n${YELLOW}WARNING: This will deploy changes to production.${NC}"
@@ -39,15 +39,15 @@ fi
 
 # Apply migrations
 echo -e "\n${YELLOW}Applying migrations...${NC}"
-npx wrangler d1 migrations apply scripture-memory --env production
+npx wrangler d1 migrations apply scripture-memory --env production --remote
 
 # Verify migrations were applied
 echo -e "\n${YELLOW}Verifying migrations...${NC}"
-npx wrangler d1 migrations list scripture-memory --env production
+npx wrangler d1 migrations list scripture-memory --env production --remote
 
 # Deploy worker
 echo -e "\n${YELLOW}Deploying worker...${NC}"
-npx wrangler deploy --env production
+npx wrangler deploy --env production --remote
 
 echo -e "\n${GREEN}Production deployment completed successfully!${NC}"
 echo -e "${YELLOW}Next steps:${NC}"
