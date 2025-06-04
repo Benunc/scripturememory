@@ -66,7 +66,7 @@ export const PointsStats: React.FC = () => {
         }
 
         debug.log('api', 'Fetching points stats...');
-        const response = await fetch('/api/gamification/stats', {
+        const response = await fetch('/gamification/stats', {
           headers: {
             'Authorization': `Bearer ${sessionToken}`
           }
