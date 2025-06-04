@@ -43,7 +43,7 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         throw new Error('No session token found');
       }
 
-      const response = await fetch('/api/gamification/stats', {
+      const response = await fetch('https://scripture-memory.ben-2e6.workers.dev/gamification/stats', {
         headers: {
           'Authorization': `Bearer ${sessionToken}`
         }
