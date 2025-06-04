@@ -74,9 +74,9 @@ export function App() {
       <ColorModeScript initialColorMode={theme.config.initialColorMode} />
       <ChakraProvider theme={theme}>
         <ColorModeManager />
-        <AuthProvider>
-          <PointsProvider>
-            <Router>
+        <Router>
+          <AuthProvider>
+            <PointsProvider>
               <Routes>
                 <Route path="/" element={<MainApp />} />
                 <Route path="/register" element={<Register />} />
@@ -87,9 +87,9 @@ export function App() {
                 <Route path="/auth/verify" element={<VerifyToken />} />
                 <Route path="/points" element={<PointsStats />} />
               </Routes>
-            </Router>
-          </PointsProvider>
-        </AuthProvider>
+            </PointsProvider>
+          </AuthProvider>
+        </Router>
       </ChakraProvider>
     </>
   );

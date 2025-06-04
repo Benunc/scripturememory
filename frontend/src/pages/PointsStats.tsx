@@ -39,6 +39,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import logo from '/assets/images/ScriptureMemory.svg';
 import { HamburgerIcon, MoonIcon, SunIcon } from '@chakra-ui/icons';
 import { getApiUrl } from '../utils/api';
+import { AppHeader } from '../components/AppHeader';
 
 interface PointsStats {
   total_points: number;
@@ -167,169 +168,88 @@ export const PointsStats: React.FC = () => {
 
   return (
     <Box minH="100vh" bg={bgColor}>
-      <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
-        <Flex justify="space-between" align="center">
-          <Link as={RouterLink} to="/" _hover={{ textDecoration: 'none' }}>
-            <HStack spacing={4}>
-              <img src={logo} alt="Scripture Memory" style={{ height: '40px' }} />
-              <Heading size="md">Scripture Memory</Heading>
-            </HStack>
-          </Link>
-          <HStack spacing={4}>
-            {isMobile ? (
-              <>
-                <IconButton
-                  aria-label={`Switch to ${colorMode === 'light' ? 'dark' : 'light'} mode`}
-                  icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
-                  onClick={toggleColorMode}
-                  variant="ghost"
-                />
-                <Menu>
-                  <MenuButton
-                    as={IconButton}
-                    icon={<HamburgerIcon />}
-                    variant="ghost"
-                    aria-label="Menu"
-                  />
-                  <MenuList>
-                    <MenuItem>
-                      <VStack align="start" spacing={1}>
-                        <Text fontSize="sm" color="gray.500">You are signed in as</Text>
-                        <HStack spacing={2}>
-                          <Avatar size="sm" name={userEmail || undefined} />
-                          <Text>{userEmail}</Text>
-                        </HStack>
-                      </VStack>
-                    </MenuItem>
-                    <MenuItem onClick={() => navigate('/donate')}>
-                      <Button
-                        variant="ghost"
-                        colorScheme="green"
-                        w="100%"
-                        justifyContent="flex-start"
-                        pl={0}
-                      >
-                        Support Us
-                      </Button>
-                    </MenuItem>
-                    <MenuItem onClick={signOut} pl={3}>
-                      Sign Out
-                    </MenuItem>
-                  </MenuList>
-                </Menu>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="ghost"
-                  onClick={() => navigate('/donate')}
-                  colorScheme="green"
-                >
-                  Support Us
-                </Button>
-                <Text>{userEmail}</Text>
-                <Avatar size="sm" name={userEmail || undefined} />
-                <Button variant="ghost" onClick={signOut}>
-                  Sign Out
-                </Button>
-                <IconButton
-                  aria-label={`Switch to ${colorMode === 'light' ? 'dark' : 'light'} mode`}
-                  icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
-                  onClick={toggleColorMode}
-                  variant="ghost"
-                />
-              </>
-            )}
-          </HStack>
-        </Flex>
-      </Box>
-
+      <AppHeader />
       <Container maxW="container.xl" py={8}>
-        <HStack justify="space-between" mb={8}>
-          <Box>
-            <Heading as="h1" size="xl" mb={2}>Track your Progress!</Heading>
-            <Text color="gray.500">Here's a real-time look at your points totals</Text>
-          </Box>
-          <Button onClick={handleBack}>Back to App</Button>
-        </HStack>
-
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-          <Stat
-            bg={cardBg}
-            p={6}
-            borderRadius="lg"
-            borderWidth="1px"
-            borderColor={borderColor}
-          >
-            <StatLabel>Total Points</StatLabel>
-            <StatNumber>{stats.total_points?.toLocaleString() ?? 0}</StatNumber>
-            <StatHelpText>All time points earned</StatHelpText>
-          </Stat>
-
-          <Stat
-            bg={cardBg}
-            p={6}
-            borderRadius="lg"
-            borderWidth="1px"
-            borderColor={borderColor}
-          >
-            <StatLabel>Current Streak</StatLabel>
-            <StatNumber>{stats.current_streak ?? 0}</StatNumber>
-            <StatHelpText>Days in a row</StatHelpText>
-          </Stat>
-
-          <Stat
-            bg={cardBg}
-            p={6}
-            borderRadius="lg"
-            borderWidth="1px"
-            borderColor={borderColor}
-          >
-            <StatLabel>Best Streak</StatLabel>
-            <StatNumber>{stats.longest_streak ?? 0}</StatNumber>
-            <StatHelpText>Longest streak achieved</StatHelpText>
-          </Stat>
-
-          <Stat
-            bg={cardBg}
-            p={6}
-            borderRadius="lg"
-            borderWidth="1px"
-            borderColor={borderColor}
-          >
-            <StatLabel>Verses Mastered</StatLabel>
-            <StatNumber>{stats.verses_mastered ?? 0}</StatNumber>
-            <StatHelpText>Total verses mastered</StatHelpText>
-          </Stat>
-
-          <Stat
-            bg={cardBg}
-            p={6}
-            borderRadius="lg"
-            borderWidth="1px"
-            borderColor={borderColor}
-          >
-            <StatLabel>Total Attempts</StatLabel>
-            <StatNumber>{stats.total_attempts ?? 0}</StatNumber>
-            <StatHelpText>All time recitations</StatHelpText>
-          </Stat>
-
-          <Stat
-            bg={cardBg}
-            p={6}
-            borderRadius="lg"
-            borderWidth="1px"
-            borderColor={borderColor}
-          >
-            <StatLabel>Last Activity</StatLabel>
-            <StatNumber>
-              {stats.last_activity_date ? new Date(stats.last_activity_date).toLocaleDateString() : 'Never'}
-            </StatNumber>
-            <StatHelpText>Last recorded activity</StatHelpText>
-          </Stat>
-        </SimpleGrid>
-
-        <PointsTutorial />
+        <VStack spacing={8} align="stretch">
+          <Heading size="lg">Your Progress</Heading>
+          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+            <Stat
+              px={4}
+              py={5}
+              bg={cardBg}
+              rounded="lg"
+              border="1px"
+              borderColor={borderColor}
+            >
+              <StatLabel>Total Points</StatLabel>
+              <StatNumber>{stats.total_points}</StatNumber>
+              <StatHelpText>Keep going!</StatHelpText>
+            </Stat>
+            <Stat
+              px={4}
+              py={5}
+              bg={cardBg}
+              rounded="lg"
+              border="1px"
+              borderColor={borderColor}
+            >
+              <StatLabel>Current Streak</StatLabel>
+              <StatNumber>{stats.current_streak} days</StatNumber>
+              <StatHelpText>Don't break the chain!</StatHelpText>
+            </Stat>
+            <Stat
+              px={4}
+              py={5}
+              bg={cardBg}
+              rounded="lg"
+              border="1px"
+              borderColor={borderColor}
+            >
+              <StatLabel>Longest Streak</StatLabel>
+              <StatNumber>{stats.longest_streak} days</StatNumber>
+              <StatHelpText>Your best streak</StatHelpText>
+            </Stat>
+            <Stat
+              px={4}
+              py={5}
+              bg={cardBg}
+              rounded="lg"
+              border="1px"
+              borderColor={borderColor}
+            >
+              <StatLabel>Verses Mastered</StatLabel>
+              <StatNumber>{stats.verses_mastered}</StatNumber>
+              <StatHelpText>Great job!</StatHelpText>
+            </Stat>
+            <Stat
+              px={4}
+              py={5}
+              bg={cardBg}
+              rounded="lg"
+              border="1px"
+              borderColor={borderColor}
+            >
+              <StatLabel>Total Attempts</StatLabel>
+              <StatNumber>{stats.total_attempts}</StatNumber>
+              <StatHelpText>Keep practicing!</StatHelpText>
+            </Stat>
+            <Stat
+              px={4}
+              py={5}
+              bg={cardBg}
+              rounded="lg"
+              border="1px"
+              borderColor={borderColor}
+            >
+              <StatLabel>Last Activity</StatLabel>
+              <StatNumber>
+                {new Date(stats.last_activity_date).toLocaleDateString()}
+              </StatNumber>
+              <StatHelpText>Keep it up!</StatHelpText>
+            </Stat>
+          </SimpleGrid>
+          <PointsTutorial />
+        </VStack>
       </Container>
       <Footer />
     </Box>

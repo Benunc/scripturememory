@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack, Flex, Divider, Link, Menu, MenuButton, MenuList, MenuItem, IconButton, useBreakpointValue, keyframes } from '@chakra-ui/react';
-import { useNavigate } from 'react-router-dom';
+import { Box, Button, HStack, Heading, Text, Avatar, useToast, VStack, Flex, Divider, Link, Menu, MenuButton, MenuList, MenuItem, IconButton, useBreakpointValue, keyframes, useColorMode } from '@chakra-ui/react';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { AddVerse } from './AddVerse';
 import { VerseList } from './VerseList';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -11,9 +11,10 @@ import { ProgressStatus } from '../utils/progress';
 import { SignIn } from './SignIn';
 import { PointsDisplay } from './PointsDisplay';
 import logo from '/assets/images/ScriptureMemory.svg';
-import { Verse } from '../types/verse';
+import { Verse } from '../types/Verse';
 import { debug } from '../utils/debug';
-import { HamburgerIcon } from '@chakra-ui/icons';
+import { HamburgerIcon, MoonIcon, SunIcon } from '@chakra-ui/icons';
+import { AppHeader } from './AppHeader';
 
 const SAMPLE_VERSES: Verse[] = [
   {
@@ -51,6 +52,7 @@ export function MainApp() {
   const verseListRef = useRef<{ scrollToVerse: (reference: string) => void }>(null);
   const navigate = useNavigate();
   const isMobile = useBreakpointValue({ base: true, md: false });
+  const { colorMode, toggleColorMode } = useColorMode();
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -127,6 +129,15 @@ export function MainApp() {
         >
           Skip to main content
         </Link>
+
+        <Box position="absolute" top={4} right={4}>
+          <IconButton
+            aria-label={`Switch to ${colorMode === 'light' ? 'dark' : 'light'} mode`}
+            icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+            onClick={toggleColorMode}
+            variant="ghost"
+          />
+        </Box>
 
         <Box p={8}>
           <VStack spacing={8} align="center">
@@ -238,65 +249,7 @@ export function MainApp() {
         Skip to main content
       </Link>
 
-      <Box as="header" p={4} borderBottom="1px" borderColor="gray.200">
-        <Flex justify="space-between" align="center">
-          <HStack spacing={4}>
-            <img src={logo} alt="Scripture Memory" style={{ height: '40px' }} />
-            <Heading size="md">Scripture Memory</Heading>
-          </HStack>
-          {isMobile ? (
-            <Menu>
-              <MenuButton
-                as={IconButton}
-                icon={<HamburgerIcon />}
-                variant="ghost"
-                aria-label="Menu"
-              />
-              <MenuList>
-                <MenuItem>
-                  <VStack align="start" spacing={1}>
-                    <Text fontSize="sm" color="gray.500">You are signed in as</Text>
-                    <HStack spacing={2}>
-                      <Avatar size="sm" name={userEmail || undefined} />
-                      <Text>{userEmail}</Text>
-                    </HStack>
-                  </VStack>
-                </MenuItem>
-                <MenuItem onClick={() => navigate('/donate')}>
-                  <Button
-                    variant="ghost"
-                    colorScheme="green"
-                    w="100%"
-                    justifyContent="flex-start"
-                    animation={`${pulseAnimation} 2s ease-in-out infinite`}
-                    pl={0}
-                  >
-                    Support Us
-                  </Button>
-                </MenuItem>
-                <MenuItem onClick={signOut} pl={3}>
-                  Sign Out
-                </MenuItem>
-              </MenuList>
-            </Menu>
-          ) : (
-            <HStack spacing={4}>
-              <Button
-                variant="ghost"
-                onClick={() => navigate('/donate')}
-                colorScheme="green"
-              >
-                Support Us
-              </Button>
-              <Text>{userEmail}</Text>
-              <Avatar size="sm" name={userEmail || undefined} />
-              <Button variant="ghost" onClick={signOut}>
-                Sign Out
-              </Button>
-            </HStack>
-          )}
-        </Flex>
-      </Box>
+      <AppHeader />
 
       <Box id="main-content" flex="1" p={8} tabIndex={-1}>
         <VStack spacing={8} align="stretch">

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { debug } from '../utils/debug';
 import { getMagicLink, verifyMagicLink } from '../utils/api';
+import { NavigateFunction } from 'react-router-dom';
 
-export const useAuth = () => {
+export const useAuth = (navigate: NavigateFunction) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -110,6 +111,9 @@ export const useAuth = () => {
     setToken(null);
     setUserEmail(null);
     setIsAuthenticated(false);
+
+    // Navigate to root
+    navigate('/');
   };
 
   return {
