@@ -5,9 +5,7 @@
     "node": ">=20.0.0"
   },
   "workspaces": [
-    "frontend",
-    "workers",
-    "shared"
+    "frontend"
   ],
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
