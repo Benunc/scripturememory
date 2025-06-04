@@ -52,7 +52,7 @@ All responses are in JSON format with the following structure:
 ### Point System
 
 The API implements a point system with the following rewards:
-- `VERSE_ADDED`: 100 points for adding a new verse
+- `VERSE_ADDED`: 10 points for adding a new verse (limited to 3 per day)
 - `WORD_CORRECT`: 1 point per correct word
 - `STREAK_MULTIPLIER`: 50% bonus per word in streak
 - `MASTERY_ACHIEVED`: 500 points for mastering a verse
@@ -235,7 +235,7 @@ Content-Type: application/json
 
 **Response (201 Created)**
 - Empty response with 201 status code
-- Awards 100 points for adding a verse
+- Awards 10 points for adding a verse (limited to 3 verses per day)
 
 **Error Responses**
 - `400 Bad Request`: Missing required fields
@@ -270,7 +270,7 @@ Authorization: Bearer <token>
    - All operations verify user ownership
 
 3. **Points Integration**
-   - Adding a verse awards 100 points
+   - Adding a verse awards 10 points (limited to 3 verses per day)
    - Points are tracked in user stats
    - Points events are recorded for history
 
@@ -550,7 +550,7 @@ Content-Type: application/json
 The API implements a point system with the following rewards:
 
 1. **Verse Addition**
-   - 100 points for adding a new verse
+   - 10 points for adding a new verse (limited to 3 verses per day)
    - One-time reward per verse
 
 2. **Word Progress**

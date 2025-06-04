@@ -88,7 +88,7 @@ echo "${YELLOW}Running migrations...${NC}"
 
 # 4.1 Add unique constraint first
 echo "${YELLOW}running new initial schema...${NC}"
-npx wrangler d1 execute DB --env development --file=./migrations/0000_2_gamification_update.sql
+npx wrangler d1 execute DB --env development --file=./migrations/0000_gamification_update.sql
 check_status
 
 echo "Checking verses after first migration..."
