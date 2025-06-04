@@ -1,3 +1,5 @@
+import { getApiUrl } from './api';
+
 interface TestResult {
   name: string;
   passed: boolean;
@@ -12,7 +14,7 @@ class TestSuite {
   private testVerseReference: string | null = null;
 
   constructor() {
-    this.baseUrl = 'https://scripture-memory.ben-2e6.workers.dev';
+    this.baseUrl = getApiUrl();
   }
 
   private async test(name: string, testFn: () => Promise<any>): Promise<void> {

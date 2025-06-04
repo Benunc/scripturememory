@@ -115,6 +115,11 @@ echo "${YELLOW}Adding mastered verses table...${NC}"
 npx wrangler d1 execute DB --env development --file=./migrations/0004_add_mastered_verses.sql
 check_status
 
+# 4.5 Add update longest streaks
+echo "${YELLOW}Updating longest streaks...${NC}"
+npx wrangler d1 execute DB --env development --file=./migrations/0005_update_longest_streaks.sql
+check_status
+
 echo "Checking for user existence at line 127..."
 echo "Checking users table structure..."
 npx wrangler d1 execute DB --env development --command="SELECT sql FROM sqlite_master WHERE type='table' AND name='users';"

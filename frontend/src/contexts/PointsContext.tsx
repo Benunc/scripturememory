@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { debug } from '../utils/debug';
+import { getApiUrl } from '../utils/api';
 
 interface PointsContextType {
   points: number;
@@ -43,7 +44,8 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         throw new Error('No session token found');
       }
 
-      const response = await fetch('https://scripture-memory.ben-2e6.workers.dev/gamification/stats', {
+      debug.log('api', 'Fetching points...');
+      const response = await fetch(`${getApiUrl()}/gamification/stats`, {
         headers: {
           'Authorization': `Bearer ${sessionToken}`
         }

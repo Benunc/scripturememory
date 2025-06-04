@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import fs from 'fs'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -16,14 +17,13 @@ export default defineConfig(({ mode }) => {
       {
         name: 'copy-cloudflare-files',
         closeBundle() {
-          // Copy _headers to dist
-          const src = resolve(__dirname, 'public', '_headers')
-          const dest = resolve(__dirname, 'dist', '_headers')
-          require('fs').copyFileSync(src, dest)
-          
-          // In production, rename index.prod.html to index.html
+          // Copy _headers file for production
           if (mode === 'production') {
-            const fs = require('fs')
+            const src = resolve(__dirname, 'public', '_headers')
+            const dest = resolve(__dirname, 'dist', '_headers')
+            fs.copyFileSync(src, dest)
+            
+            // Rename index.prod.html to index.html
             const prodHtml = resolve(__dirname, 'dist', 'index.prod.html')
             const finalHtml = resolve(__dirname, 'dist', 'index.html')
             if (fs.existsSync(prodHtml)) {

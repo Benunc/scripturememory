@@ -20,6 +20,14 @@ import {
   Flex,
   Avatar,
   Link,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  IconButton,
+  useBreakpointValue,
+  VStack,
+  useColorMode,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -29,6 +37,8 @@ import { Footer } from '../components/Footer';
 import { PointsTutorial } from '../components/PointsTutorial';
 import { Link as RouterLink } from 'react-router-dom';
 import logo from '/assets/images/ScriptureMemory.svg';
+import { HamburgerIcon, MoonIcon, SunIcon } from '@chakra-ui/icons';
+import { getApiUrl } from '../utils/api';
 
 interface PointsStats {
   total_points: number;
@@ -46,6 +56,8 @@ export const PointsStats: React.FC = () => {
   const { isAuthenticated, userEmail, signOut } = useAuth();
   const { refreshPoints } = usePoints();
   const navigate = useNavigate();
+  const isMobile = useBreakpointValue({ base: true, md: false });
+  const { colorMode, toggleColorMode } = useColorMode();
 
   // Color mode values
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -66,7 +78,7 @@ export const PointsStats: React.FC = () => {
         }
 
         debug.log('api', 'Fetching points stats...');
-        const response = await fetch('https://scripture-memory.ben-2e6.workers.dev/gamification/stats', {
+        const response = await fetch(`${getApiUrl()}/gamification/stats`, {
           headers: {
             'Authorization': `Bearer ${sessionToken}`
           }
@@ -164,11 +176,70 @@ export const PointsStats: React.FC = () => {
             </HStack>
           </Link>
           <HStack spacing={4}>
-            <Text>{userEmail}</Text>
-            <Avatar size="sm" name={userEmail || undefined} />
-            <Button variant="ghost" onClick={signOut}>
-              Sign Out
-            </Button>
+            {isMobile ? (
+              <>
+                <IconButton
+                  aria-label={`Switch to ${colorMode === 'light' ? 'dark' : 'light'} mode`}
+                  icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+                  onClick={toggleColorMode}
+                  variant="ghost"
+                />
+                <Menu>
+                  <MenuButton
+                    as={IconButton}
+                    icon={<HamburgerIcon />}
+                    variant="ghost"
+                    aria-label="Menu"
+                  />
+                  <MenuList>
+                    <MenuItem>
+                      <VStack align="start" spacing={1}>
+                        <Text fontSize="sm" color="gray.500">You are signed in as</Text>
+                        <HStack spacing={2}>
+                          <Avatar size="sm" name={userEmail || undefined} />
+                          <Text>{userEmail}</Text>
+                        </HStack>
+                      </VStack>
+                    </MenuItem>
+                    <MenuItem onClick={() => navigate('/donate')}>
+                      <Button
+                        variant="ghost"
+                        colorScheme="green"
+                        w="100%"
+                        justifyContent="flex-start"
+                        pl={0}
+                      >
+                        Support Us
+                      </Button>
+                    </MenuItem>
+                    <MenuItem onClick={signOut} pl={3}>
+                      Sign Out
+                    </MenuItem>
+                  </MenuList>
+                </Menu>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={() => navigate('/donate')}
+                  colorScheme="green"
+                >
+                  Support Us
+                </Button>
+                <Text>{userEmail}</Text>
+                <Avatar size="sm" name={userEmail || undefined} />
+                <Button variant="ghost" onClick={signOut}>
+                  Sign Out
+                </Button>
+                <IconButton
+                  aria-label={`Switch to ${colorMode === 'light' ? 'dark' : 'light'} mode`}
+                  icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+                  onClick={toggleColorMode}
+                  variant="ghost"
+                />
+              </>
+            )}
           </HStack>
         </Flex>
       </Box>

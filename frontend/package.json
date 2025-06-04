@@ -2,7 +2,7 @@
   "name": "scripture-memory",
   "private": true,
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --mode development",
     "dev:all": "node scripts/dev.js",
     "build": "vite build --mode production",
     "preview": "vite preview"

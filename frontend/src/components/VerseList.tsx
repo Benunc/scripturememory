@@ -224,7 +224,7 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
           throw new Error('No session token found');
         }
 
-        const response = await fetch(`https://scripture-memory.ben-2e6.workers.dev/progress/mastery/${reference}`, {
+        const response = await fetch(`${getApiUrl()}/progress/mastery/${reference}`, {
           headers: {
             'Authorization': `Bearer ${sessionToken}`
           }
@@ -608,7 +608,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
           
           // Send batch
           for (const progress of batch) {
-            const response = await fetch('https://scripture-memory.ben-2e6.workers.dev/progress/word', {
+            const response = await fetch(`${getApiUrl()}/progress/word`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -779,7 +779,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         throw new Error('No session token found');
       }
 
-      const response = await fetch(`https://scripture-memory.ben-2e6.workers.dev/progress/mastery/${reference}`, {
+      const response = await fetch(`${getApiUrl()}/progress/mastery/${reference}`, {
         headers: {
           'Authorization': `Bearer ${sessionToken}`
         }
@@ -930,7 +930,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       }
 
       // Only make the API call if accuracy is >= 80%
-      const response = await fetch('https://scripture-memory.ben-2e6.workers.dev/progress/verse', {
+      const response = await fetch(`${getApiUrl()}/progress/verse`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
