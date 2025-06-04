@@ -47,7 +47,7 @@ npx wrangler d1 migrations list scripture-memory --env production --remote
 
 # Deploy worker
 echo -e "\n${YELLOW}Deploying worker...${NC}"
-npx wrangler deploy --env production --remote
+npx wrangler deploy --env production 
 
 echo -e "\n${GREEN}Production deployment completed successfully!${NC}"
 echo -e "${YELLOW}Next steps:${NC}"

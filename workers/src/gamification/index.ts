@@ -306,7 +306,7 @@ export const handleGamification = {
               total_attempts,
               last_activity_date,
               created_at
-            ) VALUES (?, ?, 0, 0, 0, 0, ?, ?)
+            ) VALUES (?, ?, 1, 1, 0, 0, ?, ?)
           `).bind(userId, points, Date.now(), Date.now()).run();
         } else {
           // Update existing stats
