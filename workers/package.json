@@ -9,14 +9,18 @@
     "build": "npx wrangler deploy --dry-run --env production",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
-    "wipe-dev-db": "npx wrangler d1 execute DB_DEV --env development --command=\"DELETE FROM verses; DELETE FROM sessions; DELETE FROM magic_links; DELETE FROM users;\"",
-    "reinit-dev-db": "npx wrangler d1 execute DB_DEV --env development --file=./schema.sql",
-    "dev:stats": "npx wrangler d1 execute DB_DEV --env development --command=\"SELECT * FROM user_stats WHERE user_id = 1;\"",
+    "wipe-dev-db": "npx wrangler d1 execute DB --env development --command=\"DELETE FROM verses; DELETE FROM sessions; DELETE FROM magic_links; DELETE FROM users;\"",
+    "reinit-dev-db": "npx wrangler d1 execute DB --env development --file=./schema.sql",
+    "dev:stats": "npx wrangler d1 execute DB --env development --command=\"SELECT * FROM user_stats WHERE user_id = 1;\"",
     "db:prod": "npx wrangler d1 execute DB --env production --remote",
     "db:prod:users": "npx wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM users;\"",
+    "db:dev:users": "npx wrangler d1 execute DB --env development --command=\"SELECT * FROM users;\"",
     "db:prod:verses": "npx wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM verses;\"",
+    "db:dev:verses": "npx wrangler d1 execute DB --env development --command=\"SELECT * FROM verses;\"",
     "db:prod:sessions": "npx wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM sessions;\"",
-    "db:prod:magic-links": "npx wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM magic_links;\""
+    "db:dev:sessions": "npx wrangler d1 execute DB --env development --command=\"SELECT * FROM sessions;\"",
+    "db:prod:magic-links": "npx wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM magic_links;\"",
+    "db:dev:magic-links": "npx wrangler d1 execute DB --env development --command=\"SELECT * FROM magic_links;\""
   },
   "dependencies": {
     "itty-router": "^4.0.27"
