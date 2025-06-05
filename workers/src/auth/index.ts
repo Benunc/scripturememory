@@ -513,12 +513,12 @@ export const handleAuth = {
     });
   },
 
-  // Delete user and all associated data
+  // Anonymize user and preserve analytics data
   deleteUser: async (request: Request, env: Env): Promise<Response> => {
     try {
       const authHeader = request.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+        return new Response(JSON.stringify({ error: 'Missing or invalid authorization header' }), {
           status: 401,
           headers: { 'Content-Type': 'application/json' }
         });
@@ -526,44 +526,182 @@ export const handleAuth = {
 
       const token = authHeader.split(' ')[1];
       const userId = await getUserId(token, env);
-      
       if (!userId) {
-        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+        return new Response(JSON.stringify({ error: 'Invalid session' }), {
           status: 401,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      const db = getDB(env);
+      const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'User not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
 
-      // Use D1's batch API for atomic operations
-      // Order matters - delete child records before parent records
-      await db.batch([
-        // First delete all point events and progress tracking
-        db.prepare('DELETE FROM point_events WHERE user_id = ?').bind(userId),
-        db.prepare('DELETE FROM word_progress WHERE user_id = ?').bind(userId),
-        db.prepare('DELETE FROM verse_attempts WHERE user_id = ?').bind(userId),
-        
-        // Delete mastery records (both tables)
-        db.prepare('DELETE FROM mastered_verses WHERE user_id = ?').bind(userId),
-        db.prepare('DELETE FROM verse_mastery WHERE user_id = ?').bind(userId),
-        
-        // Now we can delete verses
-        db.prepare('DELETE FROM verses WHERE user_id = ?').bind(userId),
-        
-        // Delete remaining user data
-        db.prepare('DELETE FROM user_stats WHERE user_id = ?').bind(userId),
-        db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
-        db.prepare('DELETE FROM magic_links WHERE email = (SELECT email FROM users WHERE id = ?)').bind(userId),
-        
-        // Finally delete the user
-        db.prepare('DELETE FROM users WHERE id = ?').bind(userId)
-      ]);
+      // Gather all user data for anonymization
+      const userData = await env.DB.prepare(`
+        SELECT 
+          u.id,
+          u.email,
+          u.created_at,
+          u.last_login_at,
+          us.longest_streak,
+          us.current_streak,
+          us.verses_mastered,
+          us.total_attempts,
+          us.total_points
+        FROM users u
+        LEFT JOIN user_stats us ON u.id = us.user_id
+        WHERE u.id = ?
+      `).bind(user.id).first();
 
-      return new Response(null, { status: 204 });
+      // Get all verses the user has worked on
+      const verses = await env.DB.prepare(`
+        SELECT DISTINCT reference 
+        FROM verses 
+        WHERE user_id = ?
+      `).bind(user.id).all();
+
+      // Get mastery progress data
+      const masteryProgress = await env.DB.prepare(`
+        SELECT 
+          verse_reference,
+          current_streak,
+          longest_streak,
+          last_mastered_date,
+          days_mastered
+        FROM verse_mastery 
+        WHERE user_id = ?
+      `).bind(user.id).all();
+
+      // Get metadata counts
+      const pointEventsCount = await env.DB.prepare(`
+        SELECT COUNT(*) as count FROM point_events WHERE user_id = ?
+      `).bind(user.id).first();
+
+      const wordProgressCount = await env.DB.prepare(`
+        SELECT COUNT(*) as count FROM word_progress WHERE user_id = ?
+      `).bind(user.id).first();
+
+      const verseAttemptsCount = await env.DB.prepare(`
+        SELECT COUNT(*) as count FROM verse_attempts WHERE user_id = ?
+      `).bind(user.id).first();
+
+      const masteredVersesCount = await env.DB.prepare(`
+        SELECT COUNT(*) as count FROM mastered_verses WHERE user_id = ?
+      `).bind(user.id).first();
+
+      const verseMasteryCount = await env.DB.prepare(`
+        SELECT COUNT(*) as count FROM verse_mastery WHERE user_id = ?
+      `).bind(user.id).first();
+
+      // Insert anonymized data
+      await env.DB.prepare(`
+        INSERT INTO anonymized_users (
+          original_user_id,
+          created_at,
+          last_login_at,
+          longest_streak,
+          current_streak,
+          verses_mastered,
+          total_attempts,
+          total_points,
+          verses,
+          mastery_progress,
+          total_point_events,
+          total_word_progress,
+          total_verse_attempts,
+          total_mastered_verses,
+          total_verse_mastery,
+          deleted_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        user.id,
+        userData?.created_at,
+        userData?.last_login_at,
+        userData?.longest_streak || 0,
+        userData?.current_streak || 0,
+        userData?.verses_mastered || 0,
+        userData?.total_attempts || 0,
+        userData?.total_points || 0,
+        JSON.stringify(verses.results?.map(v => v.reference) || []),
+        JSON.stringify(masteryProgress.results || []),
+        pointEventsCount?.count || 0,
+        wordProgressCount?.count || 0,
+        verseAttemptsCount?.count || 0,
+        masteredVersesCount?.count || 0,
+        verseMasteryCount?.count || 0,
+        new Date().toISOString()
+      ).run();
+
+      // Delete user data in order
+      const tables = [
+        'point_events',
+        'word_progress',
+        'verse_attempts',
+        'mastered_verses',
+        'verse_mastery',
+        'verses',
+        'user_stats',
+        'sessions',
+        'magic_links',  // Delete magic links by email instead of user_id
+        'users'
+      ];
+
+      for (const table of tables) {
+        try {
+          // Check if table exists
+          const tableExists = await env.DB.prepare(`
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name=?
+          `).bind(table).first();
+
+          if (!tableExists) {
+            continue;
+          }
+
+          if (table === 'magic_links') {
+            // Delete magic links by email instead of user_id
+            await env.DB.prepare(`DELETE FROM ${table} WHERE email = ?`).bind(user.email).run();
+          } else if (table === 'users') {
+            // Use 'id' instead of 'user_id' for users table
+            await env.DB.prepare(`DELETE FROM ${table} WHERE id = ?`).bind(user.id).run();
+          } else {
+            await env.DB.prepare(`DELETE FROM ${table} WHERE user_id = ?`).bind(user.id).run();
+          }
+        } catch (error) {
+          console.error(`Error deleting from ${table}:`, error);
+          throw error;
+        }
+      }
+
+      return new Response(JSON.stringify({ 
+        message: 'User successfully anonymized and deleted',
+        anonymized: {
+          original_user_id: user.id,
+          verses_mastered: userData?.verses_mastered || 0,
+          total_attempts: userData?.total_attempts || 0,
+          total_points: userData?.total_points || 0,
+          total_point_events: pointEventsCount?.count || 0,
+          total_word_progress: wordProgressCount?.count || 0,
+          total_verse_attempts: verseAttemptsCount?.count || 0,
+          total_mastered_verses: masteredVersesCount?.count || 0,
+          total_verse_mastery: verseMasteryCount?.count || 0
+        }
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+
     } catch (error) {
-      console.error('Error deleting user:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+      console.error('Error in deleteUser:', error);
+      return new Response(JSON.stringify({ 
+        error: 'Failed to delete user',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
