@@ -105,6 +105,11 @@ echo "${YELLOW}Fixing verses unique constraint...${NC}"
 npx wrangler d1 execute DB --env development --file=./migrations/0006_fix_verses_unique_constraint.sql
 check_status
 
+# 4.7 add user stats
+echo "${YELLOW}Adding user stats...${NC}"
+npx wrangler d1 execute DB --env development --file=./migrations/0007_add_anonymized_users.sql
+check_status
+
 # 4.6 create new user.
 # Create first user
 echo "${YELLOW}Creating first user...${NC}"
