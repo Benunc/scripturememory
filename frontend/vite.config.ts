@@ -35,6 +35,8 @@ export default defineConfig(({ mode }) => {
     ],
     base: '/', // Use root path for custom domain
     server: {
+      host: '0.0.0.0', // Allow access from other devices
+      port: 5173,      // Explicitly set port
       proxy: {
         '/api': {
           target: workerUrl,

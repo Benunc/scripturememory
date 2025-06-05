@@ -1749,14 +1749,25 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                 ref={inputRef}
                 value={userGuess}
                 onChange={(e) => {
-                  const sanitizedValue = e.target.value.replace(/[^a-zA-Z0-9.,;:!?'"-]/g, '');
+                  const value = e.target.value;
+                  // If the last character is a space, trigger submission
+                  if (value.endsWith(' ')) {
+                    e.preventDefault();
+                    // Remove the space before submitting
+                    const sanitizedValue = value.slice(0, -1).replace(/[^a-zA-Z0-9.,;:!?'"-]/g, '');
+                    setUserGuess(sanitizedValue);
+                    handleGuessSubmit(verse.reference);
+                    return;
+                  }
+                  // Otherwise just sanitize normally
+                  const sanitizedValue = value.replace(/[^a-zA-Z0-9.,;:!?'"-]/g, '');
                   setUserGuess(sanitizedValue);
                   if (sanitizedValue.length > 1) {
                     setGuessFeedback(null);
                   }
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
+                  if (e.key === 'Enter') {
                     e.preventDefault();
                     handleGuessSubmit(verse.reference);
                   }
@@ -1783,6 +1794,16 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                 _focusVisible={{
                   outline: 'none',
                   boxShadow: inputFocusShadow,
+                }}
+              />
+              <input
+                type="text"
+                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                onKeyDown={(e) => {
+                  if (e.key === ' ') {
+                    e.preventDefault();
+                    handleGuessSubmit(verse.reference);
+                  }
                 }}
               />
               <Button
