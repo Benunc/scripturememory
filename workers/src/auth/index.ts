@@ -406,6 +406,11 @@ export const handleAuth = {
     } else {
       userId = Number(existingUser.id);
       
+      // Update last_login_at for existing user
+      await db.prepare(
+        'UPDATE users SET last_login_at = ? WHERE id = ?'
+      ).bind(Date.now(), userId).run();
+
       // Get current stats
       const stats = await db.prepare(`
         SELECT last_activity_date, current_streak, longest_streak 
