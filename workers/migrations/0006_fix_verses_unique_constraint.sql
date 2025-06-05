@@ -1,12 +1,11 @@
 -- Migration to fix the UNIQUE constraint on verses.reference to be per user
 -- SQLite does not support ALTER TABLE ADD CONSTRAINT, so we use a table-copy pattern
 
--- Step 1: Clean up any leftover tables from previous attempts
-DROP TABLE IF EXISTS verses_old;
-DROP TABLE IF EXISTS verses_new;
+-- Step 1: Create backup table to preserve verses
+CREATE TABLE IF NOT EXISTS verses_backup AS SELECT * FROM verses;
 
 -- Step 2: Create a new verses table with the correct UNIQUE constraint
-CREATE TABLE verses_new (
+CREATE TABLE IF NOT EXISTS verses_new (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
   reference TEXT NOT NULL,
@@ -18,25 +17,23 @@ CREATE TABLE verses_new (
   UNIQUE(user_id, reference)
 );
 
--- Step 3: Copy only verses that have valid user references
-INSERT INTO verses_new (id, user_id, reference, text, translation, status, created_at)
-SELECT v.id, v.user_id, v.reference, v.text, v.translation, v.status, v.created_at
-FROM verses v
-WHERE EXISTS (
-  SELECT 1 FROM users u WHERE u.id = v.user_id
-);
+-- Step 3: Copy data from backup table (without specifying IDs)
+INSERT OR IGNORE INTO verses_new (user_id, reference, text, translation, status, created_at)
+SELECT user_id, reference, text, translation, status, created_at
+FROM verses_backup;
 
 -- Step 4: Verify data was copied correctly
 SELECT COUNT(*) as new_count FROM verses_new;
-SELECT COUNT(*) as old_count FROM verses;
+SELECT COUNT(*) as old_count FROM verses_backup;
 
 -- Step 5: Only proceed with the swap if data was copied correctly
 -- This is done by renaming the tables
 ALTER TABLE verses RENAME TO verses_old;
 ALTER TABLE verses_new RENAME TO verses;
 
--- Step 6: Drop the old table only after successful rename
+-- Step 6: Drop the old tables only after successful rename
 DROP TABLE IF EXISTS verses_old;
+DROP TABLE IF EXISTS verses_backup;
 
 -- Step 7: Recreate indexes
 CREATE INDEX IF NOT EXISTS idx_verses_user_id ON verses(user_id);
