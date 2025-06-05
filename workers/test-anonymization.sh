@@ -59,7 +59,7 @@ check_status
 
 # Run migrations
 echo "${YELLOW}Running migrations...${NC}"
-for migration in ./migrations/0000_gamification_update.sql ./migrations/0001_add_unique_constraint_to_verses_reference.sql ./migrations/0002_add_progress_tables.sql ./migrations/0003_add_gamification_tables.sql ./migrations/0004_add_mastered_verses.sql ./migrations/0005_update_longest_streaks.sql ./migrations/0006_fix_verses_unique_constraint.sql ./migrations/0007_add_anonymized_users.sql; do
+for migration in ./migrations/*.sql; do
     echo "${YELLOW}Running migration: $migration${NC}"
     npx wrangler d1 execute DB --env development --file="$migration" | cat
     check_status
@@ -159,6 +159,33 @@ for i in {1..5}; do
   check_status
   echo "${BLUE}Added guess streak points: $POINTS at $TIMESTAMP${NC}"
 done
+
+# Optional logout and re-login
+echo "${YELLOW}Do you need to log out and back in? (y/n)${NC}"
+read -r NEED_RELOGIN
+
+if [ "$NEED_RELOGIN" = "y" ]; then
+    echo "${YELLOW}Logging out...${NC}"
+    LOGOUT_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/sign-out \
+        -H "Authorization: Bearer $SESSION_TOKEN")
+    check_status
+
+    echo "${YELLOW}Creating new magic link...${NC}"
+    MAGIC_LINK_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+        -H "Content-Type: application/json" \
+        -d '{"email":"test-anonymize@example.com","isRegistration":false,"turnstileToken":"test-token"}')
+    check_status
+
+    MAGIC_TOKEN=$(extract_magic_token "$MAGIC_LINK_RESPONSE")
+    echo "${BLUE}New magic token: $MAGIC_TOKEN${NC}"
+
+    # Create the full magic link URL and copy to clipboard
+    MAGIC_LINK="http://localhost:5173/auth/verify?token=$MAGIC_TOKEN"
+    echo "$MAGIC_LINK" | pbcopy
+    echo "${GREEN}Magic link copied to clipboard!${NC}"
+    echo "${BLUE}You can now paste this link in your browser to continue testing.${NC}"
+    exit 0
+fi
 
 # Check stats before anonymization
 echo "${YELLOW}Checking stats before anonymization...${NC}"

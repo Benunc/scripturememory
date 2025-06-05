@@ -120,6 +120,16 @@ echo "${YELLOW}Updating longest streaks...${NC}"
 npx wrangler d1 execute DB --env development --file=./migrations/0005_update_longest_streaks.sql
 check_status
 
+# 4.6 Add anonymized users table
+echo "${YELLOW}Adding anonymized users table...${NC}"
+npx wrangler d1 execute DB --env development --file=./migrations/0006_fix_verses_unique_constraint.sql
+check_status
+
+echo "${YELLOW}Adding anonymized users table...${NC}"
+npx wrangler d1 execute DB --env development --file=./migrations/0007_add_anonymized_users.sql
+check_status
+
+
 echo "Checking for user existence at line 127..."
 echo "Checking users table structure..."
 npx wrangler d1 execute DB --env development --command="SELECT sql FROM sqlite_master WHERE type='table' AND name='users';"
