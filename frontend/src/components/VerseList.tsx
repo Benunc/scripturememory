@@ -511,6 +511,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   const toast = useToast();
   const { userEmail, isAuthenticated } = useAuth();
   const { refreshPoints, updatePoints } = usePoints();
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Move all color mode hooks to component level
   const textColor = useColorModeValue('gray.700', 'gray.200');
@@ -1467,11 +1468,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
     // Add the word to revealedWords
     setRevealedWords(prev => [...prev, nextWordIndex]);
-
-    // Keep the input focusable but don't force focus
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
   };
 
   // Update handleReset to use number[] for revealedWords
@@ -1491,12 +1487,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       localStorage.setItem('recordedWords', JSON.stringify(newRecordedWords));
       return newRecordedWords;
     });
-    
-    // Maintain focus on the verse element
-    const verseElement = verseRefs.current[reference];
-    if (verseElement) {
-      verseElement.focus();
-    }
   };
 
   // Update handleGuessSubmit to only use local points
@@ -1573,16 +1563,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       const nextUnrevealedIndex = findFirstUnrevealedWordIndex(words);
       if (nextUnrevealedIndex < words.length) {
         setAnnouncedWord(`Correct! The next word starts with "${words[nextUnrevealedIndex][0]}"`);
-        // Keep focus on input for next word
-        setTimeout(() => {
-          inputRef.current?.focus();
-        }, 100);
       } else {
         setAnnouncedWord("Congratulations! You've completed the verse!");
-        // Keep focus on input even when complete
-        setTimeout(() => {
-          inputRef.current?.focus();
-        }, 100);
       }
     } else {
       setGuessFeedback({
@@ -1591,6 +1573,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       });
       // Reset streak on incorrect guess
       setConsecutiveCorrectGuesses(0);
+      // Clear input field after incorrect guess
+      setUserGuess('');
     }
   };
 
@@ -1613,11 +1597,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       
       return newState;
     });
-    // Maintain focus on the verse element
-    const verseElement = verseRefs.current[reference];
-    if (verseElement) {
-      verseElement.focus();
-    }
   };
 
   const handleManualStatusChange = (reference: string, newStatus: ProgressStatus) => {
@@ -1790,10 +1769,14 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                 _focus={{
                   outline: 'none',
                   boxShadow: inputFocusShadow,
+                  scrollBehavior: 'auto',
+                  scrollMargin: 0
                 }}
                 _focusVisible={{
                   outline: 'none',
                   boxShadow: inputFocusShadow,
+                  scrollBehavior: 'auto',
+                  scrollMargin: 0
                 }}
               />
               <input
@@ -2102,10 +2085,12 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                           onClick={(e) => {
                             e.stopPropagation();
                             handleShowHint(verse.reference);
+                            inputRef.current?.focus();
                           }}
-                          onKeyPress={(e) => {
+                          onKeyDown={(e) => {
                             e.stopPropagation();
                             handleShowHint(verse.reference);
+                            inputRef.current?.focus();
                           }}
                           role="button"
                           aria-label={`Show hint for next word of ${verse.reference}`}
@@ -2127,10 +2112,12 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                         onClick={(e) => {
                           e.stopPropagation();
                           handleReset(verse.reference);
+                          inputRef.current?.focus();
                         }}
-                        onKeyPress={(e) => {
+                        onKeyDown={(e) => {
                           e.stopPropagation();
                           handleReset(verse.reference);
+                          inputRef.current?.focus();
                         }}
                         role="button"
                         aria-label={`Reset memorization of ${verse.reference}`}
@@ -2151,10 +2138,12 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                         onClick={(e) => {
                           e.stopPropagation();
                           handleShowVerse(verse.reference);
+                          inputRef.current?.focus();
                         }}
-                        onKeyPress={(e) => {
+                        onKeyDown={(e) => {
                           e.stopPropagation();
                           handleShowVerse(verse.reference);
+                          inputRef.current?.focus();
                         }}
                         role="button"
                         aria-label={showFullVerse[verse.reference] ? `Hide full text of ${verse.reference}` : `Show full text of ${verse.reference}`}
