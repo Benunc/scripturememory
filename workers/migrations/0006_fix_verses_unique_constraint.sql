@@ -1,9 +1,6 @@
 -- Migration to fix the UNIQUE constraint on verses.reference to be per user
 -- SQLite does not support ALTER TABLE ADD CONSTRAINT, so we use a table-copy pattern
 
--- Step 0: Disable foreign key constraints temporarily
-PRAGMA foreign_keys = OFF;
-
 -- Step 1: Clean up any leftover tables from previous attempts
 DROP TABLE IF EXISTS verses_old;
 DROP TABLE IF EXISTS verses_new;
@@ -21,10 +18,13 @@ CREATE TABLE verses_new (
   UNIQUE(user_id, reference)
 );
 
--- Step 3: Copy data from the old table to the new table
+-- Step 3: Copy only verses that have valid user references
 INSERT INTO verses_new (id, user_id, reference, text, translation, status, created_at)
-SELECT id, user_id, reference, text, translation, status, created_at
-FROM verses;
+SELECT v.id, v.user_id, v.reference, v.text, v.translation, v.status, v.created_at
+FROM verses v
+WHERE EXISTS (
+  SELECT 1 FROM users u WHERE u.id = v.user_id
+);
 
 -- Step 4: Verify data was copied correctly
 SELECT COUNT(*) as new_count FROM verses_new;
@@ -41,9 +41,6 @@ DROP TABLE IF EXISTS verses_old;
 -- Step 7: Recreate indexes
 CREATE INDEX IF NOT EXISTS idx_verses_user_id ON verses(user_id);
 
--- Step 8: Re-enable foreign key constraints
-PRAGMA foreign_keys = ON;
-
--- Step 9: Verify data integrity and constraint
+-- Step 8: Verify data integrity and constraint
 SELECT COUNT(*) as verse_count FROM verses;
 SELECT sql FROM sqlite_master WHERE type='table' AND name='verses'; 
