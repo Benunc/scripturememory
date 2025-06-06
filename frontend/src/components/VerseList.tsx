@@ -833,7 +833,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         feedback: null,
         progress: null
       }));
-      setActiveVerseId(null);
     } else {
       const progress = await fetchMasteryProgress(reference);
       setMasteryState(prev => ({
@@ -843,7 +842,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         feedback: null,
         progress
       }));
-      setActiveVerseId(reference);
     }
   };
 
@@ -1994,7 +1992,6 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   // Update the verse card rendering
   const renderVerseCard = (verse: Verse): JSX.Element => {
     const isInMasteryMode = masteryState.activeVerse === verse.reference;
-    const isActive = activeVerseId === verse.reference;
     
     return (
       <Box
@@ -2007,8 +2004,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         role="article"
         aria-labelledby={`verse-${verse.reference}`}
         tabIndex={activeVerseId === verse.reference ? -1 : 0}
-        opacity={activeVerseId && !isActive ? 0.25 : 1}
-        filter={activeVerseId && !isActive ? "blur(1px)" : "none"}
+        opacity={activeVerseId && activeVerseId !== verse.reference ? 0.25 : 1}
+        filter={activeVerseId && activeVerseId !== verse.reference ? "blur(1px)" : "none"}
         transition="all 0.2s"
       >
         <VStack align="stretch" spacing={2}>
@@ -2534,19 +2531,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   }
 
   return (
-    <Box w="100%" position="relative">
-      {activeVerseId && (
-        <Box
-          position="fixed"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          zIndex={1}
-          onClick={() => setActiveVerseId(null)}
-          cursor="pointer"
-        />
-      )}
+    <Box w="100%">
       {/* Skip link for keyboard users */}
       <Link
         href="#verses-list"
