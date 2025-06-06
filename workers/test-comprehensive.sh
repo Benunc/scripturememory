@@ -1,7 +1,91 @@
 #!/bin/zsh
 
-# Test script for user anonymization
-# Usage: ./test-anonymization.sh
+# Comprehensive Test Script for Scripture Memory API
+# ===============================================
+#
+# Purpose:
+# ---------
+# This script tests the complete functionality of the Scripture Memory API endpoints,
+# including user authentication, verse management, progress tracking, and points system.
+# It also generates magic links for testing both desktop and mobile browsers.
+#
+# Usage:
+# ------
+# 1. Start the Wrangler dev server: npx wrangler dev --env development
+# 2. Run this script: ./test-comprehensive.sh
+# 3. Follow the prompts to:
+#    - Confirm server is running
+#    - Confirm database is clean (or let script clean it)
+# 4. The script will:
+#    - Set up test users
+#    - Add test verses
+#    - Record progress
+#    - Generate points
+#    - Test anonymization
+#
+# Testing Options:
+# ---------------
+# When prompted:
+# - Answer "n" to both "Do you want a phone link?" and "Do you want to log in in the browser?"
+#   This will test the user anonymization functionality, which:
+#   - Verifies user data is properly anonymized
+#   - Confirms user is deleted from the users table
+#   - Ensures other users' data remains unchanged
+#
+# Expected Points Breakdown:
+# ------------------------
+# User 1 (test-anonymize@example.com):
+# - Verse Additions:
+#   * Psalm 23:1: 10 points (new verse)
+#   * Psalm 23:2: 10 points (new verse)
+#   * Psalm 23:3: 10 points (new verse)
+# - Verse Mastery:
+#   * Psalm 23:1: 500 points (mastered)
+#   * Psalm 23:2: 500 points (mastered)
+#   * Psalm 23:3: 0 points (not mastered)
+# - Guess Streaks:
+#   * 5 streak events (1.0, 1.5, 2.0, 2.5, 3.0) = 10 points
+# Total Points: 1030 points
+#
+# User 2 (test-anonymize2@example.com):
+# - Verse Additions:
+#   * John 3:17: 10 points (new verse)
+# - Guess Streaks:
+#   * 5 streak events (1.0, 1.5, 2.0, 2.5, 3.0) = 10 points
+# Total Points: 20 points
+#
+# Testing Mobile:
+# --------------
+# When prompted "Do you want a phone link?", answer "y" to:
+# 1. The script will automatically:
+#    - Detect your local IP address
+#    - Generate a complete magic link with your IP
+#    - Copy the link to your clipboard
+# 2. You can then:
+#    - Text the link to yourself
+#    - Open it on your mobile device
+#    - Test the mobile experience
+#
+# Testing Desktop:
+# ---------------
+# When prompted:
+# 1. Answer "n" to "Do you want a phone link?"
+# 2. Answer "y" to "Do you want to log in in the browser?"
+# The script will:
+# - Generate a localhost magic link
+# - Copy it to your clipboard
+# - Exit, leaving the database intact for evaluation
+#
+# Note: If you answer "y" to either prompt, the script will:
+# - Copy the appropriate magic link to your clipboard
+# - Exit immediately
+# - Leave the database in its current state for testing
+#
+# Note: This script requires:
+# - A running Wrangler dev server
+# - A clean database (or permission to clean it)
+# - curl installed
+# - bc installed for floating-point calculations
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -255,6 +339,36 @@ check_status
 MAGIC_TOKEN3=$(extract_magic_token "$MAGIC_LINK_RESPONSE3")
 echo "${BLUE}Magic token for first user: $MAGIC_TOKEN3${NC}"
 
+#check the the tester needs a PHONE link
+echo "${YELLOW}Do you want a phone link? (y/n)${NC}"
+read -r NEED_PHONE_LOGIN
+
+if [ "$NEED_PHONE_LOGIN" = "y" ]; then
+  # create a new magic link for the second user
+  echo "${YELLOW}Creating new magic link for second user...${NC}"
+  MAGIC_LINK_RESPONSE4=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+      -H "Content-Type: application/json" \
+      -d '{"email":"test-anonymize2@example.com","isRegistration":false,"turnstileToken":"test-token"}')
+  check_status
+
+  #extract magic token for second user
+  MAGIC_TOKEN4=$(extract_magic_token "$MAGIC_LINK_RESPONSE4")
+  echo "${BLUE}Magic token for second user: $MAGIC_TOKEN4${NC}"
+
+  # check what the local IP address is
+  IP_ADDRESS=$(ifconfig | grep "inet " | grep -v "127.0.0.1" | awk '{print $2}')
+  echo "${BLUE}Local IP address: $IP_ADDRESS${NC}"
+
+  # combine the IP address with the magic token to create a magic link for the second user
+  MAGIC_LINK5="http://$IP_ADDRESS:5173/auth/verify?token=$MAGIC_TOKEN4"
+  echo "${BLUE}Magic link for second user: $MAGIC_LINK5${NC}"
+  
+  # copy that link to the clipboard
+  echo "$MAGIC_LINK5" | pbcopy
+  echo "${GREEN}PHONE LINK copied to clipboard!${NC}"
+  echo "${GREEN}Test completed successfully!${NC}" 
+  exit 0
+fi 
 #check if the tester wants to log in in the browser
 echo "${YELLOW}Do you want to log in in the browser? (y/n)${NC}"
 read -r NEED_RELOGIN
