@@ -60,7 +60,7 @@ export const handleProgress = {
         // Update streak before recording progress
         await updateStreak(userId, env, created_at);
 
-        // Record word progress
+        // Always record word progress for analytics - use UPSERT
         await db.prepare(`
           INSERT INTO word_progress (
             user_id, 
@@ -70,6 +70,11 @@ export const handleProgress = {
             is_correct, 
             created_at
           ) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(user_id, verse_reference, word_index) 
+          DO UPDATE SET
+            word = excluded.word,
+            is_correct = excluded.is_correct,
+            created_at = excluded.created_at
         `).bind(
           userId,
           verse_reference,
@@ -79,35 +84,34 @@ export const handleProgress = {
           created_at || Date.now()
         ).run();
 
-        // Award points for correct words
+        let streakLength = 0;
+        let pointsEarned = 0;
+
+        // Always award points for correct guesses
         if (is_correct) {
-          // First check if user stats exist
+          // Get current verse streak from user_stats
           const stats = await db.prepare(`
-            SELECT 1 FROM user_stats WHERE user_id = ?
-          `).bind(userId).first();
+            SELECT current_verse_streak, current_verse_reference
+            FROM user_stats 
+            WHERE user_id = ?
+          `).bind(userId).first() as { current_verse_streak: number, current_verse_reference: string } | null;
 
-          // Get all word progress for this verse in chronological order
-          const recentProgress = await db.prepare(`
-            SELECT word_index, is_correct, created_at
-            FROM word_progress
-            WHERE user_id = ? AND verse_reference = ?
-            ORDER BY created_at ASC
-          `).bind(userId, verse_reference).all();
-
-          // Count consecutive correct words up to this point
-          let streakLength = 0;
-          for (const progress of recentProgress.results) {
-            if (progress.is_correct === 1) {
-              streakLength++;
+          if (stats) {
+            // If this is the same verse as the current streak, increment it
+            if (stats.current_verse_reference === verse_reference) {
+              streakLength = stats.current_verse_streak + 1;
             } else {
-              break;
+              // New verse, start streak at 1
+              streakLength = 1;
             }
+          } else {
+            // First time user, start streak at 1
+            streakLength = 1;
           }
 
           // Calculate points with streak multiplier
-          // First word = 1 point, each subsequent correct word adds 0.5 to multiplier
           const multiplier = 1 + ((streakLength - 1) * POINTS.STREAK_MULTIPLIER);
-          const pointsEarned = Math.round(POINTS.WORD_CORRECT * multiplier);
+          pointsEarned = Math.round(POINTS.WORD_CORRECT * multiplier);
 
           if (!stats) {
             // Create initial stats if they don't exist
@@ -120,17 +124,34 @@ export const handleProgress = {
                 verses_mastered,
                 total_attempts,
                 last_activity_date,
-                created_at
-              ) VALUES (?, ?, 1, 1, 0, 0, ?, ?)
-            `).bind(userId, pointsEarned, created_at || Date.now(), created_at || Date.now()).run();
+                created_at,
+                current_verse_streak,
+                current_verse_reference
+              ) VALUES (?, ?, 1, 1, 0, 0, ?, ?, ?, ?)
+            `).bind(
+              userId, 
+              pointsEarned, 
+              created_at || Date.now(), 
+              created_at || Date.now(),
+              streakLength,
+              verse_reference
+            ).run();
           } else {
             // Update existing stats
             await db.prepare(`
               UPDATE user_stats 
               SET total_points = total_points + ?,
-                  last_activity_date = ?
+                  last_activity_date = ?,
+                  current_verse_streak = ?,
+                  current_verse_reference = ?
               WHERE user_id = ?
-            `).bind(pointsEarned, created_at || Date.now(), userId).run();
+            `).bind(
+              pointsEarned, 
+              created_at || Date.now(),
+              streakLength,
+              verse_reference,
+              userId
+            ).run();
           }
 
           // Record point event
@@ -145,12 +166,30 @@ export const handleProgress = {
           `).bind(
             userId,
             pointsEarned,
-            JSON.stringify({ verse_reference, word_index, word, streak_length: streakLength }),
+            JSON.stringify({ 
+              verse_reference, 
+              word_index, 
+              word, 
+              streak_length: streakLength,
+              multiplier: multiplier 
+            }),
             created_at || Date.now()
           ).run();
+        } else {
+          // Reset verse streak on incorrect guess
+          await db.prepare(`
+            UPDATE user_stats 
+            SET current_verse_streak = 0,
+                current_verse_reference = ?
+            WHERE user_id = ?
+          `).bind(verse_reference, userId).run();
         }
 
-        return new Response(JSON.stringify({ success: true }), {
+        return new Response(JSON.stringify({ 
+          success: true,
+          streak_length: is_correct ? streakLength : 0,
+          points_earned: is_correct ? pointsEarned : 0
+        }), {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (error) {

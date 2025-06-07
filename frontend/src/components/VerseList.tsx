@@ -1418,13 +1418,17 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
   // Add function to find the first unrevealed word index
   const findFirstUnrevealedWordIndex = useCallback((words: string[]): number => {
-    for (let i = 0; i < words.length; i++) {
+    const verse = verses.find(v => v.reference === activeVerseId);
+    if (!verse) return 0;
+
+    const verseWords = verse.text.split(' ');
+    for (let i = 0; i < verseWords.length; i++) {
       if (!revealedWords.includes(i)) {
         return i;
       }
     }
-    return words.length;
-  }, [revealedWords]);
+    return verseWords.length;
+  }, [revealedWords, activeVerseId, verses]);
 
   // Update handleShowHint to reveal the word
   const handleShowHint = (reference: string) => {
@@ -1489,92 +1493,103 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     });
   };
 
-  // Update handleGuessSubmit to only use local points
-  const handleGuessSubmit = (reference: string) => {
+  // Update handleGuessSubmit to always award points for correct guesses
+  const handleGuessSubmit = async (reference: string) => {
     const verse = verses.find(v => v.reference === reference);
     if (!verse) return;
 
-    const words = verse.text.split(' ');
+    if (!userGuess.trim()) return;
+
+    const words = userGuess.trim().split(/\s+/);
     const nextWordIndex = findFirstUnrevealedWordIndex(words);
+    const verseWords = verse.text.split(' ');
     
-    if (nextWordIndex >= words.length) {
-      setGuessFeedback({
-        isCorrect: false,
-        message: "Great job! Practice again with the reset button."
-      });
-      return;
-    }
+    // Normalize both the user's guess and the verse words for comparison
+    const isCorrect = words.every((word, i) => {
+      const verseWord = verseWords[nextWordIndex + i];
+      return normalizeWord(verseWord) === normalizeWord(word);
+    });
 
-    const correctWord = words[nextWordIndex].toLowerCase().replace(/[.,;:!?'"-]/g, '');
-    const isCorrect = userGuess.toLowerCase().replace(/[.,;:!?'"-]/g, '') === correctWord;
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) {
+        throw new Error('No session token found');
+      }
 
-    // Only add to queue if word hasn't been recorded yet
-    if (!isWordRecorded(reference, nextWordIndex)) {
-      const wordProgress: WordProgress = {
-        verse_reference: reference,
-        word_index: nextWordIndex,
-        word: userGuess.toLowerCase(),
-        is_correct: isCorrect,
-        timestamp: Date.now()
-      };
-      setWordProgressQueue(prev => [...prev, wordProgress]);
-      recordWord(reference, nextWordIndex);
-      
-      // Update points immediately if correct
-      if (isCorrect) {
-        const currentPoints = parseInt(localStorage.getItem('points') || '0', 10);
-        // Increment consecutive correct guesses
-        setConsecutiveCorrectGuesses(prev => prev + 1);
-        // Calculate points based on streak of correct guesses
-        // Match backend calculation: multiplier = 1 + ((streakLength - 1) * STREAK_MULTIPLIER)
-        const multiplier = 1 + ((consecutiveCorrectGuesses) * POINTS.STREAK_MULTIPLIER);
-        const pointsEarned = Math.round(POINTS.WORD_CORRECT * multiplier);
-        const newPoints = currentPoints + pointsEarned;
+      // Record progress for each word
+      for (let i = 0; i < words.length; i++) {
+        const wordIndex = nextWordIndex + i;
+        const word = words[i];
+        const verseWord = verseWords[wordIndex];
+        const wordIsCorrect = normalizeWord(verseWord) === normalizeWord(word);
+
+        const response = await fetch(`${getApiUrl()}/progress/word`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionToken}`
+          },
+          body: JSON.stringify({
+            verse_reference: verse.reference,
+            word_index: wordIndex,
+            word: word,
+            is_correct: wordIsCorrect,
+            timestamp: Date.now()
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw new Error(errorData?.error || 'Failed to record progress');
+        }
+
+        const data = await response.json();
         
-        // Update local storage and UI immediately
-        localStorage.setItem('points', newPoints.toString());
-        updatePoints(newPoints);
-      } else {
-        // Reset streak on incorrect guess
-        setConsecutiveCorrectGuesses(0);
-      }
-      
-      syncProgress();
-    }
+        if (wordIsCorrect) {
+          // Update points based on backend calculation
+          const newPoints = parseInt(localStorage.getItem('points') || '0', 10) + data.points_earned;
+          localStorage.setItem('points', newPoints.toString());
+          updatePoints(newPoints);
+          
+          // Update streak based on backend calculation
+          const streak = parseInt(localStorage.getItem('streak') || '0', 10) + data.streak_length;
+          localStorage.setItem('streak', streak.toString());
 
-    if (isCorrect) {
-      const newRevealedWords = [...revealedWords, nextWordIndex];
-      setRevealedWords(newRevealedWords);
+          // Add the word to revealedWords if it's correct
+          setRevealedWords(prev => [...prev, wordIndex]);
+          
+          // Update activeVerseId to ensure we're tracking the next word
+          setActiveVerseId(reference);
+        }
+      }
+
+      // Update UI
       setUserGuess('');
-      
-      // Check if this was the last word
-      const isLastWord = nextWordIndex === words.length - 1;
       setGuessFeedback({
-        isCorrect: true,
-        message: isLastWord ? "Great job! Practice again with the reset button." : "Correct! Keep going!"
+        isCorrect: isCorrect,
+        message: isCorrect ? "Great job! Practice again with the reset button." : "Not quite right. Try again or use the hint button."
       });
+      
+      // Clear feedback after delay
+      setTimeout(() => {
+        setGuessFeedback(null);
+      }, 2000);
 
-      // Update status to In Progress on first word if Not Started
-      if (nextWordIndex === 0 && verse.status === ProgressStatus.NotStarted) {
-        void handleStatusChange(reference, ProgressStatus.InProgress, false);
+      // If all words are correct, mark verse as complete
+      if (nextWordIndex + words.length >= verseWords.length) {
+        setGuessFeedback({
+          isCorrect: true,
+          message: "Congratulations! You've completed the verse!"
+        });
+        // Update status to Mastered
+        void handleStatusChange(verse.reference, ProgressStatus.Mastered, false);
       }
-
-      // Find the next unrevealed word for the announcement
-      const nextUnrevealedIndex = findFirstUnrevealedWordIndex(words);
-      if (nextUnrevealedIndex < words.length) {
-        setAnnouncedWord(`Correct! The next word starts with "${words[nextUnrevealedIndex][0]}"`);
-      } else {
-        setAnnouncedWord("Congratulations! You've completed the verse!");
-      }
-    } else {
+    } catch (error) {
+      console.error('Error recording progress:', error);
       setGuessFeedback({
         isCorrect: false,
-        message: "Not quite right. Try again or use the hint button."
+        message: 'Failed to record progress. Please try again.'
       });
-      // Reset streak on incorrect guess
-      setConsecutiveCorrectGuesses(0);
-      // Clear input field after incorrect guess
-      setUserGuess('');
     }
   };
 
@@ -1746,7 +1761,20 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                   }
                 }}
                 onKeyDown={(e) => {
+                  if (e.key === 'Backspace' && userGuess.endsWith(' ')) {
+                    e.preventDefault();
+                    const sanitizedValue = userGuess.slice(0, -1).replace(/[^a-zA-Z0-9.,;:!?'"-]/g, '');
+                    setUserGuess(sanitizedValue);
+                    handleGuessSubmit(verse.reference);
+                    return;
+                  }
                   if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleGuessSubmit(verse.reference);
+                  }
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === ' ') {
                     e.preventDefault();
                     handleGuessSubmit(verse.reference);
                   }
@@ -2112,16 +2140,16 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                         variant="outline"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleReset(verse.reference);
+                          handleReset(verse.reference, true);  // Explicitly clear progress
                           inputRef.current?.focus();
                         }}
                         onKeyDown={(e) => {
                           e.stopPropagation();
-                          handleReset(verse.reference);
+                          handleReset(verse.reference, true);  // Explicitly clear progress
                           inputRef.current?.focus();
                         }}
                         role="button"
-                        aria-label={`Reset memorization of ${verse.reference}`}
+                        aria-label={`Reset progress for ${verse.reference}`}
                         _focus={{
                           outline: 'none',
                           boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
@@ -2131,7 +2159,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                           boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
                         }}
                       >
-                        Reset {renderKeyboardShortcut('R')}
+                        Reset
                       </Button>
                       <Button
                         size="sm"

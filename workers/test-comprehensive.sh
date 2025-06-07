@@ -280,6 +280,47 @@ echo "${BLUE}Add verse response for second user:${NC}"
 echo "$ADD_VERSE_RESPONSE2"
 check_status
 
+# Test long verse streak with Jeremiah 29:11 (which is automatically added for new users)
+echo "${YELLOW}Testing long verse streak with Jeremiah 29:11...${NC}"
+
+# Record a long streak of correct word guesses
+for i in {0..14}; do
+  TIMESTAMP=$((BASE_TIMESTAMP + (i * 3600000))) # 1 hour apart
+  WORD_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/word \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2" \
+    -d "{\"verse_reference\":\"Jeremiah 29:11\",\"word_index\":$i,\"word\":\"word$i\",\"is_correct\":true,\"created_at\":$TIMESTAMP}")
+  check_status
+  echo "${BLUE}Recorded word progress for Jeremiah 29:11: word $i at $TIMESTAMP${NC}"
+done
+
+# Verify the streak was recorded correctly
+echo "${YELLOW}Verifying long verse streak...${NC}"
+STREAK_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT current_verse_streak, current_verse_reference FROM user_stats WHERE user_id = 2;" | cat)
+check_status
+echo "${BLUE}Verse streak data:${NC}"
+echo "$STREAK_CHECK"
+
+# Extract and verify the streak data
+STREAK_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT current_verse_streak, current_verse_reference FROM user_stats WHERE user_id = 2;" | cat)
+# Extract just the JSON part of the response (everything between [ and ])
+STREAK_JSON=$(echo "$STREAK_CHECK" | sed -n '/\[/,/\]/p')
+STREAK_COUNT=$(echo "$STREAK_JSON" | grep -A1 '"current_verse_streak":' | grep "current_verse_streak" | awk '{print $2}' | tr -d ',')
+VERSE_REF=$(echo "$STREAK_JSON" | grep -A1 '"current_verse_reference":' | grep "current_verse_reference" | awk -F'"' '{print $4}')
+
+# Verify the streak data
+if [ "$STREAK_COUNT" != "15" ]; then
+    echo "${RED}Error: Expected streak count of 15, found $STREAK_COUNT${NC}"
+    exit 1
+fi
+
+if [ "$VERSE_REF" != "Jeremiah 29:11" ]; then
+    echo "${RED}Error: Expected verse reference Jeremiah 29:11, found $VERSE_REF${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Long verse streak verified${NC}"
+
 # record progress for the second user
 echo "${YELLOW}Recording progress for second user...${NC}"
 record_attempt "John 3:17" 10 15 $BASE_TIMESTAMP
@@ -477,8 +518,8 @@ if [ "$VERSE_COUNT" != "4" ]; then
     exit 1
 fi
 
-if [ "$POINTS_COUNT" != "7" ]; then
-    echo "${RED}Error: Expected 7 point events for user 2, found $POINTS_COUNT${NC}"
+if [ "$POINTS_COUNT" != "21" ]; then
+    echo "${RED}Error: Expected 21 point events for user 2, found $POINTS_COUNT${NC}"
     exit 1
 fi
 
