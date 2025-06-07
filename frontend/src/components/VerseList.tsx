@@ -1575,14 +1575,14 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         setGuessFeedback(null);
       }, 2000);
 
-      // If all words are correct, mark verse as complete
-      if (nextWordIndex + words.length >= verseWords.length) {
+      // If all words are correct and we're not in practice mode, mark verse as complete
+      if (nextWordIndex + words.length >= verseWords.length && verse.status !== ProgressStatus.InProgress) {
         setGuessFeedback({
           isCorrect: true,
           message: "Congratulations! You've completed the verse!"
         });
         // Update status to Mastered
-        void handleStatusChange(verse.reference, ProgressStatus.Mastered, false);
+        
       }
     } catch (error) {
       console.error('Error recording progress:', error);
