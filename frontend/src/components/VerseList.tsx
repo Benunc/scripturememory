@@ -1766,13 +1766,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                 textAlign="center"
                 bg={inputBg}
                 borderColor={inputBorderColor}
-                _focus={{
-                  outline: 'none',
-                  boxShadow: inputFocusShadow,
-                  scrollBehavior: 'auto',
-                  scrollMargin: 0
+                _placeholder={{
+                  color: useColorModeValue('gray.500', 'gray.400'),
+                  opacity: 1
                 }}
-                _focusVisible={{
+                _focus={{
                   outline: 'none',
                   boxShadow: inputFocusShadow,
                   scrollBehavior: 'auto',
