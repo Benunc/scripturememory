@@ -1498,6 +1498,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     setActiveVerseId(null);
     setUserGuess('');
     setGuessFeedback(null);
+    setShowOverlay(false);
     
     // Clear recorded words from localStorage for this verse
     setRecordedWords(prev => {
