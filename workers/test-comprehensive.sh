@@ -225,11 +225,18 @@ for i in {0..4}; do
   record_attempt "Psalm 23:2" 15 15 $TIMESTAMP
 done
 
-# Record attempts for Psalm 23:3 over 2 days
+# record two imperfect attempts for Psalm 23:3 over 2 days, starting at the base timestamp
 for i in {0..1}; do
   TIMESTAMP=$((BASE_TIMESTAMP + (i * 86400000)))
-  record_attempt "Psalm 23:3" 10 15 $TIMESTAMP
+  record_attempt "Psalm 23:3" 14 15 $TIMESTAMP
 done
+
+# Record 2 perfect attempts for Psalm 23:3 over 2 days, starting after the last attempt
+for i in {0..1}; do
+  TIMESTAMP=$((BASE_TIMESTAMP + ((i + 2) * 86400000)))
+  record_attempt "Psalm 23:3" 15 15 $TIMESTAMP
+done
+check_status
 
 # Add guess streak point events
 echo "${YELLOW}Adding guess streak point events...${NC}"
@@ -518,8 +525,8 @@ if [ "$VERSE_COUNT" != "4" ]; then
     exit 1
 fi
 
-if [ "$POINTS_COUNT" != "21" ]; then
-    echo "${RED}Error: Expected 21 point events for user 2, found $POINTS_COUNT${NC}"
+if [ "$POINTS_COUNT" != "22" ]; then
+    echo "${RED}Error: Expected 22 point events for user 2, found $POINTS_COUNT${NC}"
     exit 1
 fi
 

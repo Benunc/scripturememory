@@ -397,6 +397,13 @@ export const handleProgress = {
           ORDER BY created_at DESC
         `).bind(userId, verseReference).all();
 
+        // Check if verse is mastered
+        const masteredVerse = await db.prepare(`
+          SELECT mastered_at
+          FROM mastered_verses
+          WHERE user_id = ? AND verse_reference = ?
+        `).bind(userId, verseReference).first();
+
         // Calculate perfect attempts in a row
         let perfectAttemptsInRow = 0;
         let lastAttemptDate = null;
@@ -406,12 +413,12 @@ export const handleProgress = {
           recordedAttempts = attempts.results.length;
           lastAttemptDate = attempts.results[0].created_at;
 
-          // Count perfect attempts in a row from most recent
+          // Count consecutive perfect attempts from most recent
           for (const attempt of attempts.results) {
             if (attempt.words_correct === attempt.total_words) {
               perfectAttemptsInRow++;
             } else {
-              break;
+              break; // Stop counting when we hit a non-perfect attempt
             }
           }
         }
@@ -420,7 +427,9 @@ export const handleProgress = {
           perfectAttemptsInRow,
           recordedAttempts,
           lastAttemptDate,
-          totalAttempts: attempts.results.length
+          totalAttempts: attempts.results.length,
+          isMastered: !!masteredVerse,
+          masteryDate: masteredVerse?.mastered_at
         }), {
           headers: { 'Content-Type': 'application/json' }
         });

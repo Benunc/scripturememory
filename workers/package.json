@@ -22,7 +22,9 @@
     "db:prod:magic-links": "npx wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM magic_links;\"",
     "db:dev:magic-links": "npx wrangler d1 execute DB --env development --command=\"SELECT * FROM magic_links;\"",
     "db:prod:custom-verses": "npx wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM verses WHERE reference NOT IN ('John 3:16', 'Philippians 4:13', 'Jeremiah 29:11');\"",
-    "db:dev:custom-verses": "npx wrangler d1 execute DB --env development --command=\"SELECT * FROM verses WHERE reference NOT IN ('John 3:16', 'Philippians 4:13', 'Jeremiah 29:11');\""
+    "db:dev:custom-verses": "npx wrangler d1 execute DB --env development --command=\"SELECT * FROM verses WHERE reference NOT IN ('John 3:16', 'Philippians 4:13', 'Jeremiah 29:11');\"",
+    "db:prod:mastery-events": "npx wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM point_events WHERE event_type = 'mastery_achieved' ORDER BY created_at DESC LIMIT 50;\"",
+    "db:prod:stats": "npx wrangler d1 execute DB --env production --remote --command=\"SELECT * FROM user_stats ORDER BY created_at  DESC LIMIT 50;\"" 
   },
   "dependencies": {
     "itty-router": "^4.0.27"

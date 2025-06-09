@@ -864,28 +864,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
   // Update handleMasteryAttempt to update progress immediately
   const handleMasteryAttempt = async (reference: string) => {
-    const verse = verses.find(v => v.reference === reference);
-    if (!verse) return;
-
-    // Only check cooldown if the last attempt was perfect
-    const progress = await fetchMasteryProgress(reference);
-    if (progress.consecutive_perfect > 0) {
-      if (!(await hasEnoughTimePassed(reference))) {
-        const timeUntilNextAttempt = await getTimeUntilNextAttempt(reference);
-        setMasteryState(prev => ({
-          ...prev,
-          feedback: {
-            isCorrect: false,
-            message: `You can make your next attempt in ${timeUntilNextAttempt} (24-hour cooldown only applies after perfect attempts). Feel free to practice, but it won't count towards mastery until then.`,
-            attempt: masteryState.attempt
-          },
-          attempt: '',
-          isSubmitting: false
-        }));
-        return;
-      }
-    }
-
+    if (masteryState.isSubmitting) return;
     setMasteryState(prev => ({ ...prev, isSubmitting: true }));
 
     try {
@@ -894,27 +873,36 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         throw new Error('No session token found');
       }
 
-      const words = verse.text.split(' ').map(normalizeWord);
-      const userWords = masteryState.attempt.split(' ').filter(word => word.trim());
-      const correctWords = userWords.filter(word => 
-        words.includes(normalizeWord(word))
-      );
+      const verse = verses.find(v => v.reference === reference);
+      if (!verse) {
+        throw new Error('Verse not found');
+      }
 
-      // Calculate accuracy before making the API call
+      const words = verse.text.split(' ');
+      const attempt = masteryState.attempt.trim();
+      const attemptWords = attempt.split(' ');
+
+      // Calculate accuracy
+      const correctWords = attemptWords.filter((word, index) => 
+        normalizeWord(word) === normalizeWord(words[index])
+      );
       const accuracy = correctWords.length / words.length;
       const accuracyPercent = Math.round(accuracy * 100);
 
-      // Get timeUntilNext from state
-      const timeUntilNext = masteryState.progress && masteryState.progress.consecutive_perfect > 0 ? 
-        await getTimeUntilNextAttempt(reference) : null;
+      // Check if this will trigger mastery
+      const currentProgress = masteryState.progress || {
+        total_attempts: 0,
+        overall_accuracy: 0,
+        consecutive_perfect: 0,
+        is_mastered: false
+      };
 
-      // Check if this perfect attempt will trigger mastery
       const willTriggerMastery = accuracy === 1 && 
-        progress.consecutive_perfect === 2 && 
-        !timeUntilNext;
+        currentProgress.consecutive_perfect === 2 && 
+        currentProgress.total_attempts >= 4;
 
-      // Generate feedback message
       let feedbackMessage = '';
+
       if (accuracy === 1) {
         if (willTriggerMastery) {
           feedbackMessage = "Perfect! You've mastered this verse! 🎉";
@@ -957,25 +945,27 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       });
 
       if (!response.ok) throw new Error('Failed to record attempt');
-      
-      // Update progress state immediately
-      const currentProgress = masteryState.progress || {
-        total_attempts: 0,
-        overall_accuracy: 0,
-        consecutive_perfect: 0,
-        is_mastered: false
-      };
 
+      // Fetch updated mastery progress from the backend
+      const progressResponse = await fetch(`${getApiUrl()}/progress/mastery/${reference}`, {
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`
+        }
+      });
+
+      if (!progressResponse.ok) throw new Error('Failed to fetch mastery progress');
+
+      const progressData = await progressResponse.json();
       const updatedProgress = {
-        ...currentProgress,
-        total_attempts: currentProgress.total_attempts + 1,
-        consecutive_perfect: accuracy === 1 ? currentProgress.consecutive_perfect + 1 : 0,
-        last_attempt_date: Date.now(),
-        is_mastered: willTriggerMastery || currentProgress.is_mastered,
-        mastery_date: willTriggerMastery ? Date.now() : currentProgress.mastery_date
+        total_attempts: progressData.totalAttempts || 0,
+        overall_accuracy: progressData.overallAccuracy || 0,
+        consecutive_perfect: progressData.perfectAttemptsInRow || 0,
+        is_mastered: progressData.isMastered || false,
+        mastery_date: progressData.masteryDate,
+        last_attempt_date: progressData.lastAttemptDate
       };
 
-      // Update mastery state with new progress immediately
+      // Update mastery state with new progress
       setMasteryState(prev => ({
         ...prev,
         feedback: {

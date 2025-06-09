@@ -45,7 +45,12 @@ export const handleVerses = {
       }
 
       const verses = await getDB(env).prepare(
-        'SELECT * FROM verses WHERE user_id = ? ORDER BY created_at DESC'
+        `SELECT v.*, 
+          CASE WHEN mv.verse_reference IS NOT NULL THEN 'mastered' ELSE v.status END as status
+        FROM verses v
+        LEFT JOIN mastered_verses mv ON v.reference = mv.verse_reference AND v.user_id = mv.user_id
+        WHERE v.user_id = ? 
+        ORDER BY v.created_at DESC`
       ).bind(userId).all();
 
       return new Response(JSON.stringify(verses.results), {
