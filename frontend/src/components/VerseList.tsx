@@ -69,6 +69,7 @@ import { debug, handleError } from '../utils/debug';
 import { useVerses } from '../hooks/useVerses';
 import { Footer } from './Footer';
 import { getApiUrl } from '../utils/api';
+import { VerseOverlay } from './VerseOverlay';
 
 interface Verse {
   reference: string;
@@ -712,6 +713,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   // Add state for tracking consecutive correct guesses
   const [consecutiveCorrectGuesses, setConsecutiveCorrectGuesses] = useState<number>(0);
 
+  // Add state for overlay
+  const [showOverlay, setShowOverlay] = useState(false);
+
   // Add helper function to check if enough time has passed since last attempt
   const hasEnoughTimePassed = async (reference: string): Promise<boolean> => {
     const lastAttempt = localStorage.getItem(`last_attempt_${reference}`);
@@ -823,16 +827,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     }
   };
 
-  // Update handleMasteryToggle to fetch progress
+  // Update handleMasteryToggle to show overlay
   const handleMasteryToggle = async (reference: string): Promise<void> => {
     if (masteryState.activeVerse === reference) {
-      setMasteryState(prev => ({
-        ...prev,
-        activeVerse: null,
-        attempt: '',
-        feedback: null,
-        progress: null
-      }));
+      setMasteryState(prev => ({ ...prev, activeVerse: null }));
+      setShowOverlay(false);
     } else {
       const progress = await fetchMasteryProgress(reference);
       setMasteryState(prev => ({
@@ -842,6 +841,19 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         feedback: null,
         progress
       }));
+      setShowOverlay(true);
+    }
+  };
+
+  // Add handler for overlay click
+  const handleOverlayClick = () => {
+    if (activeVerseId) {
+      setActiveVerseId(null);
+      setShowOverlay(false);
+    }
+    if (masteryState.activeVerse) {
+      setMasteryState(prev => ({ ...prev, activeVerse: null }));
+      setShowOverlay(false);
     }
   };
 
@@ -1400,17 +1412,29 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   // Update handleStart to use number[] for revealedWords
   const handleStart = (reference: string) => {
     setActiveVerseId(reference);
-    setShowFullVerse({});
+    setRevealedWords([]);
+    setShowFullVerse(prev => ({
+      ...prev,
+      [reference]: false,
+    }));
+    setUserGuess('');
+    setGuessFeedback(null);
+    setShowOverlay(true);
     
-    // Get all recorded words for this verse
-    const verseRecordedWords = recordedWords
-      .filter(word => word.verse_reference === reference)
-      .sort((a, b) => a.word_index - b.word_index);
+    // Clear recorded words from localStorage for this verse
+    setRecordedWords(prev => {
+      const newRecordedWords = prev.filter(word => word.verse_reference !== reference);
+      localStorage.setItem('recordedWords', JSON.stringify(newRecordedWords));
+      return newRecordedWords;
+    });
 
-    // Set revealed words based on recorded progress
-    setRevealedWords(verseRecordedWords.map(word => word.word_index));
-    
-    // Focus the input field after a short delay
+    // Find the verse and update its status if needed
+    const verse = verses.find(v => v.reference === reference);
+    if (verse?.status === ProgressStatus.NotStarted) {
+      void handleStatusChange(reference, ProgressStatus.InProgress, false);
+    }
+
+    // Focus input after a short delay
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
@@ -2018,6 +2042,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   // Update the verse card rendering
   const renderVerseCard = (verse: Verse): JSX.Element => {
     const isInMasteryMode = masteryState.activeVerse === verse.reference;
+    const isActive = activeVerseId === verse.reference || isInMasteryMode;
     
     return (
       <Box
@@ -2029,10 +2054,15 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         position="relative"
         role="article"
         aria-labelledby={`verse-${verse.reference}`}
-        tabIndex={activeVerseId === verse.reference ? -1 : 0}
-        opacity={activeVerseId && activeVerseId !== verse.reference ? 0.25 : 1}
-        filter={activeVerseId && activeVerseId !== verse.reference ? "blur(1px)" : "none"}
-        transition="all 0.2s"
+        tabIndex={isActive ? -1 : 0}
+        zIndex={isActive ? 101 : 1}
+        opacity={!isActive && showOverlay ? 0.25 : 1}
+        filter={!isActive && showOverlay ? "blur(1px)" : "none"}
+        transition="all 0.1s ease-in-out"
+        bg={useColorModeValue('white', 'gray.800')}
+        _hover={{
+          bg: useColorModeValue('gray.50', 'gray.700')
+        }}
       >
         <VStack align="stretch" spacing={2}>
           <Flex justify="space-between" align="center">
@@ -2557,7 +2587,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   }
 
   return (
-    <Box w="100%">
+    <Box w="100%" position="relative">
       {/* Skip link for keyboard users */}
       <Link
         href="#verses-list"
@@ -2603,6 +2633,12 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       <VStack spacing={4} align="stretch" mb={8} id="verses-list">
         {verses.map(renderVerseCard)}
       </VStack>
+
+      <VerseOverlay
+        activeVerseRef={activeVerseId ? verseRefs.current[activeVerseId] : masteryState.activeVerse ? verseRefs.current[masteryState.activeVerse] : { current: null }}
+        onOverlayClick={handleOverlayClick}
+        isVisible={showOverlay}
+      />
 
       {renderDeleteDialog()}
       {renderShortcutsModal()}
