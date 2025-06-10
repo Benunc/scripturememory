@@ -71,10 +71,11 @@ export const AddVerse: React.FC<AddVerseProps> = ({ onVerseAdded, addVerse }) =>
         const currentPoints = parseInt(localStorage.getItem('points') || '0', 10);
         const newPoints = currentPoints + 10; // 10 points for adding a verse
         updatePoints(newPoints);
-        
+        const remaining = 2 - dailyVerseCount;
+        const verseWord = remaining === 1 ? 'verse' : 'verses';
         toast({
           title: 'Success',
-          description: `Your verse has been added successfully (+10 points!) (${3 - dailyVerseCount} more verses today will earn points)`,
+          description: `Your verse has been added successfully (+10 points!) (${remaining} more ${verseWord} today will earn points)`,
           status: 'success',
           duration: 3000,
           isClosable: true,

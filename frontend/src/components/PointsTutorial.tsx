@@ -36,12 +36,12 @@ export const PointsTutorial: React.FC = () => {
             Earning Points
           </Heading>
           <UnorderedList spacing={2} color={textColor}>
-            <ListItem>1 point for each correct word during memorization practice</ListItem>
-            <ListItem>50% bonus points for each word in a streak (e.g., 3rd word in a row = 1.5 points)</ListItem>
+            <ListItem>1 point for the first correct word during memorization practice</ListItem>
+            <ListItem>Each consecutive correct word in a streak is worth its streak position (e.g., 2nd word = 2 points, 3rd word = 3 points, etc.)</ListItem>
             <ListItem>10 points for adding new verses to memorize (limit 3 points-earning verses per day)</ListItem>
             <ListItem>500 points for achieving mastery of a verse</ListItem>
             <ListItem>50 points for maintaining a daily practice streak (awarded after 2+ days)</ListItem>
-            <ListItem>Points are awarded in real-time as you practice, and make </ListItem>
+            <ListItem>Points are awarded in real-time as you practice, and make your progress visible immediately</ListItem>
           </UnorderedList>
         </Box>
 

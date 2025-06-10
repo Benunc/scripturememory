@@ -4,7 +4,7 @@
 [x] increase contrast on the placeholder text for guesses
 [x] fix the display of the donate page (headers and footers)
 [ ] add a method for tracking folks who have visited the "Thank You" page and update their "donated" info in users.
-[ ] test and verify points for word guesses stopping after a certain number of guesses
+[x] test and verify points for word guesses stopping after a certain number of guesses
 [ ] admin panel to view current users, activity, etc
 [ ] explore breaking the verseList file into different but related components or something to make it easier for the AI to see what's going on.
 [ ] make updates to the pointsStats page to make it more helpful
@@ -12,6 +12,8 @@
   [ ] show a graph of points and points events per day over time
   [ ] remove last access (it's always today)
 [ ] fix whatever happens at three hours of the session, as it's currently not actually logging out. not sure if I want it to, but right now it's definitely not. I can go back the next day and I'm still logged in.
+[ ] figure out an archive strategy
+[ ] handle the display of and messaging around mastered verses
 
 
 # Admin Panel Implementation Plan

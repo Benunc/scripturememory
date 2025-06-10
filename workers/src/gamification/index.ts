@@ -6,7 +6,7 @@ import { getDB, getUserId } from '../utils/db';
 const POINTS = {
   VERSE_ADDED: 10,         // Points for adding a new verse (limited to 3 per day)
   WORD_CORRECT: 1,         // Base points per correct word
-  STREAK_MULTIPLIER: 0.5,  // 50% bonus per word in streak
+  STREAK_MULTIPLIER: 1,    // 1x bonus per word in streak
   MASTERY_ACHIEVED: 500,   // Big bonus for mastering a verse
   DAILY_STREAK: 50,        // Bonus for maintaining daily streak
 };
@@ -391,13 +391,87 @@ export const handleGamification = {
             longest_streak: 0,
             verses_mastered: 0,
             total_attempts: 0,
-            last_activity_date: Date.now()
+            perfect_attempts: 0,
+            other_attempts: 0,
+            last_activity_date: Date.now(),
+            points_breakdown: {
+              verse_mastery: 0,
+              word_guesses: 0,
+              guess_streaks: 0,
+              verse_additions: 0,
+              daily_streaks: 0
+            }
           }), {
             headers: { 'Content-Type': 'application/json' }
           });
         }
 
-        return new Response(JSON.stringify(stats), {
+        // Get points breakdown from point_events
+        const pointsBreakdown = await db.prepare(`
+          SELECT 
+            SUM(CASE WHEN event_type = 'mastery_achieved' THEN points ELSE 0 END) as verse_mastery,
+            SUM(CASE WHEN event_type IN ('word_correct', 'guess_streak') THEN points ELSE 0 END) as word_guesses,
+            SUM(CASE WHEN event_type IN ('word_correct', 'guess_streak') AND json_extract(metadata, '$.streak_length') > 1 
+              THEN points - 1 
+              ELSE 0 END) as guess_streaks,
+            SUM(CASE WHEN event_type = 'verse_added' THEN points ELSE 0 END) as verse_additions,
+            SUM(CASE WHEN event_type = 'daily_streak' THEN points ELSE 0 END) as daily_streaks
+          FROM point_events 
+          WHERE user_id = ?
+        `).bind(userId).first();
+
+        // Get perfect and other attempts
+        const attemptsBreakdown = await db.prepare(`
+          SELECT 
+            COUNT(CASE WHEN words_correct = total_words THEN 1 END) as perfect_attempts,
+            COUNT(CASE WHEN words_correct < total_words THEN 1 END) as other_attempts
+          FROM verse_attempts 
+          WHERE user_id = ?
+        `).bind(userId).first();
+
+        // Get point history for the last 30 days
+        const pointHistory = await db.prepare(`
+          WITH RECURSIVE dates(date) AS (
+            SELECT date('now', '-30 days')
+            UNION ALL
+            SELECT date(date, '+1 day')
+            FROM dates
+            WHERE date < date('now')
+          ),
+          daily_points AS (
+            SELECT 
+              date(created_at/1000, 'unixepoch') as date,
+              SUM(points) as points
+            FROM point_events
+            WHERE user_id = ?
+            GROUP BY date(created_at/1000, 'unixepoch')
+          )
+          SELECT 
+            dates.date,
+            COALESCE(daily_points.points, 0) as points,
+            SUM(COALESCE(daily_points.points, 0)) OVER (ORDER BY dates.date) as running_total
+          FROM dates
+          LEFT JOIN daily_points ON dates.date = daily_points.date
+          ORDER BY dates.date
+        `).bind(userId).all();
+
+        return new Response(JSON.stringify({
+          ...stats,
+          perfect_attempts: attemptsBreakdown?.perfect_attempts || 0,
+          other_attempts: attemptsBreakdown?.other_attempts || 0,
+          points_breakdown: pointsBreakdown || {
+            verse_mastery: 0,
+            word_guesses: 0,
+            guess_streaks: 0,
+            verse_additions: 0,
+            daily_streaks: 0
+          },
+          point_history: pointHistory.results.map(row => ({
+            date: row.date,
+            points: row.points,
+            running_total: row.running_total
+          }))
+        }), {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (error) {

@@ -7,7 +7,7 @@ import { updateMastery, updateStreak } from '../gamification';
 const POINTS = {
   VERSE_ADDED: 100,        // Big bonus for adding a new verse
   WORD_CORRECT: 1,         // Base points per correct word
-  STREAK_MULTIPLIER: 0.5,  // 50% bonus per word in streak
+  STREAK_MULTIPLIER: 1,    // 1x bonus per word in streak
   MASTERY_ACHIEVED: 500,   // Big bonus for mastering a verse
   DAILY_STREAK: 50,        // Bonus for maintaining daily streak
 };

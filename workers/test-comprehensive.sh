@@ -211,32 +211,69 @@ record_attempt() {
 for i in {0..4}; do
   TIMESTAMP=$((BASE_TIMESTAMP + (i * 86400000)))
   if [ $i -lt 2 ]; then
-    # First 2 attempts are imperfect
+    # First 2 attempts are imperfect (14/15)
     record_attempt "Psalm 23:1" 14 15 $TIMESTAMP
   else
-    # Last 3 attempts are perfect
+    # Last 3 attempts are perfect (15/15)
     record_attempt "Psalm 23:1" 15 15 $TIMESTAMP
   fi
 done
 
-# Record attempts for Psalm 23:2 over 3 days
+# Record attempts for Psalm 23:2 over 5 days
 for i in {0..4}; do
   TIMESTAMP=$((BASE_TIMESTAMP + (i * 86400000)))
   record_attempt "Psalm 23:2" 15 15 $TIMESTAMP
 done
 
-# record two imperfect attempts for Psalm 23:3 over 2 days, starting at the base timestamp
-for i in {0..1}; do
+# Record attempts for Psalm 23:3 over 4 days
+for i in {0..3}; do
   TIMESTAMP=$((BASE_TIMESTAMP + (i * 86400000)))
-  record_attempt "Psalm 23:3" 14 15 $TIMESTAMP
-done
-
-# Record 2 perfect attempts for Psalm 23:3 over 2 days, starting after the last attempt
-for i in {0..1}; do
-  TIMESTAMP=$((BASE_TIMESTAMP + ((i + 2) * 86400000)))
-  record_attempt "Psalm 23:3" 15 15 $TIMESTAMP
+  if [ $i -lt 2 ]; then
+    # First 2 attempts are imperfect (14/15)
+    record_attempt "Psalm 23:3" 14 15 $TIMESTAMP
+  else
+    # Last 2 attempts are perfect (15/15)
+    record_attempt "Psalm 23:3" 15 15 $TIMESTAMP
+  fi
 done
 check_status
+
+# --- Word Guess Flow: Mimic 'Start Memorizing' (Single-Word Input) ---
+echo "${YELLOW}Simulating word guesses for Psalm 23:1...${NC}"
+PSALM_23_1_WORDS=("The" "LORD" "is" "my" "shepherd," "I" "lack" "nothing.")
+for idx in {1..${#PSALM_23_1_WORDS[@]}}; do
+  word=${PSALM_23_1_WORDS[$idx]}
+  WORD_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/word \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN" \
+    -d "{\"verse_reference\":\"Psalm 23:1\",\"word_index\":$((idx-1)),\"word\":\"$word\",\"is_correct\":true,\"created_at\":$BASE_TIMESTAMP}")
+  check_status
+  echo "${BLUE}Guessed word '$word' for Psalm 23:1 at index $((idx-1))${NC}"
+done
+
+echo "${YELLOW}Simulating word guesses for Psalm 23:2...${NC}"
+PSALM_23_2_WORDS=("He" "makes" "me" "lie" "down" "in" "green" "pastures," "he" "leads" "me" "beside" "quiet" "waters.")
+for idx in {1..${#PSALM_23_2_WORDS[@]}}; do
+  word=${PSALM_23_2_WORDS[$idx]}
+  WORD_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/word \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN" \
+    -d "{\"verse_reference\":\"Psalm 23:2\",\"word_index\":$((idx-1)),\"word\":\"$word\",\"is_correct\":true,\"created_at\":$BASE_TIMESTAMP}")
+  check_status
+  echo "${BLUE}Guessed word '$word' for Psalm 23:2 at index $((idx-1))${NC}"
+done
+
+echo "${YELLOW}Simulating word guesses for Psalm 23:3...${NC}"
+PSALM_23_3_WORDS=("He" "refreshes" "my" "soul." "He" "guides" "me" "along" "the" "right" "paths" "for" "his" "name's" "sake.")
+for idx in {1..${#PSALM_23_3_WORDS[@]}}; do
+  word=${PSALM_23_3_WORDS[$idx]}
+  WORD_RESPONSE=$(curl -s -X POST http://localhost:8787/progress/word \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN" \
+    -d "{\"verse_reference\":\"Psalm 23:3\",\"word_index\":$((idx-1)),\"word\":\"$word\",\"is_correct\":true,\"created_at\":$BASE_TIMESTAMP}")
+  check_status
+  echo "${BLUE}Guessed word '$word' for Psalm 23:3 at index $((idx-1))${NC}"
+done
 
 # Add guess streak point events
 echo "${YELLOW}Adding guess streak point events...${NC}"
@@ -246,7 +283,7 @@ for i in {1..5}; do
   STREAK_RESPONSE=$(curl -s -X POST http://localhost:8787/gamification/points \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $SESSION_TOKEN" \
-    -d "{\"event_type\":\"guess_streak\",\"points\":$POINTS,\"created_at\":$TIMESTAMP}")
+    -d "{\"event_type\":\"word_correct\",\"points\":$POINTS,\"metadata\":{\"streak_length\":$i},\"created_at\":$TIMESTAMP}")
   check_status
   echo "${BLUE}Added guess streak points: $POINTS at $TIMESTAMP${NC}"
 done
@@ -341,7 +378,7 @@ for i in {1..5}; do
   STREAK_RESPONSE=$(curl -s -X POST http://localhost:8787/gamification/points \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $SESSION_TOKEN2" \
-    -d "{\"event_type\":\"guess_streak\",\"points\":$POINTS,\"created_at\":$TIMESTAMP}")
+    -d "{\"event_type\":\"word_correct\",\"points\":$POINTS,\"metadata\":{\"streak_length\":$i},\"created_at\":$TIMESTAMP}")
   check_status
   echo "${BLUE}Added guess streak points: $POINTS at $TIMESTAMP${NC}"
 done
@@ -525,8 +562,8 @@ if [ "$VERSE_COUNT" != "4" ]; then
     exit 1
 fi
 
-if [ "$POINTS_COUNT" != "22" ]; then
-    echo "${RED}Error: Expected 22 point events for user 2, found $POINTS_COUNT${NC}"
+if [ "$POINTS_COUNT" != "23" ]; then
+    echo "${RED}Error: Expected 23 point events for user 2, found $POINTS_COUNT${NC}"
     exit 1
 fi
 
