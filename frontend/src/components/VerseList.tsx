@@ -510,7 +510,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   const [showFullVerse, setShowFullVerse] = useState<Record<string, boolean>>({});
   const [announcedWord, setAnnouncedWord] = useState<string>('');
   const toast = useToast();
-  const { userEmail, isAuthenticated } = useAuth();
+  const { isAuthenticated, userEmail, signOut } = useAuth({});
   const { refreshPoints, updatePoints } = usePoints();
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -550,7 +550,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   const cancelRef = React.useRef<HTMLButtonElement>(null);
   const verseRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [lastFocusedElement, setLastFocusedElement] = useState<HTMLElement | null>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const [focusedVerseIndex, setFocusedVerseIndex] = useState<number>(-1);
 
   // Add word progress state
@@ -1582,13 +1582,13 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       setUserGuess('');
       setGuessFeedback({
         isCorrect: isCorrect,
-        message: isCorrect ? "Great job! Practice again with the reset button." : "Not quite right. Try again or use the hint button."
+        message: isCorrect ? (nextWordIndex + words.length >= verseWords.length ? "Great job! Practice again with the reset button." : "Great job! Keep going!") : "Not quite right. Try again or use the hint button."
       });
       
       // Clear feedback after delay
       setTimeout(() => {
         setGuessFeedback(null);
-      }, 2000);
+      }, 8000);
 
       // If all words are correct and we're not in practice mode, mark verse as complete
       if (nextWordIndex + words.length >= verseWords.length && verse.status !== ProgressStatus.InProgress) {
