@@ -741,5 +741,116 @@ export const handleAuth = {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  },
+
+  // Add verse set to existing user
+  addVerseSet: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const { email, verseSet, turnstileToken } = await request.json();
+
+      // Validate required fields
+      if (!email || !verseSet || !turnstileToken) {
+        return new Response(JSON.stringify({ 
+          error: 'Missing required fields: email, verseSet, turnstileToken' 
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Verify Turnstile token
+      const isTurnstileValid = await verifyTurnstileToken(turnstileToken, env, request);
+      if (!isTurnstileValid) {
+        return new Response(JSON.stringify({ 
+          error: 'Invalid security check. Please try again.' 
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if user exists
+      const user = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+      if (!user) {
+        return new Response(JSON.stringify({ 
+          error: 'User not found. Please create an account first.' 
+        }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get the verse set
+      const verses = getVerseSet(verseSet);
+      if (!verses || verses.length === 0) {
+        return new Response(JSON.stringify({ 
+          error: 'Invalid verse set specified' 
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check which verses the user already has
+      const existingVerses = await env.DB.prepare(`
+        SELECT reference FROM verses WHERE user_id = ?
+      `).bind(user.id).all();
+
+      const existingReferences = new Set(existingVerses.results?.map(v => v.reference) || []);
+
+      // Filter out verses the user already has
+      const newVerses = verses.filter(verse => !existingReferences.has(verse.reference));
+
+      if (newVerses.length === 0) {
+        return new Response(JSON.stringify({ 
+          message: 'You already have all verses from this set!',
+          added: 0,
+          total: verses.length
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+// Add new verses to user's account
+const timestamp = new Date().toISOString();
+for (const verse of newVerses) {
+  await env.DB.prepare(`
+    INSERT INTO verses (
+      user_id,
+      reference,
+      text,
+      translation,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?)
+  `).bind(
+    user.id,
+    verse.reference,
+    verse.text,
+    'ESV',
+    timestamp
+  ).run();
+}
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: `Successfully added ${newVerses.length} verses from ${verseSet}`,
+        added: newVerses.length,
+        total: verses.length,
+        verses: newVerses.map(v => v.reference)
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+    } catch (error) {
+      console.error('Error in addVerseSet:', error);
+      return new Response(JSON.stringify({ 
+        error: 'Failed to add verse set',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
-}; 
+};

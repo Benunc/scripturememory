@@ -50,6 +50,8 @@ router.post('/auth/magic-link', handleAuth.sendMagicLink);
 router.get('/auth/verify', handleAuth.verifyMagicLink);
 router.post('/auth/sign-out', handleAuth.signOut);
 router.delete('/auth/delete', handleAuth.deleteUser);
+router.post('/auth/add-verses', handleAuth.addVerseSet);
+
 
 // Verse routes
 router.get('/verses', handleVerses.getVerses);

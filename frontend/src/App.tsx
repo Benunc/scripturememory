@@ -25,6 +25,8 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { runTestSuite } from './utils/testSuite';
 import { PointsStats } from './pages/PointsStats';
 import { PointsDisplay } from './components/PointsDisplay';
+import { AddVerseSet } from './pages/AddVerseSet';
+
 
 // Add type for Google client
 declare global {
@@ -88,6 +90,7 @@ export function App() {
                 <Route path="/auth/verify" element={<VerifyToken />} />
                 <Route path="/points" element={<PointsStats />} />
                 <Route path="/invite" element={<Invite />} />
+                <Route path="/add-verse-set" element={<AddVerseSet />} />
               </Routes>
             </PointsProvider>
           </AuthProvider>

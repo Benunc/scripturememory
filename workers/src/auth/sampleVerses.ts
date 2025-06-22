@@ -15,7 +15,7 @@ export const verseSets = {
     { reference: 'Psalm 119:105', text: 'Your word is a lamp for my feet, a light on my path.' },
     { reference: 'Proverbs 3:5', text: 'Trust in the LORD with all your heart and lean not on your own understanding.' },
     { reference: 'Colossians 3:23', text: 'Whatever you do, work heartily, as for the Lord and not for men,' },
-    { reference: 'Romans 12:1', text: 'Therefore, I urge you, brothers and sisters, in view of God’s mercy, to offer your bodies as a living sacrifice, holy and pleasing to God—this is your true and proper worship.' }
+    { reference: 'Romans 12:1', text: 'Therefore, I urge you, brothers and sisters, in view of God\'s mercy, to offer your bodies as a living sacrifice, holy and pleasing to God—this is your true and proper worship.' }
   ],
   // You can add more sets here in the future
 };

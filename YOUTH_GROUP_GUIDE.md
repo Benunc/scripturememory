@@ -102,9 +102,9 @@ A: The app works best with an internet connection, but some features may work of
 ## 🏆 Youth Group Challenges
 
 ### **Weekly Challenges**
-- **Monday Motivation**: Memorize a verse about God's love
-- **Wednesday Wisdom**: Focus on a verse about making good choices
-- **Friday Faith**: Memorize a verse about trusting God
+- week 1: (June 23-29th): Most points in the app wins a prize.
+- week 2: (June 30 - July 6): Memorize one of the starter verses and master it for a prize.
+- more challenges coming!
 
 ### **Monthly Goals**
 - Set a goal to master 2-3 verses per month

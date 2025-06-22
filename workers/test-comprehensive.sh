@@ -383,6 +383,34 @@ for i in {1..5}; do
   echo "${BLUE}Added guess streak points: $POINTS at $TIMESTAMP${NC}"
 done
 
+# Test adding verse set to existing user (user 2)
+echo "${YELLOW}Testing add verse set to existing user...${NC}"
+ADD_VERSESET_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/add-verses \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test-anonymize2@example.com","verseSet":"gpc_youth","turnstileToken":"test-token"}')
+check_status
+echo "${BLUE}Add verse set response:${NC}"
+echo "$ADD_VERSESET_RESPONSE"
+
+# Verify that the GPC Youth verses were added to user 2
+echo "${YELLOW}Verifying GPC Youth verses were added to user 2...${NC}"
+GPC_VERSES_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT reference FROM verses WHERE user_id = 2 AND reference IN ('Deuteronomy 29:29', 'Proverbs 1:7', 'Psalm 119:105', 'Proverbs 3:5');")
+check_status
+echo "${BLUE}GPC Youth verses check:${NC}"
+echo "$GPC_VERSES_CHECK"
+
+# Count how many GPC Youth verses were added
+GPC_VERSES_COUNT=$(echo "$GPC_VERSES_CHECK" | grep -c "Deuteronomy 29:29\|Proverbs 1:7\|Psalm 119:105\|Proverbs 3:5" || echo "0")
+echo "${BLUE}GPC Youth verses count: $GPC_VERSES_COUNT${NC}"
+
+# Verify that the verses were added (should be 4 new verses)
+if [ "$GPC_VERSES_COUNT" != "4" ]; then
+    echo "${RED}Error: Expected 4 GPC Youth verses to be added, found $GPC_VERSES_COUNT${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ GPC Youth verses successfully added to user 2${NC}"
+
 # log out the second user
 echo "${YELLOW}Logging out second user...${NC}"
 LOGOUT_RESPONSE2=$(curl -s -X POST http://localhost:8787/auth/sign-out \
@@ -405,8 +433,8 @@ echo "${BLUE}Verses:${NC}"
 echo "$VERSES_RESPONSE"
 
 # Verify the counts
-if [ "$USER1_COUNT" != "6" ] || [ "$USER2_COUNT" != "4" ]; then
-    echo "${RED}Error: Expected 6 verses for user 1 and 4 verses for user 2${NC}"
+if [ "$USER1_COUNT" != "6" ] || [ "$USER2_COUNT" != "10" ]; then
+    echo "${RED}Error: Expected 6 verses for user 1 and 10 verses for user 2${NC}"
     echo "${RED}Found $USER1_COUNT verses for user 1 and $USER2_COUNT verses for user 2${NC}"
     exit 1
 fi
