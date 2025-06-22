@@ -87,7 +87,8 @@ Content-Type: application/json
 {
   "email": "user@example.com",
   "isRegistration": false,
-  "turnstileToken": "token-from-cloudflare-turnstile"
+  "turnstileToken": "token-from-cloudflare-turnstile",
+  "verseSet": "optional-verse-set-code"
 }
 ```
 
@@ -105,6 +106,12 @@ Content-Type: application/json
 **Rate Limiting**
 - Limited to 5 requests per minute per email
 - Returns 429 Too Many Requests when limit is exceeded
+
+**Verse Set Feature**
+- Optional `verseSet` parameter can be included to specify a predefined set of verses
+- If provided, the verse set will be automatically added to new user accounts during registration
+- Available verse sets: `default`, `childrens_verses`, `gpc_youth`
+- If no verse set is specified, the `default` set is used for new users
 
 #### Verify Magic Link
 ```http
@@ -127,6 +134,65 @@ GET /auth/verify?token=<magic-link-token>
 }
 ```
 
+#### Sign Out
+```http
+POST /auth/sign-out
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Signed out successfully"
+}
+```
+
+**Features**
+- Invalidates the current session token
+- Removes the token from the database
+- No error is returned if the token was already invalid
+- Client should clear local storage after successful sign-out
+
+**Error Responses**
+- `401 Unauthorized`: Missing or invalid Authorization header
+- `500 Internal Server Error`: Server error during sign-out process
+
+#### Add Verse Set to Existing User
+```http
+POST /auth/add-verses
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "verseSet": "verse-set-code",
+  "turnstileToken": "token-from-cloudflare-turnstile"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Successfully added 3 verses from gpc_youth",
+  "added": 3,
+  "total": 6,
+  "verses": ["Deuteronomy 29:29", "Proverbs 1:7", "Psalm 119:105"]
+}
+```
+
+**Features**
+- Adds a predefined verse set to an existing user's account
+- Requires Cloudflare Turnstile verification for security
+- Only adds verses the user doesn't already have
+- Returns count of verses added and total verses in the set
+- Available verse sets: `default`, `childrens_verses`, `gpc_youth`
+
+**Error Responses**
+- `400 Bad Request`: Missing required fields or invalid Turnstile token
+- `404 Not Found`: User not found
+- `500 Internal Server Error`: Server error during verse addition
+
 ### Authentication Flow
 
 1. **Sign In vs Registration**
@@ -142,13 +208,14 @@ GET /auth/verify?token=<magic-link-token>
    - Email is sent with link containing token
    - Token is single-use and deleted after verification
    - In development, token is logged to console instead of sending email
+   - Optional verse set is stored with the magic link for new user registration
 
 3. **Session Token**
    - Generated as UUID upon successful magic link verification
    - Stored in database with 30-day expiration
    - Used in Authorization header for all subsequent requests
    - Automatically invalidated after expiration
-   - Can be manually invalidated by deleting user
+   - Can be manually invalidated by deleting user or signing out
 
 ### Session Management
 
@@ -156,11 +223,12 @@ GET /auth/verify?token=<magic-link-token>
 - Session tokens are valid for 30 days
 - Sessions are stored in the database and can be invalidated server-side
 - Each session is associated with a specific user and device
+- Users can manually sign out to invalidate their session
 
 ### Security Features
 
 1. **Cloudflare Turnstile**
-   - Required for magic link requests
+   - Required for magic link requests and verse set addition
    - Prevents automated abuse
 
 2. **Rate Limiting**
@@ -177,11 +245,34 @@ GET /auth/verify?token=<magic-link-token>
    - Server-side session storage
    - Automatic expiration
    - One-time use magic links
+   - Manual session invalidation
 
 5. **Email Enumeration Protection**
    - Identical responses for existing/non-existing users
    - No indication of account existence in error messages
-   - Rate limiting per email address 
+   - Rate limiting per email address
+
+### Available Verse Sets
+
+The API provides several predefined verse sets that can be used during registration or added to existing accounts:
+
+1. **default** (3 verses)
+   - John 3:16
+   - Philippians 4:13
+   - Jeremiah 29:11
+
+2. **childrens_verses** (3 verses)
+   - Genesis 1:1
+   - Psalm 119:105
+   - Proverbs 3:5
+
+3. **gpc_youth** (6 verses)
+   - Deuteronomy 29:29
+   - Proverbs 1:7
+   - Psalm 119:105
+   - Proverbs 3:5
+   - Colossians 3:23
+   - Romans 12:1
 
 ## Verses
 
