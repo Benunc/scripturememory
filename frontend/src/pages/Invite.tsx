@@ -14,10 +14,14 @@ import {
   useToast,
   Link,
   Badge,
+  IconButton,
 } from '@chakra-ui/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
 import { debug } from '../utils/debug';
+import { Footer } from '../components/Footer';
+import { MoonIcon, SunIcon } from '@chakra-ui/icons';
+import { useColorMode } from '@chakra-ui/react';
 
 // Add Turnstile types
 declare global {
@@ -62,6 +66,7 @@ export function Invite() {
   const toast = useToast();
   const turnstileContainerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const { colorMode, toggleColorMode } = useColorMode();
 
   // Get verse set info
   const verseSetInfo = verseSet ? VERSE_SET_DESCRIPTIONS[verseSet] : null;
@@ -233,81 +238,124 @@ export function Invite() {
   };
 
   return (
-    <Container maxW="container.md" py={8}>
-      <VStack spacing={8} align="stretch">
-        <Box textAlign="center">
-          <Heading size="xl" mb={4}>You're Invited!</Heading>
-          {verseSetInfo && (
-            <Box mb={4}>
-              <Badge colorScheme="blue" fontSize="md" mb={2}>
-                {verseSetInfo.badge}
-              </Badge>
+    <Box minH="100vh" display="flex" flexDirection="column">
+      {/* Skip to main content link for accessibility */}
+      <Link
+        href="#main-content"
+        position="absolute"
+        left="-9999px"
+        top="auto"
+        width="1px"
+        height="1px"
+        overflow="hidden"
+        zIndex="9999"
+        _focus={{
+          left: "10px",
+          top: "10px",
+          width: "auto",
+          height: "auto",
+          padding: "10px",
+          backgroundColor: "white",
+          border: "1px solid",
+          borderColor: "blue.500",
+          borderRadius: "md",
+        }}
+      >
+        Skip to main content
+      </Link>
+
+      {/* Color mode toggle */}
+      <Box position="absolute" top={4} right={4}>
+        <IconButton
+          aria-label={`Switch to ${colorMode === 'light' ? 'dark' : 'light'} mode`}
+          icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+          onClick={toggleColorMode}
+          variant="ghost"
+        />
+      </Box>
+
+      {/* Main content */}
+      <Box id="main-content" flex="1" p={8} tabIndex={-1}>
+        <Container maxW="container.md" py={8}>
+          <VStack spacing={8} align="stretch">
+            <Box textAlign="center">
+              <Heading size="xl" mb={4}>You're Invited!</Heading>
+              {verseSetInfo && (
+                <Box mb={4}>
+                  <Badge colorScheme="blue" fontSize="md" mb={2}>
+                    {verseSetInfo.badge}
+                  </Badge>
+                  <Text fontSize="lg" color="gray.600">
+                    {verseSetInfo.description}
+                  </Text>
+                </Box>
+              )}
               <Text fontSize="lg" color="gray.600">
-                {verseSetInfo.description}
+                Join Scripture Memory with a custom verse set
               </Text>
             </Box>
-          )}
-          <Text fontSize="lg" color="gray.600">
-            Join Scripture Memory with a custom verse set
-          </Text>
-        </Box>
 
-        <Card>
-          <CardBody>
-            <VStack spacing={6} align="stretch">
-              <Box>
-                <Heading size="md" mb={2}>Create Your Account</Heading>
-                <Text mb={4}>
-                  Enter your email below to create your account. We'll send you a magic link to complete the registration.
-                </Text>
-                <Box as="form" onSubmit={handleSubmit}>
-                  <VStack spacing={4}>
-                    <FormControl isRequired>
-                      <FormLabel>Email</FormLabel>
-                      <Input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Enter your email"
-                      />
-                    </FormControl>
-                    <Box ref={turnstileContainerRef} />
-                    <Button
-                      type="submit"
-                      colorScheme="blue"
-                      width="full"
-                      isLoading={isLoading}
-                      isDisabled={!turnstileToken}
-                    >
-                      Create Account
-                    </Button>
-                  </VStack>
-                </Box>
-              </Box>
+            <Card>
+              <CardBody>
+                <VStack spacing={6} align="stretch">
+                  <Box>
+                    <Heading size="md" mb={2}>Create Your Account</Heading>
+                    <Text mb={4}>
+                      Enter your email below to create your account. We'll send you a magic link to complete the registration.
+                    </Text>
+                    <Box as="form" onSubmit={handleSubmit}>
+                      <VStack spacing={4}>
+                        <FormControl isRequired>
+                          <FormLabel>Email</FormLabel>
+                          <Input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="Enter your email"
+                          />
+                        </FormControl>
+                        <Box ref={turnstileContainerRef} />
+                        <Button
+                          type="submit"
+                          colorScheme="blue"
+                          width="full"
+                          isLoading={isLoading}
+                          isDisabled={!turnstileToken}
+                        >
+                          Create Account
+                        </Button>
+                      </VStack>
+                    </Box>
+                  </Box>
 
-              <Box>
-                <Heading size="md" mb={2}>What You'll Get</Heading>
-                <VStack align="start" spacing={2}>
-                  <Text>✓ Custom verse set tailored for you</Text>
-                  <Text>✓ Track your memorization progress</Text>
-                  <Text>✓ Get personalized review schedules</Text>
-                  <Text>✓ Access your verses anywhere</Text>
-                  <Text>✓ Join a community of believers</Text>
+                  <Box>
+                    <Heading size="md" mb={2}>What You'll Get</Heading>
+                    <VStack align="start" spacing={2}>
+                      <Text>✓ Custom verse set tailored for you</Text>
+                      <Text>✓ Track your memorization progress</Text>
+                      <Text>✓ Get personalized review schedules</Text>
+                      <Text>✓ Access your verses anywhere</Text>
+                      <Text>✓ Join a community of believers</Text>
+                    </VStack>
+                  </Box>
                 </VStack>
-              </Box>
-            </VStack>
-          </CardBody>
-        </Card>
+              </CardBody>
+            </Card>
 
-        <Box textAlign="center">
-          <Text>
-            Already have an account?{' '}
-            <Link color="blue.500" onClick={() => navigate('/')}>
-              Sign in
-            </Link>
-          </Text>
-        </Box>
-      </VStack>
-    </Container>
+            <Box textAlign="center">
+              <Text>
+                Already have an account?{' '}
+                <Link color="blue.500" onClick={() => navigate('/')}>
+                  Sign in
+                </Link>
+              </Text>
+            </Box>
+          </VStack>
+        </Container>
+      </Box>
+
+      {/* Footer */}
+      <Footer />
+    </Box>
   );
 }

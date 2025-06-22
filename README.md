@@ -20,6 +20,10 @@ A modern web application for memorizing Bible verses, built with React, Cloudfla
 - **Dark/Light Mode**: Automatic theme switching based on system preferences
 - **Offline Support**: Progress tracking works offline with automatic sync (kinda. your milage may vary with offline mode)
 
+## Documentation
+
+- **[Youth Group Training Guide](YOUTH_GROUP_GUIDE.md)** - Complete guide for the Greenwood Presbyterian Church youth group getting started with the app
+
 ## Tech Stack
 
 ### Frontend
