@@ -58,6 +58,7 @@ export interface MagicLink {
   email: string;
   expires_at: number;
   created_at?: number;
+  verse_set?: string | null;
 }
 
 export interface Session {

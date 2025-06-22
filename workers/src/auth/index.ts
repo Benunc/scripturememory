@@ -2,6 +2,7 @@ import { Router } from 'itty-router';
 import { Env, MagicLink, D1Result } from '../types';
 import { generateToken, verifyToken } from './token';
 import { getUserId } from '../utils/db';
+import { getVerseSet } from './sampleVerses';
 
 // Rate limiting
 const RATE_LIMIT = 5; // requests per minute
@@ -233,10 +234,11 @@ export const handleAuth = {
   // Send magic link for sign in
   sendMagicLink: async (request: Request, env: Env): Promise<Response> => {
     try {
-      const { email, isRegistration, turnstileToken } = await request.json() as { 
+      const { email, isRegistration, turnstileToken, verseSet } = await request.json() as { 
         email: string; 
         isRegistration: boolean;
         turnstileToken: string;
+        verseSet?: string;
       };
 
       if (!email) {
@@ -288,8 +290,8 @@ export const handleAuth = {
 
       // Store in D1
       await db.prepare(
-        'INSERT INTO magic_links (token, email, expires_at) VALUES (?, ?, ?)'
-      ).bind(token, email, expiresAt.toISOString()).run();
+        'INSERT INTO magic_links (token, email, expires_at, verse_set) VALUES (?, ?, ?, ?)'
+      ).bind(token, email, expiresAt.toISOString(), verseSet || null).run();
 
       // Send email
       await sendMagicLinkEmail(email, `${request.headers.get('origin')}/auth/verify?token=${token}`, env);
@@ -371,11 +373,7 @@ export const handleAuth = {
 
       // Add sample verses for new users only
       console.log('Starting to add sample verses for new user');
-      const sampleVerses = [
-        { reference: 'John 3:16', text: 'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.' },
-        { reference: 'Philippians 4:13', text: 'I can do all things through Christ who strengthens me.' },
-        { reference: 'Jeremiah 29:11', text: 'For I know the plans I have for you," declares the LORD, "plans to prosper you and not to harm you, plans to give you hope and a future.' }
-      ];
+      const sampleVerses = getVerseSet(magicLink.verse_set as string);
 
       // Insert sample verses
       for (const verse of sampleVerses) {
@@ -516,6 +514,38 @@ export const handleAuth = {
         ...Object.fromEntries(headers)
       }
     });
+  },
+  signOut: async (request: Request, env: Env): Promise<Response> => {
+      try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return new Response('Missing or invalid Authorization header', { status: 401 });
+      }
+
+      const sessionToken = authHeader.substring(7); // Remove "Bearer " prefix
+
+      const db = getDB(env);
+      const result = await db.prepare('DELETE FROM sessions WHERE token = ?')
+        .bind(sessionToken)
+        .run();
+
+      if (result.meta.changes === 0) {
+        // Optional: Let the client know the token was already invalid.
+        // A 200 OK is also fine to not reveal token status.
+        console.log(`Sign-out attempt with an invalid token: ${sessionToken}`);
+      }
+
+      return new Response(JSON.stringify({ success: true, message: 'Signed out successfully' }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200
+      });
+    } catch (error) {
+      console.error('Error in signOut:', error);
+      return new Response(JSON.stringify({ error: 'Failed to sign out' }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 500
+      });
+    }
   },
 
   // Anonymize user and preserve analytics data

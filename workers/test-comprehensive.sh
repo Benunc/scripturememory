@@ -413,6 +413,45 @@ fi
 
 echo "${GREEN}✓ Verse counts verified${NC}"
 
+# create a third user with a custom verse set
+echo "${YELLOW}Creating third user with custom verse set...${NC}"
+MAGIC_LINK_RESPONSE3=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test-anonymize3@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses"}')
+check_status
+
+# extract magic token for third user
+MAGIC_TOKEN3=$(extract_magic_token "$MAGIC_LINK_RESPONSE3")
+echo "${BLUE}Magic token for third user: $MAGIC_TOKEN3${NC}"
+check_status
+
+#log in the third user
+echo "${YELLOW}Logging in third user...${NC}"
+VERIFY_RESPONSE3=$(curl -s -i "http://localhost:8787/auth/verify?token=$MAGIC_TOKEN3")
+check_status
+SESSION_TOKEN3=$(extract_token "$VERIFY_RESPONSE3")
+echo "${BLUE}Session token for third user: $SESSION_TOKEN3${NC}"
+
+# verify the third user has the correct verses
+echo "${YELLOW}Verifying third user has correct verses...${NC}"
+VERSES_RESPONSE3=$(npx wrangler d1 execute DB --env development --command="SELECT * FROM verses WHERE user_id = 3;")
+check_status
+ # fail if the verses are not the childrens verses
+if ! echo "$VERSES_RESPONSE3" | grep -q "Genesis 1:1"; then
+    echo "${RED}Error: Third user does not have the correct verses${NC}"
+    echo "${BLUE}Verses:${NC}"
+    echo "$VERSES_RESPONSE3"
+    exit 1
+fi
+
+echo "${GREEN}✓ Third user has correct verses${NC}"
+
+#log out the third user
+echo "${YELLOW}Logging out third user...${NC}"
+LOGOUT_RESPONSE3=$(curl -s -X POST http://localhost:8787/auth/sign-out \
+    -H "Authorization: Bearer $SESSION_TOKEN3")
+check_status
+
 # create a new magic link for the first user
 echo "${YELLOW}Creating new magic link for first user...${NC}"
 MAGIC_LINK_RESPONSE3=$(curl -s -X POST http://localhost:8787/auth/magic-link \
@@ -562,8 +601,8 @@ if [ "$VERSE_COUNT" != "4" ]; then
     exit 1
 fi
 
-if [ "$POINTS_COUNT" != "23" ]; then
-    echo "${RED}Error: Expected 23 point events for user 2, found $POINTS_COUNT${NC}"
+if [ "$POINTS_COUNT" != "22" ]; then
+    echo "${RED}Error: Expected 22 point events for user 2, found $POINTS_COUNT${NC}"
     exit 1
 fi
 

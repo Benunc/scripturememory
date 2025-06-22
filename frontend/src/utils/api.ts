@@ -144,7 +144,18 @@ export async function deleteVerse(token: string, reference: string): Promise<Api
 }
 
 export const getApiUrl = () => {
-  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? import.meta.env.VITE_WORKER_URL || 'http://localhost:8787'
-    : 'https://scripture-memory.ben-2e6.workers.dev';
-}; 
+  const host = window.location.hostname;
+
+  if (host === 'localhost' || host === '127.0.0.1') {
+    // Local development on your computer
+    return import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
+  }
+
+  if (host.startsWith('192.168.')) {
+    // Access from LAN (e.g., your phone)
+    return import.meta.env.VITE_MOBILE_WORKER_URL || 'http://192.168.1.91:8787';
+  }
+
+  // Production or any other domain
+  return 'https://scripture-memory.ben-2e6.workers.dev';
+};

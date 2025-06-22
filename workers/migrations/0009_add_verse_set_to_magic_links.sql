@@ -1,0 +1,1 @@
+ALTER TABLE magic_links ADD COLUMN verse_set TEXT;

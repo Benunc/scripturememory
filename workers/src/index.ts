@@ -48,6 +48,7 @@ router.options('*', () => {
 // Auth routes
 router.post('/auth/magic-link', handleAuth.sendMagicLink);
 router.get('/auth/verify', handleAuth.verifyMagicLink);
+router.post('/auth/sign-out', handleAuth.signOut);
 router.delete('/auth/delete', handleAuth.deleteUser);
 
 // Verse routes
@@ -78,6 +79,17 @@ export default {
     try {
       // Handle the request
       const response = await router.handle(request, env, ctx);
+      
+      // Check if response exists (route was found)
+      if (!response) {
+        return new Response(JSON.stringify({ error: 'Not Found' }), { 
+          status: 404,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        });
+      }
       
       // Create new response with original headers plus CORS
       const headers = new Headers(response.headers);
@@ -110,4 +122,4 @@ export default {
       });
     }
   }
-}; 
+};
