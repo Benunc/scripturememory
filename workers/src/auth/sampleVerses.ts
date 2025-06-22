@@ -9,6 +9,12 @@ export const verseSets = {
     { reference: 'Psalm 119:105', text: 'Your word is a lamp for my feet, a light on my path.' },
     { reference: 'Proverbs 3:5', text: 'Trust in the LORD with all your heart and lean not on your own understanding.' }
   ],
+  gpc_youth: [
+    { reference: 'Deuteronomy 29:29', text: 'The secret things belong to the LORD our God, but the things that are revealed belong to us and to our children forever, that we may do all the words of this law.' },
+    { reference: 'Proverbs 1:7', text: 'The fear of the LORD is the beginning of knowledge, but fools despise wisdom and instruction.' },
+    { reference: 'Psalm 119:105', text: 'Your word is a lamp for my feet, a light on my path.' },
+    { reference: 'Proverbs 3:5', text: 'Trust in the LORD with all your heart and lean not on your own understanding.' }
+  ],
   // You can add more sets here in the future
 };
 

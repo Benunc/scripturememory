@@ -36,7 +36,7 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   }
 }
 
-export const getMagicLink = async (email: string, isRegistration: boolean, turnstileToken: string): Promise<ApiResponse<{ token: string }>> => {
+export const getMagicLink = async (email: string, isRegistration: boolean, turnstileToken: string, verseSet?: string): Promise<ApiResponse<{ token: string }>> => {
   try {
     debug.log('api', 'Sending magic link request', { email, isRegistration });
     const response = await fetch(`${API_URL}/auth/magic-link`, {
@@ -48,6 +48,7 @@ export const getMagicLink = async (email: string, isRegistration: boolean, turns
         email,
         isRegistration,
         turnstileToken,
+        verseSet,
       }),
     });
 

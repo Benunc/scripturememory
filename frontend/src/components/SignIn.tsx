@@ -43,6 +43,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [isTurnstileReady, setIsTurnstileReady] = useState(false);
+  const [verseSet, setVerseSet] = useState('');
   const { signIn } = useAuthContext();
   const toast = useToast();
   const navigate = useNavigate();
@@ -247,7 +248,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       setIsLoading(true);
 
       try {
-        const result = await getMagicLink(email, false, turnstileToken);
+        const result = await getMagicLink(email, false, turnstileToken, verseSet);
         if (result.data) {
           toast({
             title: "Success",

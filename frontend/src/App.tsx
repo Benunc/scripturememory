@@ -20,6 +20,7 @@ import { MainApp } from './components/App';
 import { theme } from './theme';
 import { ThankYou } from './pages/ThankYou';
 import { About } from './pages/About';
+import { Invite } from './pages/Invite';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { runTestSuite } from './utils/testSuite';
 import { PointsStats } from './pages/PointsStats';
@@ -86,6 +87,7 @@ export function App() {
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/auth/verify" element={<VerifyToken />} />
                 <Route path="/points" element={<PointsStats />} />
+                <Route path="/invite" element={<Invite />} />
               </Routes>
             </PointsProvider>
           </AuthProvider>

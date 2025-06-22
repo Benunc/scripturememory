@@ -13,8 +13,9 @@ import {
   CardBody,
   useToast,
   Link,
+  Badge,
 } from '@chakra-ui/react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
 import { debug } from '../utils/debug';
 
@@ -28,19 +29,44 @@ declare global {
   }
 }
 
-export function Register() {
-  const [email, setEmail] = useState('');
+// Verse set descriptions
+const VERSE_SET_DESCRIPTIONS: Record<string, { title: string; description: string; badge: string }> = {
+  childrens_verses: {
+    title: "Children's Verses",
+    description: "Perfect for young learners with simple, foundational Bible verses.",
+    badge: "Kids"
+  },
+  beginners: {
+    title: "Beginner Verses", 
+    description: "Great starting point for new believers with essential verses.",
+    badge: "Beginner"
+  },
+  gpc_youth: {
+    title: "GPC Youth Challenge",
+    description: "For GPC Youth. Start with Pastor-Paul approved verses.",
+    badge: "GPC Youth"
+  }
+};
+
+export function Invite() {
+  const [searchParams] = useSearchParams();
+  const verseSet = searchParams.get('verseSet');
+  const prefillEmail = searchParams.get('email');
+  
+  const [email, setEmail] = useState(prefillEmail || '');
   const [isLoading, setIsLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [isTurnstileReady, setIsTurnstileReady] = useState(false);
-  const [verseSet, setVerseSet] = useState('');
   const { signIn } = useAuthContext();
   const navigate = useNavigate();
   const toast = useToast();
   const turnstileContainerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
-  // Load Turnstile script
+  // Get verse set info
+  const verseSetInfo = verseSet ? VERSE_SET_DESCRIPTIONS[verseSet] : null;
+
+  // Load Turnstile script (same as Register component)
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
     const loadTurnstile = async () => {
@@ -105,7 +131,7 @@ export function Register() {
     };
   }, []);
 
-  // Render Turnstile when ready
+  // Render Turnstile when ready (same as Register component)
   useEffect(() => {
     if (!isTurnstileReady || !turnstileContainerRef.current) return;
 
@@ -184,7 +210,8 @@ export function Register() {
         throw new Error('Please complete the security check');
       }
 
-      await signIn(email, true, turnstileToken, undefined);
+      // Pass the verseSet to the signIn function
+      await signIn(email, true, turnstileToken, verseSet);
       toast({
         title: "Check your email",
         description: "We've sent you a magic link to complete your registration.",
@@ -209,9 +236,19 @@ export function Register() {
     <Container maxW="container.md" py={8}>
       <VStack spacing={8} align="stretch">
         <Box textAlign="center">
-          <Heading size="xl" mb={4}>Join Scripture Memory</Heading>
+          <Heading size="xl" mb={4}>You're Invited!</Heading>
+          {verseSetInfo && (
+            <Box mb={4}>
+              <Badge colorScheme="blue" fontSize="md" mb={2}>
+                {verseSetInfo.badge}
+              </Badge>
+              <Text fontSize="lg" color="gray.600">
+                {verseSetInfo.description}
+              </Text>
+            </Box>
+          )}
           <Text fontSize="lg" color="gray.600">
-            Start your journey of memorizing God's Word
+            Join Scripture Memory with a custom verse set
           </Text>
         </Box>
 
@@ -249,27 +286,14 @@ export function Register() {
               </Box>
 
               <Box>
-                <Heading size="md" mb={2}>Why Join?</Heading>
+                <Heading size="md" mb={2}>What You'll Get</Heading>
                 <VStack align="start" spacing={2}>
+                  <Text>✓ Custom verse set tailored for you</Text>
                   <Text>✓ Track your memorization progress</Text>
                   <Text>✓ Get personalized review schedules</Text>
                   <Text>✓ Access your verses anywhere</Text>
                   <Text>✓ Join a community of believers</Text>
                 </VStack>
-              </Box>
-
-              <Box>
-                <Heading size="md" mb={2}>Support Our Mission</Heading>
-                <Text mb={4}>
-                  Scripture Memory is free to use, but your support helps us continue building tools for memorizing God's Word.
-                </Text>
-                <Button
-                  colorScheme="green"
-                  width="full"
-                  onClick={() => navigate('/donate')}
-                >
-                  Support Scripture Memory
-                </Button>
               </Box>
             </VStack>
           </CardBody>
@@ -286,4 +310,4 @@ export function Register() {
       </VStack>
     </Container>
   );
-} 
+}
