@@ -35,12 +35,12 @@ export const useAuth = (navigate: NavigateFunction) => {
   }, [checkSession]);
 
   // Sign in with magic link
-  const signIn = async (email: string, isRegistration: boolean, turnstileToken: string) => {
+  const signIn = async (email: string, isRegistration: boolean, turnstileToken: string, verseSet?: string) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const response = await getMagicLink(email, isRegistration, turnstileToken);
+      const response = await getMagicLink(email, isRegistration, turnstileToken, verseSet);
       if (response.error) {
         throw new Error(response.error);
       }
