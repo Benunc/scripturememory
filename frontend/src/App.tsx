@@ -26,6 +26,8 @@ import { runTestSuite } from './utils/testSuite';
 import { PointsStats } from './pages/PointsStats';
 import { PointsDisplay } from './components/PointsDisplay';
 import { AddVerseSet } from './pages/AddVerseSet';
+import Groups from './pages/Groups';
+import GroupDetails from './pages/GroupDetails';
 
 
 // Add type for Google client
@@ -91,6 +93,8 @@ export function App() {
                 <Route path="/points" element={<PointsStats />} />
                 <Route path="/invite" element={<Invite />} />
                 <Route path="/add-verse-set" element={<AddVerseSet />} />
+                <Route path="/groups" element={<Groups />} />
+                <Route path="/groups/:groupId" element={<GroupDetails />} />
               </Routes>
             </PointsProvider>
           </AuthProvider>

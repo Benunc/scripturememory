@@ -1016,8 +1016,86 @@ fi
 echo "${GREEN}✓ All leaderboard tests passed${NC}"
 
 # ========================================
+# TEST: List groups for a user (GET /groups/mine)
+# ========================================
+echo "${YELLOW}Testing list groups for a user...${NC}"
+USER_GROUPS_RESPONSE=$(curl -s -X GET http://localhost:8787/groups/mine \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+echo "${BLUE}User groups response: $USER_GROUPS_RESPONSE${NC}"
+if echo "$USER_GROUPS_RESPONSE" | grep -q '"groups"' && echo "$USER_GROUPS_RESPONSE" | grep -q '"role"'; then
+    echo "${GREEN}✓ List groups for a user works${NC}"
+else
+    echo "${RED}✗ List groups for a user failed${NC}"
+    exit 1
+fi
+
+# ========================================
 # END LEADERBOARD TESTS
 # ========================================
+USERS=(
+  "test-anonymize@example.com"
+  "test-anonymize2@example.com"
+  "test-anonymize3@example.com"
+  "group-leader@example.com"
+  "group-member@example.com"
+  "group-outsider@example.com"
+  # Add any other test users created in this script
+)
+# add a question to see if the tester needs a magic link for a specific user, as before
+echo "${YELLOW}Do you want to log in as a test user before deletion? (y/n)${NC}"
+read -r LOGIN_BEFORE_DELETE
+
+if [ "$LOGIN_BEFORE_DELETE" = "y" ]; then
+  echo "${YELLOW}Select a user to generate a magic link for:${NC}"
+  select MAGIC_LINK_EMAIL in "${USERS[@]}"; do
+    if [[ -n "$MAGIC_LINK_EMAIL" ]]; then
+      echo "${BLUE}Creating magic link for $MAGIC_LINK_EMAIL...${NC}"
+      MAGIC_LINK_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+        -H "Content-Type: application/json" \
+        -d "{\"email\":\"$MAGIC_LINK_EMAIL\",\"isRegistration\":false,\"turnstileToken\":\"test-token\"}")
+      MAGIC_TOKEN=$(echo "$MAGIC_LINK_RESPONSE" | grep -o '"message":"token=[^"]*' | cut -d'=' -f2 | cut -d'"' -f1)
+      MAGIC_LINK="http://localhost:5173/auth/verify?token=$MAGIC_TOKEN"
+      echo "${BLUE}Magic link: $MAGIC_LINK${NC}"
+      echo "$MAGIC_LINK" | pbcopy
+      echo "${GREEN}Magic link copied to clipboard${NC}"
+      echo "${YELLOW}Open the link in the browser? (y/n)${NC}"
+      read -r OPEN_LINK_QUESTION
+      if [ "$OPEN_LINK_QUESTION" = "y" ]; then
+        open "$MAGIC_LINK"
+      fi
+    else
+      echo "${RED}Invalid selection. Please try again.${NC}"
+    fi
+  done
+fi
+
+# ask if they need to log in as a different user
+echo "${YELLOW}Do you need to log in as a different user? (y/n)${NC}"
+read -r LOGIN_BEFORE_DELETE
+
+if [ "$LOGIN_BEFORE_DELETE" = "y" ]; then
+  echo "${YELLOW}Select a user to generate a magic link for:${NC}"
+  select MAGIC_LINK_EMAIL in "${USERS[@]}"; do
+    if [[ -n "$MAGIC_LINK_EMAIL" ]]; then
+      echo "${BLUE}Creating magic link for $MAGIC_LINK_EMAIL...${NC}"
+      MAGIC_LINK_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+        -H "Content-Type: application/json" \
+        -d "{\"email\":\"$MAGIC_LINK_EMAIL\",\"isRegistration\":false,\"turnstileToken\":\"test-token\"}")
+      MAGIC_TOKEN=$(echo "$MAGIC_LINK_RESPONSE" | grep -o '"message":"token=[^"]*' | cut -d'=' -f2 | cut -d'"' -f1)
+      MAGIC_LINK="http://localhost:5173/auth/verify?token=$MAGIC_TOKEN"
+      echo "${BLUE}Magic link: $MAGIC_LINK${NC}"
+      echo "$MAGIC_LINK" | pbcopy
+      echo "${GREEN}Magic link copied to clipboard${NC}"
+      echo "${YELLOW}Open the link in the browser? (y/n)${NC}"
+      read -r OPEN_LINK_QUESTION
+      if [ "$OPEN_LINK_QUESTION" = "y" ]; then
+        open "$MAGIC_LINK"
+      fi
+      echo "Test complete"
+      exit 0
+    else
+      echo "${RED}Invalid selection. Please try again.${NC}"
+    fi
 
 # Anonymize user
 echo "${YELLOW}Anonymizing user...${NC}"

@@ -75,6 +75,7 @@ router.get('/groups/:id/leaders', handleGroups.getLeaders);
 router.post('/groups/:id/leaders', handleGroups.assignLeader);
 router.post('/groups/:id/invite', handleGroups.inviteMember);
 router.post('/groups/:id/join', handleGroups.joinGroup);
+router.post('/groups/:id/join/:code', handleGroups.joinGroupByCode);
 router.get('/groups/:id/members', handleGroups.getMembers);
 router.put('/groups/:id/members/:userId/display-name', handleGroups.updateDisplayName);
 router.get('/groups/:id/members/:userId/profile', handleGroups.getMemberProfile);
@@ -82,6 +83,18 @@ router.put('/groups/:id/members/:userId/privacy', handleGroups.updatePrivacy);
 router.get('/groups/:id/leaderboard', handleGroups.getLeaderboard);
 router.get('/groups/:id/stats', handleGroups.getGroupStats);
 router.get('/groups/:id/members/:userId/ranking', handleGroups.getMemberRanking);
+
+// Add new endpoint for listing all groups the user is a member of
+router.get('/groups/mine', handleGroups.listUserGroups);
+
+// Add new invitation details endpoint
+router.get('/groups/invitations/:id', handleGroups.getInvitationDetails);
+
+// Add new invitation details by code endpoint
+router.get('/groups/invitations/code/:code', handleGroups.getInvitationDetailsByCode);
+
+// Add new existing invitation endpoint
+router.post('/groups/:id/invitations/existing', handleGroups.getExistingInvitation);
 
 // Export the fetch handler
 export default {

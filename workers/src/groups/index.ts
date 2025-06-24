@@ -78,6 +78,16 @@ interface MemberRanking {
   };
 }
 
+// Generate a secure random invitation code
+function generateInvitationCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 export const handleGroups = {
   // Create a new group
   createGroup: async (request: Request, env: Env): Promise<Response> => {
@@ -367,12 +377,22 @@ export const handleGroups = {
         });
       }
 
+      // Check if the email belongs to an existing user
+      const existingUser = await db.prepare(`
+        SELECT id FROM users WHERE email = ?
+      `).bind(email.trim()).first();
+
+      if (!existingUser) {
+        return new Response(JSON.stringify({ error: 'User with this email address does not exist in the system' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       // Check if user is already a member
       const existingMember = await db.prepare(`
-        SELECT 1 FROM group_members WHERE group_id = ? AND user_id = (
-          SELECT id FROM users WHERE email = ?
-        )
-      `).bind(groupId, email.trim()).first();
+        SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?
+      `).bind(groupId, existingUser.id).first();
 
       if (existingMember) {
         return new Response(JSON.stringify({ error: 'User is already a member of this group' }), { 
@@ -396,14 +416,20 @@ export const handleGroups = {
 
       // Create invitation (expires in 7 days)
       const expiresAt = Date.now() + (7 * 24 * 60 * 60 * 1000);
-      await db.prepare(`
-        INSERT INTO group_invitations (group_id, email, invited_by, expires_at)
-        VALUES (?, ?, ?, ?)
-      `).bind(groupId, email.trim(), userId, expiresAt).run();
+      const invitationCode = generateInvitationCode();
+      
+      const result = await db.prepare(`
+        INSERT INTO group_invitations (group_id, email, invited_by, expires_at, invitation_code)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(groupId, email.trim(), userId, expiresAt, invitationCode).run();
 
       return new Response(JSON.stringify({ 
         success: true,
-        message: 'Invitation sent successfully'
+        message: 'Invitation sent successfully',
+        invitation: {
+          id: result.meta?.last_row_id || 0,
+          code: invitationCode
+        }
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
@@ -502,6 +528,91 @@ export const handleGroups = {
     }
   },
 
+  // Accept invitation and join group by invitation code
+  joinGroupByCode: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const groupId = url.pathname.split('/')[2];
+      const invitationCode = url.pathname.split('/')[4]; // /groups/:id/join/:code
+
+      if (!invitationCode) {
+        return new Response(JSON.stringify({ error: 'Invitation code is required' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Get user email
+      const user = await db.prepare(`
+        SELECT email FROM users WHERE id = ?
+      `).bind(userId).first();
+
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'User not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Verify invitation exists and is valid
+      const invitation = await db.prepare(`
+        SELECT * FROM group_invitations 
+        WHERE invitation_code = ? AND group_id = ? AND email = ? AND is_accepted = FALSE AND expires_at > ?
+      `).bind(invitationCode, groupId, user.email, Date.now()).first();
+
+      if (!invitation) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired invitation' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Add user to group as member
+      await db.prepare(`
+        INSERT INTO group_members (group_id, user_id, role, joined_at)
+        VALUES (?, ?, 'member', ?)
+      `).bind(groupId, userId, Date.now()).run();
+
+      // Mark invitation as accepted
+      await db.prepare(`
+        UPDATE group_invitations SET is_accepted = TRUE WHERE id = ?
+      `).bind(invitation.id).run();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: 'Successfully joined group'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error joining group:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
   // List group members
   getMembers: async (request: Request, env: Env): Promise<Response> => {
     try {
@@ -534,6 +645,8 @@ export const handleGroups = {
           gm.user_id,
           gm.role,
           gm.joined_at,
+          gm.display_name,
+          gm.is_public,
           u.email as member_email
         FROM group_members gm
         JOIN users u ON gm.user_id = u.id
@@ -541,9 +654,18 @@ export const handleGroups = {
         ORDER BY gm.joined_at ASC
       `).bind(groupId).all();
 
+      // Process members to handle privacy settings
+      const processedMembers = members.results.map((member: any) => ({
+        user_id: member.user_id,
+        role: member.role,
+        joined_at: member.joined_at,
+        member_email: member.is_public ? member.member_email : 'Anonymous',
+        display_name: member.is_public ? ((member.display_name && member.display_name !== 'null') ? member.display_name : 'Anonymous') : 'Anonymous'
+      }));
+
       return new Response(JSON.stringify({ 
         success: true, 
-        members: members.results
+        members: processedMembers
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
@@ -943,8 +1065,6 @@ export const handleGroups = {
       let lastValue = -1;
 
       for (const entry of leaderboard.results) {
-        if (!entry.is_public) continue; // Skip private members
-
         let currentValue = 0;
         switch (metric) {
           case 'points':
@@ -969,7 +1089,7 @@ export const handleGroups = {
         processedLeaderboard.push({
           rank: currentRank,
           user_id: entry.user_id,
-          display_name: entry.display_name || 'Anonymous',
+          display_name: entry.is_public ? ((entry.display_name && entry.display_name !== 'null') ? entry.display_name : 'Anonymous') : 'Anonymous',
           points: entry.total_points || 0,
           verses_mastered: entry.verses_mastered || 0,
           current_streak: entry.current_streak || 0,
@@ -1076,10 +1196,11 @@ export const handleGroups = {
         SELECT 
           gm.user_id,
           gm.display_name,
+          gm.is_public,
           us.total_points
         FROM group_members gm
         JOIN user_stats us ON gm.user_id = us.user_id
-        WHERE gm.group_id = ? AND gm.is_active = TRUE AND gm.is_public = TRUE
+        WHERE gm.group_id = ? AND gm.is_active = TRUE
         ORDER BY us.total_points DESC
         LIMIT 1
       `).bind(groupId).first();
@@ -1105,24 +1226,24 @@ export const handleGroups = {
       `).bind(groupId, weekAgo).first();
 
       const stats: GroupStats = {
-        total_members: (totalMembers?.count as number) || 0,
-        active_members: (activeMembers?.count as number) || 0,
-        total_points: (totals?.total_points as number) || 0,
-        total_verses_mastered: (totals?.total_verses_mastered as number) || 0,
-        average_points_per_member: (activeMembers?.count as number) ? Math.round(((totals?.total_points as number) || 0) / (activeMembers.count as number)) : 0,
+        total_members: totalMembers?.count ? Number(totalMembers.count) : 0,
+        active_members: activeMembers?.count ? Number(activeMembers.count) : 0,
+        total_points: totals?.total_points ? Number(totals.total_points) : 0,
+        total_verses_mastered: totals?.total_verses_mastered ? Number(totals.total_verses_mastered) : 0,
+        average_points_per_member: activeMembers?.count && totals?.total_points ? Math.round(Number(totals.total_points) / Number(activeMembers.count)) : 0,
         top_performer: topPerformer ? {
-          user_id: (topPerformer.user_id as number) || 0,
-          display_name: (topPerformer.display_name as string) || 'Anonymous',
-          points: (topPerformer.total_points as number) || 0
+          user_id: Number(topPerformer.user_id) || 0,
+          display_name: topPerformer.is_public ? ((topPerformer.display_name && topPerformer.display_name !== 'null') ? String(topPerformer.display_name) : 'Anonymous') : 'Anonymous',
+          points: Number(topPerformer.total_points) || 0
         } : {
           user_id: 0,
           display_name: 'None',
           points: 0
         },
         recent_activity: {
-          new_members_this_week: (newMembersThisWeek?.count as number) || 0,
-          verses_mastered_this_week: (versesMasteredThisWeek?.count as number) || 0,
-          points_earned_this_week: (pointsEarnedThisWeek?.total as number) || 0
+          new_members_this_week: newMembersThisWeek?.count ? Number(newMembersThisWeek.count) : 0,
+          verses_mastered_this_week: versesMasteredThisWeek?.count ? Number(versesMasteredThisWeek.count) : 0,
+          points_earned_this_week: pointsEarnedThisWeek?.total ? Number(pointsEarnedThisWeek.total) : 0
         }
       };
 
@@ -1278,6 +1399,281 @@ export const handleGroups = {
       });
     } catch (error) {
       console.error('Error getting member ranking:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // List all groups the authenticated user is a member of
+  listUserGroups: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const db = getDB(env);
+      // Query all active groups for this user
+      const groups = await db.prepare(`
+        SELECT g.id, g.name, g.description, gm.role,
+          (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND is_active = TRUE) as member_count
+        FROM group_members gm
+        JOIN groups g ON gm.group_id = g.id
+        WHERE gm.user_id = ? AND gm.is_active = TRUE AND g.is_active = 1
+        ORDER BY g.created_at DESC
+      `).bind(userId).all();
+      return new Response(JSON.stringify({
+        success: true,
+        groups: groups.results
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error listing user groups:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get invitation details
+  getInvitationDetails: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const invitationId = url.pathname.split('/')[3]; // /groups/invitations/:id
+
+      const db = getDB(env);
+
+      // Get invitation details
+      const invitation = await db.prepare(`
+        SELECT 
+          gi.id,
+          gi.group_id,
+          gi.email,
+          gi.invited_by,
+          gi.expires_at,
+          gi.is_accepted,
+          g.name as group_name,
+          g.description as group_description,
+          u.email as inviter_email
+        FROM group_invitations gi
+        JOIN groups g ON gi.group_id = g.id
+        JOIN users u ON gi.invited_by = u.id
+        WHERE gi.id = ? AND gi.is_accepted = FALSE AND gi.expires_at > ?
+      `).bind(invitationId, Date.now()).first();
+
+      if (!invitation) {
+        return new Response(JSON.stringify({ error: 'Invitation not found or expired' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response(JSON.stringify({ 
+        invitation: {
+          id: invitation.id,
+          group_id: invitation.group_id,
+          email: invitation.email,
+          invited_by: invitation.invited_by,
+          expires_at: invitation.expires_at,
+          is_accepted: invitation.is_accepted,
+          group_name: invitation.group_name,
+          group_description: invitation.group_description,
+          inviter_email: invitation.inviter_email
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting invitation details:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get existing invitation for email in group
+  getExistingInvitation: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const groupId = url.pathname.split('/')[2];
+      const { email } = await request.json();
+
+      if (!email || email.trim().length === 0) {
+        return new Response(JSON.stringify({ error: 'Email is required' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Check if current user can invite (leaders and creators)
+      const canInvite = await db.prepare(`
+        SELECT role FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND role IN ('leader', 'creator')
+      `).bind(groupId, userId).first();
+
+      if (!canInvite) {
+        return new Response(JSON.stringify({ error: 'You do not have permission to invite members' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get existing invitation
+      const invitation = await db.prepare(`
+        SELECT id, invitation_code, expires_at, is_accepted
+        FROM group_invitations 
+        WHERE group_id = ? AND email = ? AND is_accepted = FALSE AND expires_at > ?
+      `).bind(groupId, email.trim(), Date.now()).first();
+
+      if (invitation) {
+        return new Response(JSON.stringify({ 
+          invitation: {
+            id: invitation.id,
+            code: invitation.invitation_code,
+            expires_at: invitation.expires_at,
+            is_accepted: invitation.is_accepted
+          }
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } else {
+        return new Response(JSON.stringify({ error: 'No active invitation found for this email' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    } catch (error) {
+      console.error('Error getting existing invitation:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get invitation details by code
+  getInvitationDetailsByCode: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const invitationCode = url.pathname.split('/')[3]; // /groups/invitations/code/:code
+
+      const db = getDB(env);
+
+      // Get invitation details by code
+      const invitation = await db.prepare(`
+        SELECT 
+          gi.id,
+          gi.group_id,
+          gi.email,
+          gi.invited_by,
+          gi.expires_at,
+          gi.is_accepted,
+          gi.invitation_code,
+          g.name as group_name,
+          g.description as group_description,
+          u.email as inviter_email
+        FROM group_invitations gi
+        JOIN groups g ON gi.group_id = g.id
+        JOIN users u ON gi.invited_by = u.id
+        WHERE gi.invitation_code = ? AND gi.is_accepted = FALSE AND gi.expires_at > ?
+      `).bind(invitationCode, Date.now()).first();
+
+      if (!invitation) {
+        return new Response(JSON.stringify({ error: 'Invitation not found or expired' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response(JSON.stringify({ 
+        invitation: {
+          id: invitation.id,
+          group_id: invitation.group_id,
+          email: invitation.email,
+          invited_by: invitation.invited_by,
+          expires_at: invitation.expires_at,
+          is_accepted: invitation.is_accepted,
+          invitation_code: invitation.invitation_code,
+          group_name: invitation.group_name,
+          group_description: invitation.group_description,
+          inviter_email: invitation.inviter_email
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting invitation details by code:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
         headers: { 'Content-Type': 'application/json' }

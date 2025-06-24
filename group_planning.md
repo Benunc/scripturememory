@@ -1969,7 +1969,74 @@ This migration is **safe for production** because:
 
 ---
 
+## 🔄 NEXT: Step 6 - List Groups for a User
 
+### Overview
+Implement an endpoint to fetch all groups that the authenticated user is currently a member of (active membership). This is essential for the frontend to display a user's groups, enable navigation, and show group roles.
+
+### Database Changes
+- **No new migrations needed.** Uses existing `group_members` and `groups` tables.
+
+### API Endpoint to Implement
+
+#### `GET /groups/mine`
+```http
+GET /groups/mine
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "groups": [
+    {
+      "id": 1,
+      "name": "My Study Group",
+      "description": "A group for studying scripture together",
+      "role": "leader",
+      "member_count": 8,
+      "created_at": 1718000000000
+    },
+    {
+      "id": 2,
+      "name": "Youth Group",
+      "description": "Youth group challenge",
+      "role": "member",
+      "member_count": 15,
+      "created_at": 1717000000000
+    }
+  ]
+}
+```
+
+**Features:**
+- Returns all active groups the user is a member of.
+- Includes group name, description, user's role, member count, and creation date.
+- Only includes groups where `is_active = TRUE` for both group and membership.
+
+**Error Responses:**
+- `401 Unauthorized`: Invalid or missing token
+
+### Backend Implementation
+- Add a handler in `groups/index.ts`:
+  - Authenticate user.
+  - Query all groups where the user is an active member.
+  - Join with `groups` table for group info.
+  - Count members for each group.
+  - Return as array.
+
+### Test Script
+- Add to `test-groups-step6.sh`:
+  - Create users and groups.
+  - Add users to multiple groups with different roles.
+  - Call `/groups/mine` as each user.
+  - Assert correct groups and roles are returned.
+
+### Comprehensive Test Update
+- Add a section to `test-comprehensive.sh` to verify this endpoint for all test users.
+
+---
 
 ## Implementation Status
 
