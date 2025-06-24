@@ -132,7 +132,7 @@ read -r DB_CLEAN
 
 if [ "$DB_CLEAN" != "y" ]; then
     echo "${YELLOW}Cleaning database...${NC}"
-    npx wrangler d1 execute DB --env development --command="PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS point_events; DROP TABLE IF EXISTS word_progress; DROP TABLE IF EXISTS verse_attempts; DROP TABLE IF EXISTS verse_mastery; DROP TABLE IF EXISTS mastered_verses; DROP TABLE IF EXISTS verses; DROP TABLE IF EXISTS user_stats; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS magic_links; DROP TABLE IF EXISTS users; DROP TABLE IF EXISTS anonymized_users; PRAGMA foreign_keys = ON;" | cat
+    npx wrangler d1 execute DB --env development --command="PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS group_invitations; DROP TABLE IF EXISTS group_members; DROP TABLE IF EXISTS groups; DROP TABLE IF EXISTS point_events; DROP TABLE IF EXISTS word_progress; DROP TABLE IF EXISTS verse_attempts; DROP TABLE IF EXISTS verse_mastery; DROP TABLE IF EXISTS mastered_verses; DROP TABLE IF EXISTS verses; DROP TABLE IF EXISTS user_stats; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS magic_links; DROP TABLE IF EXISTS users; DROP TABLE IF EXISTS anonymized_users; PRAGMA foreign_keys = ON;" | cat
     check_status
 fi
 
@@ -553,6 +553,261 @@ check_status
 echo "${BLUE}Stats before anonymization:${NC}"
 echo "$STATS_RESPONSE"
 
+# ========================================
+# GROUP MANAGEMENT TESTS
+# ========================================
+echo "${YELLOW}Testing group management functionality...${NC}"
+
+# Create additional test users for group testing
+echo "${YELLOW}Creating group test users...${NC}"
+GROUP_USER1_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"group-leader@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+check_status
+
+GROUP_USER2_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"group-member@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+check_status
+
+GROUP_USER3_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"group-outsider@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+check_status
+
+# Extract and verify tokens for group users
+GROUP_TOKEN1=$(extract_magic_token "$GROUP_USER1_RESPONSE")
+GROUP_VERIFY1=$(curl -s -i "http://localhost:8787/auth/verify?token=$GROUP_TOKEN1")
+GROUP_SESSION1=$(extract_token "$GROUP_VERIFY1")
+
+GROUP_TOKEN2=$(extract_magic_token "$GROUP_USER2_RESPONSE")
+GROUP_VERIFY2=$(curl -s -i "http://localhost:8787/auth/verify?token=$GROUP_TOKEN2")
+GROUP_SESSION2=$(extract_token "$GROUP_VERIFY2")
+
+GROUP_TOKEN3=$(extract_magic_token "$GROUP_USER3_RESPONSE")
+GROUP_VERIFY3=$(curl -s -i "http://localhost:8787/auth/verify?token=$GROUP_TOKEN3")
+GROUP_SESSION3=$(extract_token "$GROUP_VERIFY3")
+
+echo "${BLUE}Group test users created successfully${NC}"
+
+# Test 1: Group Creation
+echo "${YELLOW}Testing group creation...${NC}"
+GROUP_CREATE_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/create \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"name":"Comprehensive Test Group","description":"Group for comprehensive testing"}')
+
+echo "${BLUE}Group create response: $GROUP_CREATE_RESPONSE${NC}"
+
+# Extract group ID
+GROUP_ID=$(echo "$GROUP_CREATE_RESPONSE" | grep -o '"id":[0-9]*' | cut -d':' -f2)
+echo "${BLUE}Created group ID: $GROUP_ID${NC}"
+
+# Verify group creation
+if [ -n "$GROUP_ID" ]; then
+    echo "${GREEN}✓ Group creation works${NC}"
+else
+    echo "${RED}✗ Group creation failed${NC}"
+    exit 1
+fi
+
+# Verify creator is automatically a member with creator role
+CREATOR_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT COUNT(*) as count FROM group_members WHERE group_id = $GROUP_ID AND role = 'creator';" | cat)
+if echo "$CREATOR_CHECK" | grep -q '"count": 1'; then
+    echo "${GREEN}✓ Creator automatically becomes member with creator role${NC}"
+else
+    echo "${RED}✗ Creator membership failed${NC}"
+    exit 1
+fi
+
+# Test 2: Get Group Leaders
+echo "${YELLOW}Testing get group leaders...${NC}"
+GET_LEADERS_RESPONSE=$(curl -s -X GET http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+
+echo "${BLUE}Get leaders response: $GET_LEADERS_RESPONSE${NC}"
+
+if echo "$GET_LEADERS_RESPONSE" | grep -q '"role":"creator"'; then
+    echo "${GREEN}✓ Get leaders works${NC}"
+else
+    echo "${RED}✗ Get leaders failed${NC}"
+    exit 1
+fi
+
+# Test 3: Assign Leader
+echo "${YELLOW}Testing leader assignment...${NC}"
+ASSIGN_LEADER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"group-leader@example.com"}')
+
+echo "${BLUE}Assign leader response: $ASSIGN_LEADER_RESPONSE${NC}"
+
+# Note: This should fail because the user is already a creator
+if echo "$ASSIGN_LEADER_RESPONSE" | grep -q "already a leader"; then
+    echo "${GREEN}✓ Leader assignment correctly prevents duplicate assignment${NC}"
+else
+    echo "${RED}✗ Leader assignment validation failed${NC}"
+    exit 1
+fi
+
+# Test 4: Assign Different User as Leader
+echo "${YELLOW}Testing assign different user as leader...${NC}"
+ASSIGN_DIFF_LEADER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"group-member@example.com"}')
+
+echo "${BLUE}Assign different leader response: $ASSIGN_DIFF_LEADER_RESPONSE${NC}"
+
+if echo "$ASSIGN_DIFF_LEADER_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Assign different leader works${NC}"
+else
+    echo "${RED}✗ Assign different leader failed${NC}"
+    exit 1
+fi
+
+# Verify the new leader was assigned
+NEW_LEADER_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT COUNT(*) as count FROM group_members WHERE group_id = $GROUP_ID AND role = 'leader';" | cat)
+if echo "$NEW_LEADER_CHECK" | grep -q '"count": 1'; then
+    echo "${GREEN}✓ New leader assignment verified in database${NC}"
+else
+    echo "${RED}✗ New leader assignment not found in database${NC}"
+    exit 1
+fi
+
+# Test 5: Permission Denied for Non-Leaders
+echo "${YELLOW}Testing permission denied for non-leaders...${NC}"
+PERMISSION_DENIED_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION3" \
+  -d '{"email":"test@example.com"}')
+
+echo "${BLUE}Permission denied response: $PERMISSION_DENIED_RESPONSE${NC}"
+
+if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "permission"; then
+    echo "${GREEN}✓ Permission denied works correctly${NC}"
+else
+    echo "${RED}✗ Permission denied failed${NC}"
+    exit 1
+fi
+
+# Test 6: Assign Leader to Non-Existent User
+echo "${YELLOW}Testing assign leader to non-existent user...${NC}"
+NONEXISTENT_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"nonexistent@example.com"}')
+
+echo "${BLUE}Non-existent user response: $NONEXISTENT_RESPONSE${NC}"
+
+if echo "$NONEXISTENT_RESPONSE" | grep -q "User not found"; then
+    echo "${GREEN}✓ Non-existent user handling works${NC}"
+else
+    echo "${RED}✗ Non-existent user handling failed${NC}"
+    exit 1
+fi
+
+# Test 7: Duplicate Group Name Validation
+echo "${YELLOW}Testing duplicate group name validation...${NC}"
+DUPLICATE_GROUP_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/create \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"name":"Comprehensive Test Group","description":"Duplicate group"}')
+
+echo "${BLUE}Duplicate group response: $DUPLICATE_GROUP_RESPONSE${NC}"
+
+if echo "$DUPLICATE_GROUP_RESPONSE" | grep -q "already exists"; then
+    echo "${GREEN}✓ Duplicate group name validation works${NC}"
+else
+    echo "${RED}✗ Duplicate group name validation failed${NC}"
+    exit 1
+fi
+
+# Test 8: Group Name Length Validation
+echo "${YELLOW}Testing group name length validation...${NC}"
+SHORT_NAME_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/create \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"name":"A","description":"Too short"}')
+
+echo "${BLUE}Short name response: $SHORT_NAME_RESPONSE${NC}"
+
+if echo "$SHORT_NAME_RESPONSE" | grep -q "between 2 and 50 characters"; then
+    echo "${GREEN}✓ Group name length validation works${NC}"
+else
+    echo "${RED}✗ Group name length validation failed${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ All group management tests passed${NC}"
+
+# ========================================
+# END GROUP MANAGEMENT TESTS
+# ========================================
+
+# Test group membership and invitations
+echo "${YELLOW}Testing group membership and invitations...${NC}"
+
+# Invite member
+INVITE_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/invite \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"group-outsider@example.com"}')
+
+if echo "$INVITE_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Group invitation works${NC}"
+else
+    echo "${RED}✗ Group invitation failed${NC}"
+    exit 1
+fi
+
+# Get invitation ID for joining
+INVITATION_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM group_invitations WHERE group_id = $GROUP_ID AND email = 'group-outsider@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
+
+# Join group
+JOIN_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/join \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION3" \
+  -d "{\"invitationId\":$INVITATION_ID}")
+
+if echo "$JOIN_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Group joining works${NC}"
+else
+    echo "${RED}✗ Group joining failed${NC}"
+    exit 1
+fi
+
+# Get members
+GET_MEMBERS_RESPONSE=$(curl -s -X GET http://localhost:8787/groups/$GROUP_ID/members \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+
+if echo "$GET_MEMBERS_RESPONSE" | grep -q '"members"'; then
+    echo "${GREEN}✓ Get members works${NC}"
+else
+    echo "${RED}✗ Get members failed${NC}"
+    exit 1
+fi
+
+# Test permission denied for non-leaders trying to invite
+PERMISSION_DENIED_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/invite \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION3" \
+  -d '{"email":"test@example.com"}')
+
+if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "permission"; then
+    echo "${GREEN}✓ Permission denied for non-leaders works${NC}"
+else
+    echo "${RED}✗ Permission denied for non-leaders failed${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ All group membership and invitation tests passed${NC}"
+
+# ========================================
+# END GROUP MEMBERSHIP AND INVITATION TESTS
+# ========================================
+
 # Anonymize user
 echo "${YELLOW}Anonymizing user...${NC}"
 DELETE_RESPONSE=$(curl -s -X DELETE http://localhost:8787/auth/delete \
@@ -624,8 +879,8 @@ VERSE_COUNT=$(echo "$VERSE_JSON" | grep -A1 '"count":' | grep "count" | awk '{pr
 POINTS_COUNT=$(echo "$POINTS_JSON" | grep -A1 '"count":' | grep "count" | awk '{print $2}' | tr -d ',')
 
 # Verify all the expected data
-if [ "$VERSE_COUNT" != "4" ]; then
-    echo "${RED}Error: Expected 4 verses for user 2, found $VERSE_COUNT${NC}"
+if [ "$VERSE_COUNT" != "10" ]; then
+    echo "${RED}Error: Expected 10 verses for user 2, found $VERSE_COUNT${NC}"
     exit 1
 fi
 

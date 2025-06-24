@@ -701,6 +701,314 @@ The streak system tracks daily practice:
    - Batch updates when possible
    - Cache frequently accessed stats 
 
+## Groups
+
+The API provides endpoints for managing groups, which allow users to organize around verse sets and participate in leaderboards. Groups support leadership management, member invitations, and membership tracking.
+
+### Data Models
+
+```typescript
+interface Group {
+  id: number;
+  name: string;
+  description?: string;
+  created_at: number;
+  created_by: number;
+}
+
+interface GroupMember {
+  group_id: number;
+  user_id: number;
+  role: 'creator' | 'leader' | 'member';
+  joined_at: number;
+  is_active: boolean;
+}
+
+interface GroupInvitation {
+  id: number;
+  group_id: number;
+  email: string;
+  invited_by: number;
+  expires_at: number;
+  is_accepted: boolean;
+}
+
+interface CreateGroupRequest {
+  name: string;
+  description?: string;
+}
+
+interface AssignLeaderRequest {
+  email: string;
+}
+
+interface InviteMemberRequest {
+  email: string;
+}
+
+interface JoinGroupRequest {
+  invitationId: number;
+}
+```
+
+### Endpoints
+
+#### Create Group
+```http
+POST /groups/create
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "My Study Group",
+  "description": "A group for studying scripture together"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "id": 1,
+  "name": "My Study Group",
+  "description": "A group for studying scripture together",
+  "created_at": 1234567890
+}
+```
+
+**Features**
+- Creates a new group with the specified name and description
+- Group creator automatically becomes a member with 'creator' role
+- Validates group name length (2-50 characters)
+- Prevents duplicate group names
+- Returns the created group ID
+
+**Error Responses**
+- `400 Bad Request`: Invalid group name or description
+- `401 Unauthorized`: Invalid or missing token
+- `409 Conflict`: Group name already exists
+
+#### Get Group Leaders
+```http
+GET /groups/{id}/leaders
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "leaders": [
+    {
+      "user_id": 1,
+      "email": "creator@example.com",
+      "role": "creator",
+      "joined_at": 1234567890
+    },
+    {
+      "user_id": 2,
+      "email": "leader@example.com",
+      "role": "leader",
+      "joined_at": 1234567891
+    }
+  ]
+}
+```
+
+**Features**
+- Returns all group members with 'creator' or 'leader' roles
+- Includes user email and join date
+- Only accessible to group members
+- Sorted by join date
+
+**Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User is not a member of the group
+- `404 Not Found`: Group not found
+
+#### Assign Group Leader
+```http
+POST /groups/{id}/leaders
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "email": "newleader@example.com"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Leader assigned successfully"
+}
+```
+
+**Features**
+- Assigns a user as a leader of the group
+- Only existing creators/leaders can assign new leaders
+- User must exist in the system
+- Prevents duplicate leader assignments
+- User becomes a member if not already one
+
+**Error Responses**
+- `400 Bad Request`: User not found or already a leader
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User lacks permission to assign leaders
+- `404 Not Found`: Group not found
+
+#### Invite Group Member
+```http
+POST /groups/{id}/invite
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "email": "newmember@example.com"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Invitation sent successfully"
+}
+```
+
+**Features**
+- Sends an invitation to join the group
+- Only creators/leaders can invite members
+- Invitations expire after 7 days
+- Prevents duplicate invitations
+- Prevents inviting existing members
+- User must exist in the system
+
+**Error Responses**
+- `400 Bad Request`: User not found, already a member, or invitation already exists
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User lacks permission to invite members
+- `404 Not Found`: Group not found
+
+#### Join Group
+```http
+POST /groups/{id}/join
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "invitationId": 123
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Successfully joined group"
+}
+```
+
+**Features**
+- Accepts an invitation to join a group
+- Requires valid invitation ID
+- Invitation must match user's email
+- Invitation must not be expired or already accepted
+- User becomes a member with 'member' role
+- Marks invitation as accepted
+
+**Error Responses**
+- `400 Bad Request`: Invalid invitation ID or expired invitation
+- `401 Unauthorized`: Invalid or missing token
+- `404 Not Found`: Group not found
+
+#### Get Group Members
+```http
+GET /groups/{id}/members
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "members": [
+    {
+      "user_id": 1,
+      "member_email": "creator@example.com",
+      "role": "creator",
+      "joined_at": 1234567890
+    },
+    {
+      "user_id": 2,
+      "member_email": "member@example.com",
+      "role": "member",
+      "joined_at": 1234567891
+    }
+  ]
+}
+```
+
+**Features**
+- Returns all active group members
+- Includes user email, role, and join date
+- Only accessible to group members
+- Sorted by join date
+- Excludes inactive members
+
+**Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User is not a member of the group
+- `404 Not Found`: Group not found
+
+### Group Roles and Permissions
+
+1. **Creator Role**
+   - Automatically assigned to group creator
+   - Can assign leaders
+   - Can invite members
+   - Can manage group settings
+   - Cannot be removed or changed
+
+2. **Leader Role**
+   - Can assign other leaders
+   - Can invite members
+   - Can manage group activities
+   - Assigned by creators or other leaders
+
+3. **Member Role**
+   - Can view group information
+   - Can participate in group activities
+   - Cannot invite or assign leaders
+   - Assigned when joining via invitation
+
+### Best Practices
+
+1. **Group Management**
+   - Use descriptive group names
+   - Provide clear group descriptions
+   - Assign multiple leaders for redundancy
+   - Monitor group activity regularly
+
+2. **Invitation System**
+   - Send invitations to existing users only
+   - Set appropriate expiration times
+   - Handle expired invitations gracefully
+   - Prevent invitation spam
+
+3. **Permission Handling**
+   - Always verify user permissions
+   - Check role hierarchy
+   - Handle permission errors gracefully
+   - Log permission changes
+
+4. **Data Integrity**
+   - Maintain referential integrity
+   - Handle user deletions gracefully
+   - Clean up expired invitations
+   - Validate all inputs
+
 ## Error Handling and Common Patterns
 
 This section covers common error scenarios and patterns for working with the API effectively.
