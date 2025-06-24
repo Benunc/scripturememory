@@ -1,10 +1,22 @@
 import { Verse } from '../types';
 import { debug } from './debug';
 
-// Use worker URL in production, relative URL in development
-const API_URL = import.meta.env.MODE === 'production'
-  ? 'https://scripture-memory.ben-2e6.workers.dev'
-  : '/api';
+export const getApiUrl = () => {
+  const host = window.location.hostname;
+
+  if (host === 'localhost' || host === '127.0.0.1') {
+    // Local development on your computer
+    return import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
+  }
+
+  if (host.startsWith('192.168.')) {
+    // Access from LAN (e.g., your phone)
+    return import.meta.env.VITE_MOBILE_WORKER_URL || 'http://192.168.1.91:8787';
+  }
+
+  // Production or any other domain
+  return 'https://scripture-memory.ben-2e6.workers.dev';
+};
 
 interface ApiResponse<T> {
   data?: T;
@@ -39,7 +51,7 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
 export const getMagicLink = async (email: string, isRegistration: boolean, turnstileToken: string, verseSet?: string): Promise<ApiResponse<{ token: string }>> => {
   try {
     debug.log('api', 'Sending magic link request', { email, isRegistration });
-    const response = await fetch(`${API_URL}/auth/magic-link`, {
+    const response = await fetch(`${getApiUrl()}/auth/magic-link`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -72,7 +84,7 @@ export const getMagicLink = async (email: string, isRegistration: boolean, turns
 export const verifyMagicLink = async (token: string): Promise<ApiResponse<{ token: string; email: string }>> => {
   try {
     debug.log('api', 'Making verification request');
-    const response = await fetch(`${API_URL}/auth/verify?token=${token}`);
+    const response = await fetch(`${getApiUrl()}/auth/verify?token=${token}`);
     
     debug.log('api', 'Verification response received', { 
       status: response.status,
@@ -106,14 +118,14 @@ export const verifyMagicLink = async (token: string): Promise<ApiResponse<{ toke
 };
 
 export async function getVerses(token: string): Promise<ApiResponse<Verse[]>> {
-  const response = await fetch(`${API_URL}/verses`, {
+  const response = await fetch(`${getApiUrl()}/verses`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
   return handleResponse<Verse[]>(response);
 }
 
 export async function addVerse(token: string, verse: Omit<Verse, 'lastReviewed'>): Promise<ApiResponse<void>> {
-  const response = await fetch(`${API_URL}/verses`, {
+  const response = await fetch(`${getApiUrl()}/verses`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -125,7 +137,7 @@ export async function addVerse(token: string, verse: Omit<Verse, 'lastReviewed'>
 }
 
 export async function updateVerse(token: string, reference: string, updates: Partial<Verse>): Promise<ApiResponse<void>> {
-  const response = await fetch(`${API_URL}/verses/${encodeURIComponent(reference)}`, {
+  const response = await fetch(`${getApiUrl()}/verses/${encodeURIComponent(reference)}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -137,26 +149,9 @@ export async function updateVerse(token: string, reference: string, updates: Par
 }
 
 export async function deleteVerse(token: string, reference: string): Promise<ApiResponse<void>> {
-  const response = await fetch(`${API_URL}/verses/${encodeURIComponent(reference)}`, {
+  const response = await fetch(`${getApiUrl()}/verses/${encodeURIComponent(reference)}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` }
   });
   return handleResponse<void>(response);
 }
-
-export const getApiUrl = () => {
-  const host = window.location.hostname;
-
-  if (host === 'localhost' || host === '127.0.0.1') {
-    // Local development on your computer
-    return import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
-  }
-
-  if (host.startsWith('192.168.')) {
-    // Access from LAN (e.g., your phone)
-    return import.meta.env.VITE_MOBILE_WORKER_URL || 'http://192.168.1.91:8787';
-  }
-
-  // Production or any other domain
-  return 'https://scripture-memory.ben-2e6.workers.dev';
-};

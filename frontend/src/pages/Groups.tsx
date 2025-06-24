@@ -47,6 +47,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { AppHeader } from '../components/AppHeader';
 import { Footer } from '../components/Footer';
 import { containsProfanity, getProfanityErrorMessage } from '../utils/profanityFilter';
+import { getApiUrl } from '../utils/api';
 
 interface Group {
   id: number;
@@ -95,7 +96,7 @@ const Groups: React.FC = () => {
     if (!isAuthenticated || !token) return;
     
     try {
-      const response = await fetch('/api/gamification/stats', {
+      const response = await fetch(`${getApiUrl()}/gamification/stats`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -117,10 +118,8 @@ const Groups: React.FC = () => {
       if (!isAuthenticated || !token) return;
       
       try {
-        const response = await fetch('/api/gamification/stats', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        const response = await fetch(`${getApiUrl()}/gamification/stats`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (response.ok) {
@@ -149,7 +148,7 @@ const Groups: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch('/api/groups/mine', {
+        const response = await fetch(`${getApiUrl()}/groups/mine`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -187,7 +186,7 @@ const Groups: React.FC = () => {
       // Get user profile from the first group to get current settings
       const firstGroup = groups[0];
       
-      const response = await fetch(`/api/groups/${firstGroup.id}/members/${userId}/profile`, {
+      const response = await fetch(`${getApiUrl()}/groups/${firstGroup.id}/members/${userId}/profile`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -213,7 +212,7 @@ const Groups: React.FC = () => {
       // Update settings for each group
       const updatePromises = groups.map(async group => {
         // Update display name
-        const displayNameResponse = await fetch(`/api/groups/${group.id}/members/${userId}/display-name`, {
+        const displayNameResponse = await fetch(`${getApiUrl()}/groups/${group.id}/members/${userId}/display-name`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -227,7 +226,7 @@ const Groups: React.FC = () => {
         }
         
         // Update privacy settings
-        const privacyResponse = await fetch(`/api/groups/${group.id}/members/${userId}/privacy`, {
+        const privacyResponse = await fetch(`${getApiUrl()}/groups/${group.id}/members/${userId}/privacy`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -266,7 +265,7 @@ const Groups: React.FC = () => {
     
     try {
       setCreating(true);
-      const response = await fetch('/api/groups/create', {
+      const response = await fetch(`${getApiUrl()}/groups/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -328,7 +327,7 @@ const Groups: React.FC = () => {
         if (invitationCodeMatch) {
           invitationId = invitationCodeMatch[1]; // This is the invitation code
           // Get invitation details to find group ID
-          const detailsResponse = await fetch(`/api/groups/invitations/code/${invitationId}`, {
+          const detailsResponse = await fetch(`${getApiUrl()}/groups/invitations/code/${invitationId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
@@ -346,7 +345,7 @@ const Groups: React.FC = () => {
       }
       
       // Join the group using the invitation code
-      const response = await fetch(`/api/groups/${groupId}/join/${invitationId}`, {
+      const response = await fetch(`${getApiUrl()}/groups/${groupId}/join/${invitationId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -359,7 +358,7 @@ const Groups: React.FC = () => {
         setJoinSuccess('Successfully joined the group!');
         setJoinInput('');
         // Refresh groups list
-        const groupsResponse = await fetch('/api/groups/mine', {
+        const groupsResponse = await fetch(`${getApiUrl()}/groups/mine`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (groupsResponse.ok) {

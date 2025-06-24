@@ -49,6 +49,7 @@ import { ArrowBackIcon, ExternalLinkIcon, CopyIcon } from '@chakra-ui/icons';
 import { useAuthContext } from '../contexts/AuthContext';
 import { AppHeader } from '../components/AppHeader';
 import { Footer } from '../components/Footer';
+import { getApiUrl } from '../utils/api';
 
 interface GroupMember {
   user_id: number;
@@ -120,7 +121,7 @@ const GroupDetails: React.FC = () => {
       
       try {
         // Load group info from user's groups list
-        const groupsResponse = await fetch('/api/groups/mine', {
+        const groupsResponse = await fetch(`${getApiUrl()}/groups/mine`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -139,7 +140,7 @@ const GroupDetails: React.FC = () => {
         }
 
         // Load members
-        const membersResponse = await fetch(`/api/groups/${groupId}/members`, {
+        const membersResponse = await fetch(`${getApiUrl()}/groups/${groupId}/members`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -149,7 +150,7 @@ const GroupDetails: React.FC = () => {
         }
 
         // Load leaderboard
-        const leaderboardResponse = await fetch(`/api/groups/${groupId}/leaderboard?metric=points`, {
+        const leaderboardResponse = await fetch(`${getApiUrl()}/groups/${groupId}/leaderboard?metric=points`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -159,7 +160,7 @@ const GroupDetails: React.FC = () => {
         }
 
         // Load stats
-        const statsResponse = await fetch(`/api/groups/${groupId}/stats`, {
+        const statsResponse = await fetch(`${getApiUrl()}/groups/${groupId}/stats`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -189,7 +190,7 @@ const GroupDetails: React.FC = () => {
       setInvitationCode(null);
       
       // First, check if an invitation already exists for this email
-      const existingResponse = await fetch(`/api/groups/${groupId}/invitations/existing`, {
+      const existingResponse = await fetch(`${getApiUrl()}/groups/${groupId}/invitations/existing`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -208,7 +209,7 @@ const GroupDetails: React.FC = () => {
       }
 
       // No existing invitation, create a new one
-      const response = await fetch(`/api/groups/${groupId}/invite`, {
+      const response = await fetch(`${getApiUrl()}/groups/${groupId}/invite`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
