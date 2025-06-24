@@ -76,6 +76,12 @@ router.post('/groups/:id/leaders', handleGroups.assignLeader);
 router.post('/groups/:id/invite', handleGroups.inviteMember);
 router.post('/groups/:id/join', handleGroups.joinGroup);
 router.get('/groups/:id/members', handleGroups.getMembers);
+router.put('/groups/:id/members/:userId/display-name', handleGroups.updateDisplayName);
+router.get('/groups/:id/members/:userId/profile', handleGroups.getMemberProfile);
+router.put('/groups/:id/members/:userId/privacy', handleGroups.updatePrivacy);
+router.get('/groups/:id/leaderboard', handleGroups.getLeaderboard);
+router.get('/groups/:id/stats', handleGroups.getGroupStats);
+router.get('/groups/:id/members/:userId/ranking', handleGroups.getMemberRanking);
 
 // Export the fetch handler
 export default {

@@ -808,6 +808,217 @@ echo "${GREEN}✓ All group membership and invitation tests passed${NC}"
 # END GROUP MEMBERSHIP AND INVITATION TESTS
 # ========================================
 
+# Test display names and privacy
+echo "${YELLOW}Testing display names and privacy...${NC}"
+
+# Get user IDs for testing
+GROUP_USER1_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'group-leader@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
+GROUP_USER2_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'group-member@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
+
+echo "${BLUE}Group user 1 ID: $GROUP_USER1_ID${NC}"
+echo "${BLUE}Group user 2 ID: $GROUP_USER2_ID${NC}"
+
+# First, make sure group-member@example.com is in the group by inviting them
+echo "${YELLOW}Inviting group-member@example.com to ensure they're in the group...${NC}"
+INVITE_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/invite \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"group-member@example.com"}')
+
+if echo "$INVITE_MEMBER_RESPONSE" | grep -q "already a member"; then
+    echo "${BLUE}group-member@example.com is already a member${NC}"
+else
+    echo "${BLUE}Invited group-member@example.com${NC}"
+    # Get invitation ID and join
+    MEMBER_INVITATION_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM group_invitations WHERE group_id = $GROUP_ID AND email = 'group-member@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
+    
+    if [ -n "$MEMBER_INVITATION_ID" ]; then
+        JOIN_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/join \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $GROUP_SESSION2" \
+          -d "{\"invitationId\":$MEMBER_INVITATION_ID}")
+        echo "${BLUE}Joined group: $JOIN_MEMBER_RESPONSE${NC}"
+    fi
+fi
+
+# Test 1: Update display name
+echo "${YELLOW}Testing update display name...${NC}"
+UPDATE_NAME_RESPONSE=$(curl -s -X PUT http://localhost:8787/groups/$GROUP_ID/members/$GROUP_USER1_ID/display-name \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"displayName":"Test User"}')
+
+echo "${BLUE}Update name response: $UPDATE_NAME_RESPONSE${NC}"
+
+if echo "$UPDATE_NAME_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Display name update works${NC}"
+else
+    echo "${RED}✗ Display name update failed${NC}"
+    exit 1
+fi
+
+# Test 2: Get member profile
+echo "${YELLOW}Testing get member profile...${NC}"
+GET_PROFILE_RESPONSE=$(curl -s -X GET http://localhost:8787/groups/$GROUP_ID/members/$GROUP_USER1_ID/profile \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+
+echo "${BLUE}Get profile response: $GET_PROFILE_RESPONSE${NC}"
+
+if echo "$GET_PROFILE_RESPONSE" | grep -q '"display_name":"Test User"'; then
+    echo "${GREEN}✓ Get member profile works${NC}"
+else
+    echo "${RED}✗ Get member profile failed${NC}"
+    exit 1
+fi
+
+# Test 3: Update privacy settings
+echo "${YELLOW}Testing update privacy settings...${NC}"
+UPDATE_PRIVACY_RESPONSE=$(curl -s -X PUT http://localhost:8787/groups/$GROUP_ID/members/$GROUP_USER1_ID/privacy \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"isPublic":false}')
+
+echo "${BLUE}Update privacy response: $UPDATE_PRIVACY_RESPONSE${NC}"
+
+if echo "$UPDATE_PRIVACY_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Privacy settings update works${NC}"
+else
+    echo "${RED}✗ Privacy settings update failed${NC}"
+    exit 1
+fi
+
+# Test 4: Validation tests
+echo "${YELLOW}Testing display name validation...${NC}"
+
+# Test invalid name (too short)
+SHORT_NAME_RESPONSE=$(curl -s -X PUT http://localhost:8787/groups/$GROUP_ID/members/$GROUP_USER1_ID/display-name \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"displayName":"A"}')
+
+if echo "$SHORT_NAME_RESPONSE" | grep -q "between 2 and 30 characters"; then
+    echo "${GREEN}✓ Short name validation works${NC}"
+else
+    echo "${RED}✗ Short name validation failed${NC}"
+    exit 1
+fi
+
+# Test invalid characters
+INVALID_CHARS_RESPONSE=$(curl -s -X PUT http://localhost:8787/groups/$GROUP_ID/members/$GROUP_USER1_ID/display-name \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"displayName":"Test@User"}')
+
+if echo "$INVALID_CHARS_RESPONSE" | grep -q "can only contain letters"; then
+    echo "${GREEN}✓ Invalid characters validation works${NC}"
+else
+    echo "${RED}✗ Invalid characters validation failed${NC}"
+    exit 1
+fi
+
+# Test 5: Permission tests
+echo "${YELLOW}Testing permission validation...${NC}"
+
+# Get the ID of group-outsider@example.com (who should be a regular member)
+GROUP_OUTSIDER_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'group-outsider@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
+echo "${BLUE}Group outsider ID: $GROUP_OUTSIDER_ID${NC}"
+
+# Test group-outsider@example.com (regular member) trying to update group-leader@example.com's display name (should fail)
+PERMISSION_DENIED_RESPONSE=$(curl -s -X PUT http://localhost:8787/groups/$GROUP_ID/members/$GROUP_USER1_ID/display-name \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION3" \
+  -d '{"displayName":"Unauthorized Change"}')
+
+echo "${BLUE}Permission denied response: $PERMISSION_DENIED_RESPONSE${NC}"
+
+if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "permission"; then
+    echo "${GREEN}✓ Permission denied validation works${NC}"
+else
+    echo "${RED}✗ Permission denied validation failed${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ All display names and privacy tests passed${NC}"
+
+# ========================================
+# END DISPLAY NAMES AND PRIVACY TESTS
+# ========================================
+
+# Test leaderboards
+echo "${YELLOW}Testing leaderboards...${NC}"
+
+# Add some points to create a leaderboard
+echo "${YELLOW}Adding points to create leaderboard...${NC}"
+POINTS_RESPONSE1=$(curl -s -X POST http://localhost:8787/gamification/points \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"event_type":"verse_added","points":1000}')
+
+POINTS_RESPONSE2=$(curl -s -X POST http://localhost:8787/gamification/points \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION2" \
+  -d '{"event_type":"verse_added","points":800}')
+
+# Get leaderboard
+echo "${YELLOW}Testing get leaderboard...${NC}"
+LEADERBOARD_RESPONSE=$(curl -s -X GET "http://localhost:8787/groups/$GROUP_ID/leaderboard?metric=points" \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+
+echo "${BLUE}Leaderboard response: $LEADERBOARD_RESPONSE${NC}"
+
+if echo "$LEADERBOARD_RESPONSE" | grep -q '"rank":1'; then
+    echo "${GREEN}✓ Get leaderboard works${NC}"
+else
+    echo "${RED}✗ Get leaderboard failed${NC}"
+    exit 1
+fi
+
+# Get group stats
+echo "${YELLOW}Testing get group stats...${NC}"
+STATS_RESPONSE=$(curl -s -X GET http://localhost:8787/groups/$GROUP_ID/stats \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+
+echo "${BLUE}Stats response: $STATS_RESPONSE${NC}"
+
+if echo "$STATS_RESPONSE" | grep -q '"total_members"'; then
+    echo "${GREEN}✓ Get group stats works${NC}"
+else
+    echo "${RED}✗ Get group stats failed${NC}"
+    exit 1
+fi
+
+# Get member ranking
+echo "${YELLOW}Testing get member ranking...${NC}"
+RANKING_RESPONSE=$(curl -s -X GET http://localhost:8787/groups/$GROUP_ID/members/$GROUP_USER2_ID/ranking \
+  -H "Authorization: Bearer $GROUP_SESSION2")
+
+echo "${BLUE}Ranking response: $RANKING_RESPONSE${NC}"
+
+if echo "$RANKING_RESPONSE" | grep -q '"rank"'; then
+    echo "${GREEN}✓ Get member ranking works${NC}"
+else
+    echo "${RED}✗ Get member ranking failed${NC}"
+    exit 1
+fi
+
+# Test different metrics
+echo "${YELLOW}Testing different metrics...${NC}"
+STREAK_LEADERBOARD_RESPONSE=$(curl -s -X GET "http://localhost:8787/groups/$GROUP_ID/leaderboard?metric=current_streak" \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+
+if echo "$STREAK_LEADERBOARD_RESPONSE" | grep -q '"rank":1'; then
+    echo "${GREEN}✓ Different metrics test passed${NC}"
+else
+    echo "${RED}✗ Different metrics test failed${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ All leaderboard tests passed${NC}"
+
+# ========================================
+# END LEADERBOARD TESTS
+# ========================================
+
 # Anonymize user
 echo "${YELLOW}Anonymizing user...${NC}"
 DELETE_RESPONSE=$(curl -s -X DELETE http://localhost:8787/auth/delete \

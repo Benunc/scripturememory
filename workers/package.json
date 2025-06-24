@@ -7,6 +7,7 @@
     "dev": "npx wrangler dev --env development",
     "deploy": "npx wrangler deploy --env production",
     "build": "npx wrangler deploy --dry-run --env production",
+    "prodmigrations": "npx wrangler d1 migrations apply DB --env production --remote",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "wipe-dev-db": "npx wrangler d1 execute DB --env development --command=\"DELETE FROM verses; DELETE FROM sessions; DELETE FROM magic_links; DELETE FROM users;\"",

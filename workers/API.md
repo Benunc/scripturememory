@@ -962,6 +962,248 @@ Authorization: Bearer <token>
 - `403 Forbidden`: User is not a member of the group
 - `404 Not Found`: Group not found
 
+#### Update Display Name
+```http
+PUT /groups/{id}/members/{userId}/display-name
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "displayName": "New Display Name"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Display name updated successfully"
+}
+```
+
+**Features**
+- Updates a member's display name in the group
+- Only the member themselves or group leaders can update display names
+- Validates display name format (2-30 characters, letters, numbers, spaces, hyphens only)
+- Prevents duplicate display names within the same group
+- Display names are used in leaderboards instead of email addresses
+
+**Error Responses**
+- `400 Bad Request`: Invalid display name format or already taken
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User lacks permission to update this display name
+- `404 Not Found`: Group or member not found
+
+#### Get Member Profile
+```http
+GET /groups/{id}/members/{userId}/profile
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "profile": {
+    "user_id": 123,
+    "display_name": "John Doe",
+    "email": "john@example.com",
+    "role": "member",
+    "joined_at": 1234567890,
+    "is_public": true
+  }
+}
+```
+
+**Features**
+- Returns a member's profile information
+- Group leaders can view any member's profile
+- Regular members can only view public profiles or their own
+- Includes display name, email, role, join date, and privacy settings
+- Respects privacy settings (is_public flag)
+
+**Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: Profile is private or user lacks access
+- `404 Not Found`: Group or member not found
+
+#### Update Privacy Settings
+```http
+PUT /groups/{id}/members/{userId}/privacy
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "isPublic": false
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Privacy settings updated successfully"
+}
+```
+
+**Features**
+- Updates a member's privacy settings in the group
+- Only the member themselves or group leaders can update privacy settings
+- Controls whether the member appears in leaderboards and member lists
+- Private members are hidden from other members but visible to leaders
+
+**Error Responses**
+- `400 Bad Request`: Invalid privacy setting
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User lacks permission to update this privacy setting
+- `404 Not Found`: Group or member not found
+
+#### Get Group Leaderboard
+```http
+GET /groups/{id}/leaderboard?metric=points&timeframe=all
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `metric`: `points`, `verses_mastered`, `current_streak`, `longest_streak` (default: `points`)
+- `timeframe`: `all`, `week`, `month`, `year` (default: `all`)
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "leaderboard": [
+    {
+      "rank": 1,
+      "user_id": 123,
+      "display_name": "John Doe",
+      "points": 1500,
+      "verses_mastered": 5,
+      "current_streak": 7,
+      "longest_streak": 12,
+      "is_public": true
+    },
+    {
+      "rank": 2,
+      "user_id": 456,
+      "display_name": "Jane Smith",
+      "points": 1200,
+      "verses_mastered": 4,
+      "current_streak": 5,
+      "longest_streak": 8,
+      "is_public": true
+    }
+  ],
+  "metadata": {
+    "total_members": 10,
+    "participating_members": 8,
+    "metric": "points",
+    "timeframe": "all"
+  }
+}
+```
+
+**Features**
+- Shows rankings based on selected metric (points, verses mastered, streaks)
+- Respects privacy settings (only shows public members)
+- Supports time-based filtering (all-time, weekly, monthly, yearly)
+- Handles ties properly (same rank for equal values)
+- Includes metadata about participation and filtering
+- Only accessible to group members
+
+**Error Responses**
+- `400 Bad Request`: Invalid metric or timeframe parameter
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User is not a member of the group
+- `404 Not Found`: Group not found
+
+#### Get Group Statistics
+```http
+GET /groups/{id}/stats
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "stats": {
+    "total_members": 15,
+    "active_members": 12,
+    "total_points": 8500,
+    "total_verses_mastered": 45,
+    "average_points_per_member": 567,
+    "top_performer": {
+      "user_id": 123,
+      "display_name": "John Doe",
+      "points": 1500
+    },
+    "recent_activity": {
+      "new_members_this_week": 2,
+      "verses_mastered_this_week": 8,
+      "points_earned_this_week": 1200
+    }
+  }
+}
+```
+
+**Features**
+- Provides comprehensive group performance metrics
+- Shows total and active member counts
+- Calculates group-wide totals and averages
+- Identifies top performer (highest points)
+- Tracks recent activity (last 7 days)
+- Only accessible to group members
+- Helps leaders understand group engagement
+
+**Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User is not a member of the group
+- `404 Not Found`: Group not found
+
+#### Get Member's Group Ranking
+```http
+GET /groups/{id}/members/{userId}/ranking
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "ranking": {
+    "user_id": 123,
+    "display_name": "John Doe",
+    "rank": 3,
+    "total_members": 15,
+    "percentile": 80,
+    "metrics": {
+      "points": 1200,
+      "verses_mastered": 4,
+      "current_streak": 5,
+      "longest_streak": 12
+    },
+    "next_rank": {
+      "rank": 2,
+      "points_needed": 150
+    }
+  }
+}
+```
+
+**Features**
+- Shows individual member's ranking and percentile
+- Includes all relevant metrics (points, verses mastered, streaks)
+- Calculates progress toward next rank
+- Respects privacy settings (can only view public members or own ranking)
+- Provides motivational information for improvement
+- Only accessible to group members
+
+**Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: Member profile is private or user lacks access
+- `404 Not Found`: Group, member, or ranking not found
+
 ### Group Roles and Permissions
 
 1. **Creator Role**

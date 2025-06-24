@@ -18,6 +18,66 @@ interface JoinGroupRequest {
   invitationId: number;
 }
 
+interface UpdateDisplayNameRequest {
+  displayName: string;
+}
+
+interface UpdatePrivacyRequest {
+  isPublic: boolean;
+}
+
+interface LeaderboardQuery {
+  metric?: 'points' | 'verses_mastered' | 'current_streak' | 'longest_streak';
+  timeframe?: 'all' | 'week' | 'month' | 'year';
+}
+
+interface LeaderboardEntry {
+  rank: number;
+  user_id: number;
+  display_name: string;
+  points: number;
+  verses_mastered: number;
+  current_streak: number;
+  longest_streak: number;
+  is_public: boolean;
+}
+
+interface GroupStats {
+  total_members: number;
+  active_members: number;
+  total_points: number;
+  total_verses_mastered: number;
+  average_points_per_member: number;
+  top_performer: {
+    user_id: number;
+    display_name: string;
+    points: number;
+  };
+  recent_activity: {
+    new_members_this_week: number;
+    verses_mastered_this_week: number;
+    points_earned_this_week: number;
+  };
+}
+
+interface MemberRanking {
+  user_id: number;
+  display_name: string;
+  rank: number;
+  total_members: number;
+  percentile: number;
+  metrics: {
+    points: number;
+    verses_mastered: number;
+    current_streak: number;
+    longest_streak: number;
+  };
+  next_rank?: {
+    rank: number;
+    points_needed: number;
+  };
+}
+
 export const handleGroups = {
   // Create a new group
   createGroup: async (request: Request, env: Env): Promise<Response> => {
@@ -489,6 +549,735 @@ export const handleGroups = {
       });
     } catch (error) {
       console.error('Error getting members:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Update member display name
+  updateDisplayName: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const pathParts = url.pathname.split('/');
+      const groupId = pathParts[2];
+      const targetUserId = pathParts[4];
+
+      const { displayName } = await request.json() as UpdateDisplayNameRequest;
+
+      // Validate display name
+      if (!displayName || displayName.trim().length < 2 || displayName.trim().length > 30) {
+        return new Response(JSON.stringify({ error: 'Display name must be between 2 and 30 characters' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Validate display name format (alphanumeric, spaces, hyphens, underscores only)
+      const nameRegex = /^[a-zA-Z0-9\s\-_]+$/;
+      if (!nameRegex.test(displayName.trim())) {
+        return new Response(JSON.stringify({ error: 'Display name can only contain letters, numbers, spaces, hyphens, and underscores' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check for consecutive spaces
+      if (displayName.includes('  ')) {
+        return new Response(JSON.stringify({ error: 'Display name cannot contain consecutive spaces' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Check if user has permission to update this display name
+      const canUpdate = await db.prepare(`
+        SELECT role FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND role IN ('leader', 'creator')
+      `).bind(groupId, userId).first();
+
+      const isOwnProfile = userId === parseInt(targetUserId);
+
+      if (!canUpdate && !isOwnProfile) {
+        return new Response(JSON.stringify({ error: 'You do not have permission to update this display name' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if display name is already taken in this group
+      const existingName = await db.prepare(`
+        SELECT 1 FROM group_members 
+        WHERE group_id = ? AND display_name = ? AND user_id != ?
+      `).bind(groupId, displayName.trim(), targetUserId).first();
+
+      if (existingName) {
+        return new Response(JSON.stringify({ error: 'Display name is already taken in this group' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Update display name
+      await db.prepare(`
+        UPDATE group_members 
+        SET display_name = ? 
+        WHERE group_id = ? AND user_id = ?
+      `).bind(displayName.trim(), groupId, targetUserId).run();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: 'Display name updated successfully'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error updating display name:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get member profile
+  getMemberProfile: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const pathParts = url.pathname.split('/');
+      const groupId = pathParts[2];
+      const targetUserId = pathParts[4];
+
+      const db = getDB(env);
+
+      // Check if requesting user is a leader (leaders can see all profiles)
+      const isLeader = await db.prepare(`
+        SELECT role FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND role IN ('leader', 'creator')
+      `).bind(groupId, userId).first();
+
+      // Get target member profile
+      const profile = await db.prepare(`
+        SELECT 
+          gm.user_id,
+          gm.display_name,
+          gm.role,
+          gm.joined_at,
+          gm.is_public,
+          u.email
+        FROM group_members gm
+        JOIN users u ON gm.user_id = u.id
+        WHERE gm.group_id = ? AND gm.user_id = ? AND gm.is_active = TRUE
+      `).bind(groupId, targetUserId).first();
+
+      if (!profile) {
+        return new Response(JSON.stringify({ error: 'Member not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check privacy settings (leaders can always see, others need is_public = true)
+      if (!isLeader && !profile.is_public && userId !== parseInt(targetUserId)) {
+        return new Response(JSON.stringify({ error: 'Profile is private' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        profile: {
+          user_id: profile.user_id,
+          display_name: profile.display_name,
+          email: profile.email,
+          role: profile.role,
+          joined_at: profile.joined_at,
+          is_public: profile.is_public
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting member profile:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Update privacy settings
+  updatePrivacy: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const pathParts = url.pathname.split('/');
+      const groupId = pathParts[2];
+      const targetUserId = pathParts[4];
+
+      const { isPublic } = await request.json() as UpdatePrivacyRequest;
+
+      if (typeof isPublic !== 'boolean') {
+        return new Response(JSON.stringify({ error: 'isPublic must be a boolean value' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Check if user has permission to update this privacy setting
+      const canUpdate = await db.prepare(`
+        SELECT role FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND role IN ('leader', 'creator')
+      `).bind(groupId, userId).first();
+
+      const isOwnProfile = userId === parseInt(targetUserId);
+
+      if (!canUpdate && !isOwnProfile) {
+        return new Response(JSON.stringify({ error: 'You do not have permission to update this privacy setting' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Update privacy setting
+      await db.prepare(`
+        UPDATE group_members 
+        SET is_public = ? 
+        WHERE group_id = ? AND user_id = ?
+      `).bind(isPublic, groupId, targetUserId).run();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: 'Privacy settings updated successfully'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error updating privacy settings:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get group leaderboard
+  getLeaderboard: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const groupId = url.pathname.split('/')[2];
+      const metric = url.searchParams.get('metric') || 'points';
+      const timeframe = url.searchParams.get('timeframe') || 'all';
+
+      // Validate parameters
+      const validMetrics = ['points', 'verses_mastered', 'current_streak', 'longest_streak'];
+      const validTimeframes = ['all', 'week', 'month', 'year'];
+      
+      if (!validMetrics.includes(metric)) {
+        return new Response(JSON.stringify({ error: 'Invalid metric parameter' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (!validTimeframes.includes(timeframe)) {
+        return new Response(JSON.stringify({ error: 'Invalid timeframe parameter' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Check if user is a member of the group
+      const isMember = await db.prepare(`
+        SELECT 1 FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND is_active = TRUE
+      `).bind(groupId, userId).first();
+
+      if (!isMember) {
+        return new Response(JSON.stringify({ error: 'You must be a member of this group to view the leaderboard' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Build the leaderboard query based on metric and timeframe
+      let orderBy = '';
+
+      switch (metric) {
+        case 'points':
+          orderBy = 'us.total_points DESC';
+          break;
+        case 'verses_mastered':
+          orderBy = 'us.verses_mastered DESC';
+          break;
+        case 'current_streak':
+          orderBy = 'us.current_streak DESC';
+          break;
+        case 'longest_streak':
+          orderBy = 'us.longest_streak DESC';
+          break;
+      }
+
+      // Add timeframe filtering if needed
+      let timeframeFilter = '';
+      if (timeframe !== 'all') {
+        const now = Date.now();
+        let cutoffTime = 0;
+        
+        switch (timeframe) {
+          case 'week':
+            cutoffTime = now - (7 * 24 * 60 * 60 * 1000);
+            break;
+          case 'month':
+            cutoffTime = now - (30 * 24 * 60 * 60 * 1000);
+            break;
+          case 'year':
+            cutoffTime = now - (365 * 24 * 60 * 60 * 1000);
+            break;
+        }
+        
+        if (cutoffTime > 0) {
+          timeframeFilter = `AND us.last_activity_date >= ${cutoffTime}`;
+        }
+      }
+
+      const leaderboardQuery = `
+        SELECT 
+          gm.user_id,
+          gm.display_name,
+          gm.is_public,
+          us.total_points,
+          us.verses_mastered,
+          us.current_streak,
+          us.longest_streak
+        FROM group_members gm
+        LEFT JOIN user_stats us ON gm.user_id = us.user_id
+        WHERE gm.group_id = ? AND gm.is_active = TRUE ${timeframeFilter}
+        ORDER BY ${orderBy}
+      `;
+
+      const leaderboard = await db.prepare(leaderboardQuery).bind(groupId).all();
+
+      // Process results and add rankings
+      const processedLeaderboard: LeaderboardEntry[] = [];
+      let currentRank = 1;
+      let lastValue = -1;
+
+      for (const entry of leaderboard.results) {
+        if (!entry.is_public) continue; // Skip private members
+
+        let currentValue = 0;
+        switch (metric) {
+          case 'points':
+            currentValue = entry.total_points || 0;
+            break;
+          case 'verses_mastered':
+            currentValue = entry.verses_mastered || 0;
+            break;
+          case 'current_streak':
+            currentValue = entry.current_streak || 0;
+            break;
+          case 'longest_streak':
+            currentValue = entry.longest_streak || 0;
+            break;
+        }
+
+        // Handle ties (same rank for same values)
+        if (currentValue !== lastValue) {
+          currentRank = processedLeaderboard.length + 1;
+        }
+
+        processedLeaderboard.push({
+          rank: currentRank,
+          user_id: entry.user_id,
+          display_name: entry.display_name || 'Anonymous',
+          points: entry.total_points || 0,
+          verses_mastered: entry.verses_mastered || 0,
+          current_streak: entry.current_streak || 0,
+          longest_streak: entry.longest_streak || 0,
+          is_public: entry.is_public
+        });
+
+        lastValue = currentValue;
+      }
+
+      // Get metadata
+      const totalMembers = await db.prepare(`
+        SELECT COUNT(*) as count FROM group_members 
+        WHERE group_id = ? AND is_active = TRUE
+      `).bind(groupId).first();
+
+      const participatingMembers = processedLeaderboard.length;
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        leaderboard: processedLeaderboard,
+        metadata: {
+          total_members: totalMembers?.count || 0,
+          participating_members: participatingMembers,
+          metric,
+          timeframe
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting leaderboard:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get group statistics
+  getGroupStats: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const groupId = url.pathname.split('/')[2];
+
+      const db = getDB(env);
+
+      // Check if user is a member of the group
+      const isMember = await db.prepare(`
+        SELECT 1 FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND is_active = TRUE
+      `).bind(groupId, userId).first();
+
+      if (!isMember) {
+        return new Response(JSON.stringify({ error: 'You must be a member of this group to view group stats' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get total members
+      const totalMembers = await db.prepare(`
+        SELECT COUNT(*) as count FROM group_members 
+        WHERE group_id = ? AND is_active = TRUE
+      `).bind(groupId).first();
+
+      // Get active members (have stats)
+      const activeMembers = await db.prepare(`
+        SELECT COUNT(*) as count FROM group_members gm
+        JOIN user_stats us ON gm.user_id = us.user_id
+        WHERE gm.group_id = ? AND gm.is_active = TRUE
+      `).bind(groupId).first();
+
+      // Get total points and verses mastered
+      const totals = await db.prepare(`
+        SELECT 
+          SUM(us.total_points) as total_points,
+          SUM(us.verses_mastered) as total_verses_mastered
+        FROM group_members gm
+        JOIN user_stats us ON gm.user_id = us.user_id
+        WHERE gm.group_id = ? AND gm.is_active = TRUE
+      `).bind(groupId).first();
+
+      // Get top performer
+      const topPerformer = await db.prepare(`
+        SELECT 
+          gm.user_id,
+          gm.display_name,
+          us.total_points
+        FROM group_members gm
+        JOIN user_stats us ON gm.user_id = us.user_id
+        WHERE gm.group_id = ? AND gm.is_active = TRUE AND gm.is_public = TRUE
+        ORDER BY us.total_points DESC
+        LIMIT 1
+      `).bind(groupId).first();
+
+      // Get recent activity (this week)
+      const weekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      
+      const newMembersThisWeek = await db.prepare(`
+        SELECT COUNT(*) as count FROM group_members 
+        WHERE group_id = ? AND joined_at >= ?
+      `).bind(groupId, weekAgo).first();
+
+      const versesMasteredThisWeek = await db.prepare(`
+        SELECT COUNT(*) as count FROM verses v
+        JOIN group_members gm ON v.user_id = gm.user_id
+        WHERE gm.group_id = ? AND v.status = 'mastered' AND v.created_at >= ?
+      `).bind(groupId, weekAgo).first();
+
+      const pointsEarnedThisWeek = await db.prepare(`
+        SELECT SUM(pe.points) as total FROM point_events pe
+        JOIN group_members gm ON pe.user_id = gm.user_id
+        WHERE gm.group_id = ? AND pe.created_at >= ?
+      `).bind(groupId, weekAgo).first();
+
+      const stats: GroupStats = {
+        total_members: (totalMembers?.count as number) || 0,
+        active_members: (activeMembers?.count as number) || 0,
+        total_points: (totals?.total_points as number) || 0,
+        total_verses_mastered: (totals?.total_verses_mastered as number) || 0,
+        average_points_per_member: (activeMembers?.count as number) ? Math.round(((totals?.total_points as number) || 0) / (activeMembers.count as number)) : 0,
+        top_performer: topPerformer ? {
+          user_id: (topPerformer.user_id as number) || 0,
+          display_name: (topPerformer.display_name as string) || 'Anonymous',
+          points: (topPerformer.total_points as number) || 0
+        } : {
+          user_id: 0,
+          display_name: 'None',
+          points: 0
+        },
+        recent_activity: {
+          new_members_this_week: (newMembersThisWeek?.count as number) || 0,
+          verses_mastered_this_week: (versesMasteredThisWeek?.count as number) || 0,
+          points_earned_this_week: (pointsEarnedThisWeek?.total as number) || 0
+        }
+      };
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        stats
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting group stats:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get member's group ranking
+  getMemberRanking: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const pathParts = url.pathname.split('/');
+      const groupId = pathParts[2];
+      const targetUserId = pathParts[4];
+
+      const db = getDB(env);
+
+      // Check if requesting user is a member of the group
+      const isMember = await db.prepare(`
+        SELECT 1 FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND is_active = TRUE
+      `).bind(groupId, userId).first();
+
+      if (!isMember) {
+        return new Response(JSON.stringify({ error: 'You must be a member of this group to view rankings' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if target user is a member and public (unless requesting own ranking)
+      const targetMember = await db.prepare(`
+        SELECT is_public FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND is_active = TRUE
+      `).bind(groupId, targetUserId).first();
+
+      if (!targetMember) {
+        return new Response(JSON.stringify({ error: 'Member not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (!targetMember.is_public && userId !== parseInt(targetUserId)) {
+        return new Response(JSON.stringify({ error: 'Member profile is private' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get all member rankings by points
+      const allRankings = await db.prepare(`
+        SELECT 
+          gm.user_id,
+          gm.display_name,
+          gm.is_public,
+          us.total_points,
+          us.verses_mastered,
+          us.current_streak,
+          us.longest_streak
+        FROM group_members gm
+        LEFT JOIN user_stats us ON gm.user_id = us.user_id
+        WHERE gm.group_id = ? AND gm.is_active = TRUE AND gm.is_public = TRUE
+        ORDER BY us.total_points DESC
+      `).bind(groupId).all();
+
+      // Find target user's rank
+      let targetRank = 0;
+      let targetData = null;
+      const totalMembers = allRankings.results.length;
+
+      for (let i = 0; i < allRankings.results.length; i++) {
+        const entry = allRankings.results[i];
+        if (entry.user_id === parseInt(targetUserId)) {
+          targetRank = i + 1;
+          targetData = entry;
+          break;
+        }
+      }
+
+      if (!targetData) {
+        return new Response(JSON.stringify({ error: 'Member not found in rankings' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Calculate percentile
+      const percentile = totalMembers > 1 ? Math.round(((totalMembers - targetRank + 1) / totalMembers) * 100) : 100;
+
+      // Find next rank info
+      let nextRank = null;
+      if (targetRank > 1) {
+        const nextRankEntry = allRankings.results[targetRank - 2]; // -2 because arrays are 0-indexed
+        if (nextRankEntry) {
+          const pointsNeeded = nextRankEntry.total_points - targetData.total_points;
+          nextRank = {
+            rank: targetRank - 1,
+            points_needed: pointsNeeded
+          };
+        }
+      }
+
+      const ranking: MemberRanking = {
+        user_id: targetData.user_id,
+        display_name: targetData.display_name || 'Anonymous',
+        rank: targetRank,
+        total_members: totalMembers,
+        percentile,
+        metrics: {
+          points: targetData.total_points || 0,
+          verses_mastered: targetData.verses_mastered || 0,
+          current_streak: targetData.current_streak || 0,
+          longest_streak: targetData.longest_streak || 0
+        },
+        next_rank: nextRank
+      };
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        ranking
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting member ranking:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
         headers: { 'Content-Type': 'application/json' }
