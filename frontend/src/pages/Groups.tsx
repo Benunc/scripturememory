@@ -397,42 +397,52 @@ const Groups: React.FC = () => {
       <AppHeader />
 
       <Box id="main-content" flex="1" p={8} tabIndex={-1}>
-        <Container maxW="container.xl">
+        <Container maxW="container.xl" px={{ base: 1, md: 1 }}>
           <VStack spacing={6} align="stretch">
             {/* Header */}
             <VStack align="start" spacing={2}>
               <Heading size="lg">Groups</Heading>
-              <Text align="left" color="gray.500">Groups are a way to challenge yourself and others to memorize the Bible together. Users who have amassed at least 5000 points and mastered 5 verses can create a group.</Text>
+              <Text align="left" color="gray.500" fontSize={{ base: "sm", md: "md" }}>
+                Groups are a way to challenge yourself and others to memorize the Bible together. Users who have amassed at least 5000 points and mastered 5 verses can create a group.
+              </Text>
             </VStack>
 
             {/* Tabs */}
             <Tabs>
-              <TabList>
-                <Tab>My Groups</Tab>
-                <Tab>Join Group</Tab>
-                <Tab>Profile Settings</Tab>
+              <TabList overflowX="auto" css={{
+                '&::-webkit-scrollbar': { display: 'none' },
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none'
+              }}>
+                <Tab whiteSpace="nowrap">My Groups</Tab>
+                <Tab whiteSpace="nowrap">Join Group</Tab>
+                <Tab whiteSpace="nowrap">Profile Settings</Tab>
               </TabList>
 
               <TabPanels>
                 {/* My Groups Tab */}
-                <TabPanel>
+                <TabPanel px={{ base: 0, md: 4 }}>
                   <VStack spacing={6} align="stretch">
                     {/* Group Creation */}
                     {canCreateGroup && (
                       <Card>
                         <CardBody>
                           <VStack spacing={4} align="stretch">
-                            <HStack justify="space-between">
-                              <VStack align="start" spacing={1}>
-                                <Heading size="md">Create New Group</Heading>
-                                <Text fontSize="sm" color="gray.600">
-                                  You've proven your commitment! Start a new scripture study group
-                                </Text>
-                              </VStack>
-                              <Button leftIcon={<AddIcon />} colorScheme="blue" onClick={onOpen}>
-                                Create Group
-                              </Button>
-                            </HStack>
+                            <VStack align="start" spacing={2}>
+                              <Heading size="md">Create New Group</Heading>
+                              <Text fontSize="sm" color="gray.600">
+                                You've proven your commitment! Start a new scripture study group
+                              </Text>
+                            </VStack>
+                            <Button 
+                              leftIcon={<AddIcon />} 
+                              colorScheme="blue" 
+                              onClick={onOpen}
+                              size={{ base: "md", md: "lg" }}
+                              width={{ base: "full", md: "auto" }}
+                            >
+                              Create Group
+                            </Button>
                           </VStack>
                         </CardBody>
                       </Card>
@@ -462,14 +472,14 @@ const Groups: React.FC = () => {
                         </CardBody>
                       </Card>
                     ) : (
-                      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={{ base: 3, md: 6 }}>
                         {groups.map((group) => (
                           <Card key={group.id} _hover={{ shadow: 'md' }} transition="shadow 0.2s">
-                            <CardHeader>
+                            <CardHeader pb={2}>
                               <VStack align="start" spacing={2}>
-                                <Heading size="md">{group.name}</Heading>
+                                <Heading size="md" fontSize={{ base: "lg", md: "xl" }}>{group.name}</Heading>
                                 {group.description && (
-                                  <Text fontSize="sm" color="gray.600">
+                                  <Text fontSize="sm" color="gray.600" noOfLines={2}>
                                     {group.description}
                                   </Text>
                                 )}
@@ -477,17 +487,18 @@ const Groups: React.FC = () => {
                             </CardHeader>
                             <CardBody pt={0}>
                               <VStack spacing={4} align="stretch">
-                                <Flex justify="space-between" align="center">
+                                <Flex justify="space-between" align="center" wrap="wrap" gap={2}>
                                   <Badge 
                                     colorScheme={
                                       group.role === 'creator' ? 'purple' : 
                                       group.role === 'leader' ? 'blue' : 'gray'
                                     }
+                                    fontSize="xs"
                                   >
                                     {group.role}
                                   </Badge>
                                 </Flex>
-                                <Flex justify="space-between" align="center">
+                                <Flex justify="space-between" align="center" direction={{ base: "column", sm: "row" }} gap={3}>
                                   <Text fontSize="sm" color="gray.500">
                                     {group.member_count} {group.member_count === 1 ? 'member' : 'members'}
                                   </Text>
@@ -495,6 +506,7 @@ const Groups: React.FC = () => {
                                     size="sm" 
                                     colorScheme="blue" 
                                     onClick={() => navigate(`/groups/${group.id}`)}
+                                    width={{ base: "full", sm: "auto" }}
                                   >
                                     View Group
                                   </Button>
@@ -509,7 +521,7 @@ const Groups: React.FC = () => {
                 </TabPanel>
 
                 {/* Join Group Tab */}
-                <TabPanel>
+                <TabPanel px={{ base: 0, md: 4 }}>
                   <VStack spacing={6} align="stretch">
                     <Card>
                       <CardHeader>
@@ -517,7 +529,7 @@ const Groups: React.FC = () => {
                       </CardHeader>
                       <CardBody>
                         <VStack spacing={4} align="stretch">
-                          <Text color="gray.600">
+                          <Text color="gray.600" fontSize={{ base: "sm", md: "md" }}>
                             Enter an invitation link or invitation code to join an existing group
                           </Text>
                           
@@ -539,21 +551,22 @@ const Groups: React.FC = () => {
                             <FormLabel>Invitation Link or Code</FormLabel>
                             <Input 
                               placeholder="e.g., /groups/123/join/ABC12345 or just ABC12345"
-                              size="lg"
+                              size={{ base: "md", md: "lg" }}
                               value={joinInput}
                               onChange={(e) => setJoinInput(e.target.value)}
                             />
-                            <FormHelperText>
+                            <FormHelperText fontSize="xs">
                               You can enter a full invitation link or just the invitation code.
                             </FormHelperText>
                           </FormControl>
                           <Button 
                             colorScheme="blue" 
-                            size="lg" 
+                            size={{ base: "md", md: "lg" }}
                             onClick={handleJoinGroup}
                             isLoading={joining}
                             loadingText="Joining..."
                             isDisabled={!joinInput.trim()}
+                            width={{ base: "full", md: "auto" }}
                           >
                             Join Group
                           </Button>
@@ -564,7 +577,7 @@ const Groups: React.FC = () => {
                 </TabPanel>
 
                 {/* Profile Settings Tab */}
-                <TabPanel>
+                <TabPanel px={{ base: 0, md: 4 }}>
                   <VStack spacing={6} align="stretch">
                     <Card>
                       <CardHeader>
@@ -572,7 +585,7 @@ const Groups: React.FC = () => {
                       </CardHeader>
                       <CardBody>
                         <VStack spacing={6} align="stretch">
-                          <Text color="gray.600">
+                          <Text color="gray.600" fontSize={{ base: "sm", md: "md" }}>
                             Manage how you appear in your groups
                           </Text>
                           
@@ -593,8 +606,9 @@ const Groups: React.FC = () => {
                               }}
                               placeholder="Enter your display name"
                               maxLength={30}
+                              size={{ base: "md", md: "lg" }}
                             />
-                            <FormHelperText>
+                            <FormHelperText fontSize="xs">
                               This name will be shown to other group members. 2-30 characters, letters, numbers, spaces, hyphens, and underscores only.
                             </FormHelperText>
                           </FormControl>
@@ -607,7 +621,7 @@ const Groups: React.FC = () => {
                           )}
 
                           <FormControl display="flex" alignItems="center">
-                            <FormLabel htmlFor="privacy-toggle" mb="0">
+                            <FormLabel htmlFor="privacy-toggle" mb="0" fontSize={{ base: "sm", md: "md" }}>
                               Public Profile
                             </FormLabel>
                             <Switch 
@@ -617,7 +631,7 @@ const Groups: React.FC = () => {
                             />
                           </FormControl>
                           <FormControl>
-                            <FormHelperText>
+                            <FormHelperText fontSize="xs">
                               When enabled, other group members can see your profile and stats in leaderboards.
                             </FormHelperText>
                           </FormControl>
@@ -628,6 +642,8 @@ const Groups: React.FC = () => {
                             isLoading={updatingProfile}
                             loadingText="Updating..."
                             isDisabled={!displayName.trim() || displayName.trim().length < 2 || !!profanityError}
+                            size={{ base: "md", md: "lg" }}
+                            width={{ base: "full", md: "auto" }}
                           >
                             Update Profile
                           </Button>
@@ -640,9 +656,9 @@ const Groups: React.FC = () => {
             </Tabs>
 
             {/* Create Group Modal */}
-            <Modal isOpen={isOpen} onClose={onClose}>
+            <Modal isOpen={isOpen} onClose={onClose} size={{ base: "full", md: "md" }}>
               <ModalOverlay />
-              <ModalContent>
+              <ModalContent mx={{ base: 2, md: 0 }}>
                 <ModalHeader>Create New Group</ModalHeader>
                 <ModalCloseButton />
                 <ModalBody>
@@ -657,6 +673,7 @@ const Groups: React.FC = () => {
                         }}
                         placeholder="Enter group name"
                         maxLength={50}
+                        size={{ base: "md", md: "lg" }}
                       />
                       {groupProfanityErrors.name && (
                         <Alert status="error" mt={2}>
@@ -676,6 +693,7 @@ const Groups: React.FC = () => {
                         placeholder="Describe your group's purpose"
                         maxLength={200}
                         rows={3}
+                        size={{ base: "md", md: "lg" }}
                       />
                       {groupProfanityErrors.description && (
                         <Alert status="error" mt={2}>
@@ -687,7 +705,7 @@ const Groups: React.FC = () => {
                   </VStack>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="ghost" mr={3} onClick={onClose}>
+                  <Button variant="ghost" mr={3} onClick={onClose} size={{ base: "md", md: "lg" }}>
                     Cancel
                   </Button>
                   <Button 
@@ -696,6 +714,7 @@ const Groups: React.FC = () => {
                     isLoading={creating}
                     loadingText="Creating..."
                     isDisabled={!createForm.name.trim() || createForm.name.trim().length < 2 || !!groupProfanityErrors.name || !!groupProfanityErrors.description}
+                    size={{ base: "md", md: "lg" }}
                   >
                     Create Group
                   </Button>

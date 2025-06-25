@@ -286,28 +286,32 @@ const GroupDetails: React.FC = () => {
       <AppHeader />
 
       <Box id="main-content" flex="1" p={8} tabIndex={-1}>
-        <Container maxW="container.xl">
+        <Container maxW="container.xl" px={{ base: 1, md: 1 }}>
           <VStack spacing={6} align="stretch">
             {/* Header */}
-            <HStack justify="space-between" align="start">
-              <VStack align="start" spacing={2}>
+            <HStack justify="space-between" align="start" wrap="wrap" gap={4}>
+              <VStack align="start" spacing={2} flex="1" minW="0">
                 <Button 
                   leftIcon={<ArrowBackIcon />} 
                   variant="ghost" 
                   onClick={() => navigate('/groups')}
+                  size={{ base: "sm", md: "md" }}
                 >
                   Back to Groups
                 </Button>
-                <Heading size="lg">{groupName}</Heading>
+                <Heading size="lg" fontSize={{ base: "xl", md: "2xl" }}>{groupName}</Heading>
                 {groupDescription && (
-                  <Text color="gray.600">{groupDescription}</Text>
+                  <Text color="gray.600" fontSize={{ base: "sm", md: "md" }} noOfLines={2}>
+                    {groupDescription}
+                  </Text>
                 )}
-                <HStack>
+                <HStack wrap="wrap" gap={2}>
                   <Badge 
                     colorScheme={
                       userRole === 'creator' ? 'purple' : 
                       userRole === 'leader' ? 'blue' : 'gray'
                     }
+                    fontSize="xs"
                   >
                     {userRole}
                   </Badge>
@@ -320,57 +324,61 @@ const GroupDetails: React.FC = () => {
 
             {/* Tabs */}
             <Tabs index={activeTab} onChange={setActiveTab}>
-              <TabList>
-                <Tab>Overview</Tab>
-                <Tab>Members</Tab>
-                <Tab>Leaderboard</Tab>
+              <TabList overflowX="auto" css={{
+                '&::-webkit-scrollbar': { display: 'none' },
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none'
+              }}>
+                <Tab whiteSpace="nowrap">Overview</Tab>
+                <Tab whiteSpace="nowrap">Members</Tab>
+                <Tab whiteSpace="nowrap">Leaderboard</Tab>
                 {(userRole === 'creator' || userRole === 'leader') && (
-                  <Tab>Invite Members</Tab>
+                  <Tab whiteSpace="nowrap">Invite Members</Tab>
                 )}
               </TabList>
 
               <TabPanels>
                 {/* Overview Tab */}
-                <TabPanel>
+                <TabPanel px={{ base: 0, md: 4 }}>
                   {stats && (
                     <VStack spacing={6} align="stretch">
-                      <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6}>
+                      <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} spacing={{ base: 3, md: 6 }}>
                         <Stat>
-                          <StatLabel>Total Members</StatLabel>
-                          <StatNumber>{stats.total_members}</StatNumber>
-                          <StatHelpText>Active: {stats.active_members}</StatHelpText>
+                          <StatLabel fontSize={{ base: "xs", md: "sm" }}>Total Members</StatLabel>
+                          <StatNumber fontSize={{ base: "lg", md: "xl" }}>{stats.total_members}</StatNumber>
+                          <StatHelpText fontSize="xs">Active: {stats.active_members}</StatHelpText>
                         </Stat>
                         <Stat>
-                          <StatLabel>Total Points</StatLabel>
-                          <StatNumber>{stats.total_points.toLocaleString()}</StatNumber>
-                          <StatHelpText>Group total</StatHelpText>
+                          <StatLabel fontSize={{ base: "xs", md: "sm" }}>Total Points</StatLabel>
+                          <StatNumber fontSize={{ base: "lg", md: "xl" }}>{stats.total_points.toLocaleString()}</StatNumber>
+                          <StatHelpText fontSize="xs">Group total</StatHelpText>
                         </Stat>
                         <Stat>
-                          <StatLabel>Verses Mastered</StatLabel>
-                          <StatNumber>{stats.total_verses_mastered}</StatNumber>
-                          <StatHelpText>Group total</StatHelpText>
+                          <StatLabel fontSize={{ base: "xs", md: "sm" }}>Verses Mastered</StatLabel>
+                          <StatNumber fontSize={{ base: "lg", md: "xl" }}>{stats.total_verses_mastered}</StatNumber>
+                          <StatHelpText fontSize="xs">Group total</StatHelpText>
                         </Stat>
                         <Stat>
-                          <StatLabel>Avg Points/Member</StatLabel>
-                          <StatNumber>{stats.average_points_per_member}</StatNumber>
-                          <StatHelpText>Active members only</StatHelpText>
+                          <StatLabel fontSize={{ base: "xs", md: "sm" }}>Avg Points/Member</StatLabel>
+                          <StatNumber fontSize={{ base: "lg", md: "xl" }}>{stats.average_points_per_member}</StatNumber>
+                          <StatHelpText fontSize="xs">Active members only</StatHelpText>
                         </Stat>
                       </SimpleGrid>
 
                       <Divider />
 
                       <Box>
-                        <Heading size="md" mb={4}>Top Performer</Heading>
+                        <Heading size="md" mb={4} fontSize={{ base: "lg", md: "xl" }}>Top Performer</Heading>
                         <Card>
                           <CardBody>
                             <HStack justify="space-between">
                               <VStack align="start" spacing={1}>
-                                <Text fontWeight="bold">{stats.top_performer.display_name}</Text>
+                                <Text fontWeight="bold" fontSize={{ base: "md", md: "lg" }}>{stats.top_performer.display_name}</Text>
                                 <Text fontSize="sm" color="gray.500">
                                   {stats.top_performer.points.toLocaleString()} points
                                 </Text>
                               </VStack>
-                              <Badge colorScheme="gold">#1</Badge>
+                              <Badge colorScheme="gold" fontSize="xs">#1</Badge>
                             </HStack>
                           </CardBody>
                         </Card>
@@ -379,32 +387,32 @@ const GroupDetails: React.FC = () => {
                       <Divider />
 
                       <Box>
-                        <Heading size="md" mb={4}>Recent Activity</Heading>
-                        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+                        <Heading size="md" mb={4} fontSize={{ base: "lg", md: "xl" }}>Recent Activity</Heading>
+                        <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={{ base: 2, md: 4 }}>
                           <Card>
                             <CardBody>
                               <Stat>
-                                <StatLabel>New Members</StatLabel>
-                                <StatNumber>{stats.recent_activity.new_members_this_week}</StatNumber>
-                                <StatHelpText>This week</StatHelpText>
+                                <StatLabel fontSize="xs">New Members</StatLabel>
+                                <StatNumber fontSize={{ base: "lg", md: "xl" }}>{stats.recent_activity.new_members_this_week}</StatNumber>
+                                <StatHelpText fontSize="xs">This week</StatHelpText>
                               </Stat>
                             </CardBody>
                           </Card>
                           <Card>
                             <CardBody>
                               <Stat>
-                                <StatLabel>Verses Mastered</StatLabel>
-                                <StatNumber>{stats.recent_activity.verses_mastered_this_week}</StatNumber>
-                                <StatHelpText>This week</StatHelpText>
+                                <StatLabel fontSize="xs">Verses Mastered</StatLabel>
+                                <StatNumber fontSize={{ base: "lg", md: "xl" }}>{stats.recent_activity.verses_mastered_this_week}</StatNumber>
+                                <StatHelpText fontSize="xs">This week</StatHelpText>
                               </Stat>
                             </CardBody>
                           </Card>
                           <Card>
                             <CardBody>
                               <Stat>
-                                <StatLabel>Points Earned</StatLabel>
-                                <StatNumber>{stats.recent_activity.points_earned_this_week}</StatNumber>
-                                <StatHelpText>This week</StatHelpText>
+                                <StatLabel fontSize="xs">Points Earned</StatLabel>
+                                <StatNumber fontSize={{ base: "lg", md: "xl" }}>{stats.recent_activity.points_earned_this_week}</StatNumber>
+                                <StatHelpText fontSize="xs">This week</StatHelpText>
                               </Stat>
                             </CardBody>
                           </Card>
@@ -415,83 +423,143 @@ const GroupDetails: React.FC = () => {
                 </TabPanel>
 
                 {/* Members Tab */}
-                <TabPanel>
+                <TabPanel px={{ base: 0, md: 4 }}>
                   <VStack spacing={4} align="stretch">
-                    <Heading size="md">Group Members</Heading>
+                    <Heading size="md" fontSize={{ base: "lg", md: "xl" }}>Group Members</Heading>
                     <Card>
-                      <CardBody>
-                        <Table variant="simple">
-                          <Thead>
-                            <Tr>
-                              <Th>Member</Th>
-                              <Th>Role</Th>
-                              <Th>Joined</Th>
-                            </Tr>
-                          </Thead>
-                          <Tbody>
-                            {members.map((member) => (
-                              <Tr key={member.user_id}>
-                                <Td>{member.display_name}</Td>
-                                <Td>
+                      <CardBody p={{ base: 1, md: 6 }}>
+                        {/* Mobile-friendly member list */}
+                        <VStack spacing={3} align="stretch" display={{ base: "flex", md: "none" }}>
+                          {members.map((member) => (
+                            <Box key={member.user_id} p={3} border="1px" borderColor="gray.200" borderRadius="md">
+                              <VStack align="start" spacing={2}>
+                                <Text fontWeight="bold" fontSize="sm">{member.display_name}</Text>
+                                <HStack spacing={2}>
                                   <Badge 
                                     colorScheme={
                                       member.role === 'creator' ? 'purple' : 
                                       member.role === 'leader' ? 'blue' : 'gray'
                                     }
+                                    fontSize="xs"
                                   >
                                     {member.role}
                                   </Badge>
-                                </Td>
-                                <Td>{new Date(member.joined_at).toLocaleDateString()}</Td>
+                                  <Text fontSize="xs" color="gray.500">
+                                    Joined {new Date(member.joined_at).toLocaleDateString()}
+                                  </Text>
+                                </HStack>
+                              </VStack>
+                            </Box>
+                          ))}
+                        </VStack>
+                        
+                        {/* Desktop table */}
+                        <Box display={{ base: "none", md: "block" }}>
+                          <Table variant="simple">
+                            <Thead>
+                              <Tr>
+                                <Th>Member</Th>
+                                <Th>Role</Th>
+                                <Th>Joined</Th>
                               </Tr>
-                            ))}
-                          </Tbody>
-                        </Table>
+                            </Thead>
+                            <Tbody>
+                              {members.map((member) => (
+                                <Tr key={member.user_id}>
+                                  <Td>{member.display_name}</Td>
+                                  <Td>
+                                    <Badge 
+                                      colorScheme={
+                                        member.role === 'creator' ? 'purple' : 
+                                        member.role === 'leader' ? 'blue' : 'gray'
+                                      }
+                                    >
+                                      {member.role}
+                                    </Badge>
+                                  </Td>
+                                  <Td>{new Date(member.joined_at).toLocaleDateString()}</Td>
+                                </Tr>
+                              ))}
+                            </Tbody>
+                          </Table>
+                        </Box>
                       </CardBody>
                     </Card>
                   </VStack>
                 </TabPanel>
 
                 {/* Leaderboard Tab */}
-                <TabPanel>
+                <TabPanel px={{ base: 0, md: 4 }}>
                   <VStack spacing={4} align="stretch">
-                    <Heading size="md">Leaderboard</Heading>
+                    <Heading size="md" fontSize={{ base: "lg", md: "xl" }}>Leaderboard</Heading>
                     <Card>
-                      <CardBody>
-                        <Table variant="simple">
-                          <Thead>
-                            <Tr>
-                              <Th>Rank</Th>
-                              <Th>Member</Th>
-                              <Th>Points</Th>
-                              <Th>Verses</Th>
-                              <Th>Current Streak</Th>
-                              <Th>Longest Streak</Th>
-                            </Tr>
-                          </Thead>
-                          <Tbody>
-                            {leaderboard.map((entry) => (
-                              <Tr key={entry.user_id}>
-                                <Td>
+                      <CardBody p={{ base: 1, md: 6 }}>
+                        {/* Mobile-friendly leaderboard */}
+                        <VStack spacing={3} align="stretch" display={{ base: "flex", md: "none" }}>
+                          {leaderboard.map((entry) => (
+                            <Box key={entry.user_id} p={3} border="1px" borderColor="gray.200" borderRadius="md">
+                              <VStack align="start" spacing={2}>
+                                <HStack justify="space-between" width="full">
                                   <Badge 
                                     colorScheme={
                                       entry.rank === 1 ? 'gold' : 
                                       entry.rank === 2 ? 'gray' : 
                                       entry.rank === 3 ? 'orange' : 'gray'
                                     }
+                                    fontSize="xs"
                                   >
                                     #{entry.rank}
                                   </Badge>
-                                </Td>
-                                <Td>{entry.display_name}</Td>
-                                <Td>{entry.points.toLocaleString()}</Td>
-                                <Td>{entry.verses_mastered}</Td>
-                                <Td>{entry.current_streak}</Td>
-                                <Td>{entry.longest_streak}</Td>
+                                  <Text fontWeight="bold" fontSize="sm">{entry.display_name}</Text>
+                                </HStack>
+                                <SimpleGrid columns={2} spacing={2} width="full">
+                                  <Text fontSize="xs" color="gray.500">Points: {entry.points.toLocaleString()}</Text>
+                                  <Text fontSize="xs" color="gray.500">Verses: {entry.verses_mastered}</Text>
+                                  <Text fontSize="xs" color="gray.500">Current: {entry.current_streak}</Text>
+                                  <Text fontSize="xs" color="gray.500">Longest: {entry.longest_streak}</Text>
+                                </SimpleGrid>
+                              </VStack>
+                            </Box>
+                          ))}
+                        </VStack>
+                        
+                        {/* Desktop table */}
+                        <Box display={{ base: "none", md: "block" }}>
+                          <Table variant="simple">
+                            <Thead>
+                              <Tr>
+                                <Th>Rank</Th>
+                                <Th>Member</Th>
+                                <Th>Points</Th>
+                                <Th>Verses</Th>
+                                <Th>Current Streak</Th>
+                                <Th>Longest Streak</Th>
                               </Tr>
-                            ))}
-                          </Tbody>
-                        </Table>
+                            </Thead>
+                            <Tbody>
+                              {leaderboard.map((entry) => (
+                                <Tr key={entry.user_id}>
+                                  <Td>
+                                    <Badge 
+                                      colorScheme={
+                                        entry.rank === 1 ? 'gold' : 
+                                        entry.rank === 2 ? 'gray' : 
+                                        entry.rank === 3 ? 'orange' : 'gray'
+                                      }
+                                    >
+                                      #{entry.rank}
+                                    </Badge>
+                                  </Td>
+                                  <Td>{entry.display_name}</Td>
+                                  <Td>{entry.points.toLocaleString()}</Td>
+                                  <Td>{entry.verses_mastered}</Td>
+                                  <Td>{entry.current_streak}</Td>
+                                  <Td>{entry.longest_streak}</Td>
+                                </Tr>
+                              ))}
+                            </Tbody>
+                          </Table>
+                        </Box>
                       </CardBody>
                     </Card>
                   </VStack>
@@ -499,13 +567,13 @@ const GroupDetails: React.FC = () => {
 
                 {/* Invite Members Tab - Only for leaders/creators */}
                 {(userRole === 'creator' || userRole === 'leader') && (
-                  <TabPanel>
+                  <TabPanel px={{ base: 0, md: 4 }}>
                     <VStack spacing={4} align="stretch">
-                      <Heading size="md">Invite Members</Heading>
+                      <Heading size="md" fontSize={{ base: "lg", md: "xl" }}>Invite Members</Heading>
                       <Card>
                         <CardBody>
                           <VStack spacing={4} align="stretch">
-                            <Text color="gray.600">
+                            <Text color="gray.600" fontSize={{ base: "sm", md: "md" }}>
                               Create an invitation code to share with someone you want to invite to this group. The user must already have an account in the system.
                             </Text>
                             
@@ -530,8 +598,9 @@ const GroupDetails: React.FC = () => {
                                 onChange={(e) => setInviteEmail(e.target.value)}
                                 placeholder="Enter email address"
                                 type="email"
+                                size={{ base: "md", md: "lg" }}
                               />
-                              <FormHelperText>
+                              <FormHelperText fontSize="xs">
                                 Only users who already have accounts in the system can be invited.
                               </FormHelperText>
                             </FormControl>
@@ -542,13 +611,15 @@ const GroupDetails: React.FC = () => {
                               isLoading={inviting}
                               loadingText="Creating Invitation..."
                               isDisabled={!inviteEmail.trim()}
+                              size={{ base: "md", md: "lg" }}
+                              width={{ base: "full", md: "auto" }}
                             >
                               Create Invitation
                             </Button>
 
                             {invitationCode && (
                               <VStack spacing={3} align="stretch" mt={4}>
-                                <Text fontWeight="bold" color="gray.700">
+                                <Text fontWeight="bold" color="gray.700" fontSize={{ base: "sm", md: "md" }}>
                                   Invitation Code:
                                 </Text>
                                 <InputGroup>
@@ -556,6 +627,7 @@ const GroupDetails: React.FC = () => {
                                     value={invitationCode}
                                     isReadOnly
                                     pr="4.5rem"
+                                    size={{ base: "md", md: "lg" }}
                                   />
                                   <InputRightElement width="4.5rem">
                                     <IconButton
@@ -567,7 +639,7 @@ const GroupDetails: React.FC = () => {
                                     />
                                   </InputRightElement>
                                 </InputGroup>
-                                <Text fontSize="sm" color="gray.600">
+                                <Text fontSize="xs" color="gray.600">
                                   Share this code with the person you want to invite. They can use it in the "Join Group" tab to join this group.
                                 </Text>
                               </VStack>

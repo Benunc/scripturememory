@@ -193,6 +193,31 @@ Content-Type: application/json
 - `404 Not Found`: User not found
 - `500 Internal Server Error`: Server error during verse addition
 
+#### Delete User Account
+```http
+DELETE /auth/delete
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Account deleted successfully"
+}
+```
+
+**Features**
+- Permanently deletes the user's account
+- Removes all user data including verses, progress, and stats
+- Invalidates all active sessions
+- Cannot be undone
+- Requires valid authentication token
+
+**Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+- `500 Internal Server Error`: Server error during deletion
+
 ### Authentication Flow
 
 1. **Sign In vs Registration**
@@ -347,6 +372,37 @@ Authorization: Bearer <token>
 - `400 Bad Request`: Missing reference
 - `404 Not Found`: Verse not found
 - `401 Unauthorized`: Invalid or missing token
+
+#### Update Verse
+```http
+PUT /verses/:reference
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "text": "Updated verse text...",
+  "translation": "NIV"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Verse updated successfully"
+}
+```
+
+**Features**
+- Updates an existing verse's text and/or translation
+- Requires verse ownership
+- Validates that the verse exists
+- URL-encode the reference in the path
+
+**Error Responses**
+- `400 Bad Request`: Missing required fields
+- `401 Unauthorized`: Invalid or missing token
+- `404 Not Found`: Verse not found or unauthorized
 
 ### Features
 
@@ -1441,3 +1497,321 @@ All error responses follow this format:
    - Batch related requests
    - Use pagination for large datasets
    - Implement request debouncing 
+
+#### List User's Groups
+```http
+GET /groups/mine
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "groups": [
+    {
+      "id": 1,
+      "name": "My Study Group",
+      "description": "A group for studying scripture together",
+      "role": "creator",
+      "member_count": 5
+    },
+    {
+      "id": 2,
+      "name": "Youth Group",
+      "description": "Youth ministry group",
+      "role": "member",
+      "member_count": 12
+    }
+  ]
+}
+```
+
+**Features**
+- Returns all groups the authenticated user is a member of
+- Includes user's role in each group
+- Shows member count for each group
+- Groups are sorted by creation date (newest first)
+- Only returns active groups
+
+**Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+
+#### Get Invitation Details
+```http
+GET /groups/invitations/:id
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "invitation": {
+    "id": 123,
+    "group_id": 1,
+    "email": "user@example.com",
+    "invited_by": 456,
+    "expires_at": 1234567890,
+    "is_accepted": false,
+    "group_name": "My Study Group",
+    "group_description": "A group for studying scripture together",
+    "inviter_email": "leader@example.com"
+  }
+}
+```
+
+**Features**
+- Returns detailed information about a specific invitation
+- Includes group information and inviter details
+- Only returns active, unexpired invitations
+- Useful for displaying invitation details to users
+
+**Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+- `404 Not Found`: Invitation not found or expired
+
+#### Get Invitation Details by Code
+```http
+GET /groups/invitations/code/:code
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "invitation": {
+    "id": 123,
+    "group_id": 1,
+    "email": "user@example.com",
+    "invited_by": 456,
+    "expires_at": 1234567890,
+    "is_accepted": false,
+    "invitation_code": "ABC123XY",
+    "group_name": "My Study Group",
+    "group_description": "A group for studying scripture together",
+    "inviter_email": "leader@example.com"
+  }
+}
+```
+
+**Features**
+- Returns detailed information about an invitation using its code
+- Includes the invitation code in the response
+- Only returns active, unexpired invitations
+- Useful for verifying invitation codes before joining
+
+**Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+- `404 Not Found`: Invitation not found or expired
+
+#### Get Existing Invitation
+```http
+POST /groups/:id/invitations/existing
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "email": "user@example.com"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "invitation": {
+    "id": 123,
+    "code": "ABC123XY",
+    "expires_at": 1234567890,
+    "is_accepted": false
+  }
+}
+```
+
+**Response (404 Not Found)**
+```json
+{
+  "error": "No active invitation found for this email"
+}
+```
+
+**Features**
+- Checks if an active invitation exists for a specific email
+- Returns invitation details if found
+- Returns 404 if no active invitation exists
+- Useful for preventing duplicate invitations
+
+**Error Responses**
+- `400 Bad Request`: Missing email
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User lacks permission to check invitations
+- `404 Not Found`: No active invitation found
+
+#### Join Group by Invitation Code
+```http
+POST /groups/:id/join/:code
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Successfully joined group"
+}
+```
+
+**Features**
+- Accepts an invitation using the invitation code
+- Requires valid invitation code that matches user's email
+- Invitation must not be expired or already accepted
+- User becomes a member with 'member' role
+- Marks invitation as accepted
+
+**Error Responses**
+- `400 Bad Request`: Invalid invitation code or expired invitation
+- `401 Unauthorized`: Invalid or missing token
+- `404 Not Found`: Group not found
+
+## API Endpoint Summary
+
+This section provides a quick reference to all available endpoints organized by category.
+
+### Authentication Endpoints
+- `POST /auth/magic-link` - Request magic link for sign in/registration
+- `GET /auth/verify` - Verify magic link and get session token
+- `POST /auth/sign-out` - Sign out and invalidate session
+- `DELETE /auth/delete` - Delete user account
+- `POST /auth/add-verses` - Add verse set to existing user
+
+### Verse Management Endpoints
+- `GET /verses` - List user's verses
+- `POST /verses` - Add new verse
+- `PUT /verses/:reference` - Update existing verse
+- `DELETE /verses/:reference` - Delete verse
+
+### Progress Tracking Endpoints
+- `POST /progress/word` - Record word-by-word progress
+- `POST /progress/verse` - Record complete verse attempt
+- `GET /progress/mastery/:reference` - Check mastery progress
+
+### Gamification Endpoints
+- `GET /gamification/stats` - Get user statistics
+- `POST /gamification/points` - Record point event
+
+### Group Management Endpoints
+- `POST /groups/create` - Create new group
+- `GET /groups/mine` - List user's groups
+- `GET /groups/:id/leaders` - Get group leaders
+- `POST /groups/:id/leaders` - Assign group leader
+- `POST /groups/:id/invite` - Invite member to group
+- `POST /groups/:id/join` - Join group with invitation ID
+- `POST /groups/:id/join/:code` - Join group with invitation code
+- `GET /groups/:id/members` - Get group members
+- `PUT /groups/:id/members/:userId/display-name` - Update member display name
+- `GET /groups/:id/members/:userId/profile` - Get member profile
+- `PUT /groups/:id/members/:userId/privacy` - Update member privacy settings
+- `GET /groups/:id/leaderboard` - Get group leaderboard
+- `GET /groups/:id/stats` - Get group statistics
+- `GET /groups/:id/members/:userId/ranking` - Get member's group ranking
+
+### Invitation Management Endpoints
+- `GET /groups/invitations/:id` - Get invitation details by ID
+- `GET /groups/invitations/code/:code` - Get invitation details by code
+- `POST /groups/:id/invitations/existing` - Check for existing invitation
+
+## Database Schema Overview
+
+The API uses the following main database tables:
+
+### Core Tables
+- `users` - User accounts and authentication
+- `sessions` - Active user sessions
+- `magic_links` - Magic link tokens for authentication
+- `verses` - User's scripture verses
+- `word_progress` - Word-by-word progress tracking
+- `verse_attempts` - Complete verse attempt records
+- `user_stats` - User statistics and gamification data
+- `point_events` - Point event history
+
+### Group Tables
+- `groups` - Group information
+- `group_members` - Group membership and roles
+- `group_invitations` - Group invitation system
+
+### Mastery Tables
+- `mastered_verses` - Verses that have been mastered
+- `verse_streaks` - Streak tracking for verses
+
+## Development and Deployment
+
+### Environment Variables
+- `DB` - D1 database binding
+- `JWT_SECRET` - Secret for JWT tokens
+- `EMAIL_API_KEY` - Email service API key
+- `TURNSTILE_SECRET` - Cloudflare Turnstile secret
+
+### Local Development
+1. Set up Wrangler CLI
+2. Create local D1 database: `wrangler d1 create scripture-memory-dev`
+3. Run migrations: `wrangler d1 migrations apply scripture-memory-dev`
+4. Start dev server: `wrangler dev`
+
+### Production Deployment
+1. Deploy to Cloudflare Workers: `wrangler deploy`
+2. Apply production migrations: `wrangler d1 migrations apply scripture-memory-prod`
+
+### Testing
+- Use the provided test scripts in the `workers/tests/` directory
+- Test all endpoints with proper authentication
+- Verify error handling and edge cases
+- Test rate limiting and security features
+
+## Security Considerations
+
+1. **Authentication**
+   - All endpoints (except auth) require Bearer token
+   - Tokens expire after 30 days
+   - Magic links expire after 15 minutes
+   - Sessions can be invalidated server-side
+
+2. **Rate Limiting**
+   - Magic link requests: 5 per minute per email
+   - Other endpoints: 100 per minute per user
+   - Prevents abuse and spam
+
+3. **Data Protection**
+   - User data is isolated by user_id
+   - Group members can only access their group data
+   - Privacy settings control data visibility
+   - No sensitive data in URLs or logs
+
+4. **Input Validation**
+   - All inputs are validated server-side
+   - SQL injection protection via prepared statements
+   - XSS protection via proper content types
+   - File upload restrictions
+
+## Monitoring and Maintenance
+
+### Key Metrics to Monitor
+- API response times
+- Error rates by endpoint
+- Authentication success/failure rates
+- Group activity and engagement
+- Database performance
+
+### Regular Maintenance Tasks
+- Clean up expired sessions and magic links
+- Archive old point events
+- Monitor group invitation expiration
+- Update rate limiting rules as needed
+- Review and update security policies
+
+### Troubleshooting Common Issues
+1. **Authentication Errors**: Check token expiration and session validity
+2. **Rate Limiting**: Implement exponential backoff for retries
+3. **Database Errors**: Check D1 database status and connection limits
+4. **CORS Issues**: Verify origin headers and preflight requests
+5. **Group Permission Errors**: Verify user roles and group membership
+
+This API documentation should provide comprehensive guidance for developers working with the Scripture Memory application. For additional support, refer to the source code and test files in the repository. 
