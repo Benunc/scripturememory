@@ -1,25 +1,13 @@
 import { Router } from 'itty-router';
-import { Env, Verse } from '../types';
+import { Env, Verse, D1Result } from '../types';
+import { getDB, getUserId } from '../utils/db';
 
-// Point system constants
+// Points for different actions
 const POINTS = {
-  VERSE_ADDED: 10,         // Points for adding a new verse (limited to 3 per day)
-  WORD_CORRECT: 1,         // Base points per correct word
-  STREAK_MULTIPLIER: 1,    // 1x bonus per word in streak
-  MASTERY_ACHIEVED: 500,   // Big bonus for mastering a verse
+  VERSE_ADDED: 100,        // Points for adding a new verse
+  VERSE_UPDATED: 25,       // Points for updating a verse
+  VERSE_DELETED: -50,      // Points deducted for deleting a verse
   DAILY_STREAK: 50,        // Bonus for maintaining daily streak
-};
-
-// Helper to get the correct database binding
-const getDB = (env: Env) => env.DB;
-
-// Helper to get user ID from session token
-const getUserId = async (token: string, env: Env): Promise<number | null> => {
-  const session = await getDB(env).prepare(
-    'SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?'
-  ).bind(token, Date.now()).first();
-
-  return session ? session.user_id as number : null;
 };
 
 export const handleVerses = {

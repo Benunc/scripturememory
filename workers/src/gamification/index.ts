@@ -131,8 +131,7 @@ export async function updateStreak(userId: number, env: Env, eventTimestamp?: nu
 // Helper function to check and update mastery
 export async function updateMastery(userId: number, verseReference: string, env: Env): Promise<void> {
   const db = getDB(env);
-  console.log(`[updateMastery] Checking mastery for verse ${verseReference}`);
-
+  
   // Get all attempts for this verse
   const result = await db.prepare(`
     SELECT words_correct, total_words, created_at
@@ -147,10 +146,8 @@ export async function updateMastery(userId: number, verseReference: string, env:
     total_words: row.total_words as number
   }));
 
-  console.log(`[updateMastery] Found ${attempts.length} attempts`);
-
+  
   if (attempts.length < MASTERY.MIN_ATTEMPTS) {
-    console.log(`[updateMastery] Not enough attempts (${attempts.length} < ${MASTERY.MIN_ATTEMPTS})`);
     return;
   }
 
@@ -166,10 +163,8 @@ export async function updateMastery(userId: number, verseReference: string, env:
     }
   }
 
-  console.log(`[updateMastery] Found consecutive perfect attempts starting at index ${perfectAttemptsStart}`);
 
   if (perfectAttemptsStart === -1) {
-    console.log(`[updateMastery] No consecutive perfect attempts found`);
     return;
   }
 
@@ -179,10 +174,8 @@ export async function updateMastery(userId: number, verseReference: string, env:
   const totalWords = accuracyAttempts.reduce((sum, attempt) => sum + attempt.total_words, 0);
   const accuracy = totalCorrect / totalWords;
 
-  console.log(`[updateMastery] Accuracy: ${accuracy} (${totalCorrect}/${totalWords})`);
-
+  
   if (accuracy < MASTERY.MIN_ACCURACY) {
-    console.log(`[updateMastery] Accuracy too low (${accuracy} < ${MASTERY.MIN_ACCURACY})`);
     return;
   }
 
@@ -193,11 +186,8 @@ export async function updateMastery(userId: number, verseReference: string, env:
   `).bind(userId, verseReference).first();
 
   if (isMastered) {
-    console.log(`[updateMastery] Verse already mastered`);
     return;
   }
-
-  console.log(`[updateMastery] Awarding mastery!`);
 
   // Record mastery
   await db.prepare(`
@@ -233,7 +223,7 @@ export async function updateMastery(userId: number, verseReference: string, env:
     WHERE user_id = ?
   `).bind(POINTS.MASTERY_ACHIEVED, userId).run();
 
-  console.log(`[updateMastery] Mastery awarded successfully`);
+  
 }
 
 export const handleGamification = {

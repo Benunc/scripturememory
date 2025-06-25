@@ -551,7 +551,7 @@ export const handleGroups = {
 
       const url = new URL(request.url);
       const groupId = url.pathname.split('/')[2];
-      const invitationCode = url.pathname.split('/')[4]; // /groups/:id/join/:code
+      const invitationCode = url.pathname.split('/')[4]; // /groups/invitations/code/:code
 
       if (!invitationCode) {
         return new Response(JSON.stringify({ error: 'Invitation code is required' }), { 
@@ -1626,7 +1626,7 @@ export const handleGroups = {
       }
 
       const url = new URL(request.url);
-      const invitationCode = url.pathname.split('/')[3]; // /groups/invitations/code/:code
+      const invitationCode = url.pathname.split('/')[4]; // /groups/invitations/code/:code
 
       const db = getDB(env);
 
@@ -1646,12 +1646,24 @@ export const handleGroups = {
         FROM group_invitations gi
         JOIN groups g ON gi.group_id = g.id
         JOIN users u ON gi.invited_by = u.id
-        WHERE gi.invitation_code = ? AND gi.is_accepted = FALSE AND gi.expires_at > ?
+        WHERE gi.invitation_code = ? AND gi.is_accepted = 0 AND gi.expires_at > ?
       `).bind(invitationCode, Date.now()).first();
 
       if (!invitation) {
         return new Response(JSON.stringify({ error: 'Invitation not found or expired' }), { 
           status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if the authenticated user's email matches the invited email
+      const user = await db.prepare(`
+        SELECT email FROM users WHERE id = ?
+      `).bind(userId).first();
+
+      if (!user || user.email !== invitation.email) {
+        return new Response(JSON.stringify({ error: 'You are not authorized to view this invitation' }), { 
+          status: 403,
           headers: { 'Content-Type': 'application/json' }
         });
       }

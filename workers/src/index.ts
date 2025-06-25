@@ -87,11 +87,11 @@ router.get('/groups/:id/members/:userId/ranking', handleGroups.getMemberRanking)
 // Add new endpoint for listing all groups the user is a member of
 router.get('/groups/mine', handleGroups.listUserGroups);
 
-// Add new invitation details endpoint
-router.get('/groups/invitations/:id', handleGroups.getInvitationDetails);
-
-// Add new invitation details by code endpoint
+// Add new invitation details by code endpoint (more specific route first)
 router.get('/groups/invitations/code/:code', handleGroups.getInvitationDetailsByCode);
+
+// Add new invitation details endpoint (more general route second)
+router.get('/groups/invitations/:id', handleGroups.getInvitationDetails);
 
 // Add new existing invitation endpoint
 router.post('/groups/:id/invitations/existing', handleGroups.getExistingInvitation);
