@@ -39,4 +39,3 @@ prodIndex = prodIndex.replace(
 // Write the updated index.html to dist
 fs.writeFileSync(distIndexPath, prodIndex);
 
-console.log('Updated index.html with correct script and CSS paths'); 

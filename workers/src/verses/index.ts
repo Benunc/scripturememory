@@ -4,9 +4,10 @@ import { getDB, getUserId } from '../utils/db';
 
 // Points for different actions
 const POINTS = {
-  VERSE_ADDED: 100,        // Points for adding a new verse
-  VERSE_UPDATED: 25,       // Points for updating a verse
-  VERSE_DELETED: -50,      // Points deducted for deleting a verse
+  VERSE_ADDED: 10,         // Points for adding a new verse (limited to 3 per day)
+  WORD_CORRECT: 1,         // Base points per correct word
+  STREAK_MULTIPLIER: 1,    // 1x bonus per word in streak
+  MASTERY_ACHIEVED: 500,   // Big bonus for mastering a verse
   DAILY_STREAK: 50,        // Bonus for maintaining daily streak
 };
 

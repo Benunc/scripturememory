@@ -206,7 +206,6 @@ const verifyTurnstileToken = async (token: string, env: Env, request: Request): 
   }
 
   try {
-    console.log('Verifying Turnstile token...');
     const formData = new FormData();
     formData.append('secret', env.TURNSTILE_SECRET_KEY);
     formData.append('response', token);
@@ -217,7 +216,6 @@ const verifyTurnstileToken = async (token: string, env: Env, request: Request): 
     });
 
     const result = await response.json() as TurnstileResponse;
-    console.log('Turnstile verification result:', result);
     
     if (!result.success) {
       console.error('Turnstile verification failed:', result['error-codes']);
@@ -325,32 +323,26 @@ export const handleAuth = {
     const db = getDB(env);
     
     // Get the magic link
-    console.log('Looking up magic link with token:', token);
     const magicLink = await db.prepare(
       'SELECT * FROM magic_links WHERE token = ? AND expires_at > ?'
     ).bind(token, Date.now()).first();
-    console.log('Magic link lookup result:', magicLink);
+    
 
     if (!magicLink) {
-      console.log('No valid magic link found');
       return new Response('Invalid or expired token', { status: 400 });
     }
 
     // Delete the used magic link
     await db.prepare('DELETE FROM magic_links WHERE token = ?').bind(token).run();
-    console.log('Deleted used magic link');
 
     // Check if user exists
-    console.log('Checking for existing user with email:', magicLink.email);
     const existingUser = await db.prepare(
       'SELECT * FROM users WHERE LOWER(email) = LOWER(?)'
     ).bind(magicLink.email).first();
-    console.log('Existing user query result:', existingUser);
 
     let userId: number;
     
     if (!existingUser) {
-      console.log('No existing user found, creating new user');
       // Create new user
       const result = await db.prepare(
         'INSERT INTO users (email, created_at) VALUES (?, ?)'
@@ -372,13 +364,11 @@ export const handleAuth = {
       `).bind(userId, Date.now(), Date.now()).run();
 
       // Add sample verses for new users only
-      console.log('Starting to add sample verses for new user');
       const sampleVerses = getVerseSet(magicLink.verse_set as string);
 
       // Insert sample verses
       for (const verse of sampleVerses) {
-        console.log('Inserting verse:', verse.reference);
-        try {
+         try {
           await db.prepare(`
             INSERT INTO verses (
               user_id,
@@ -394,13 +384,11 @@ export const handleAuth = {
             'NIV',
             Date.now()
           ).run();
-          console.log('Successfully inserted verse:', verse.reference);
         } catch (error) {
           console.error('Error inserting verse:', verse.reference, error);
           throw error;
         }
       }
-      console.log('Finished adding sample verses');
     } else {
       userId = Number(existingUser.id);
       
@@ -532,7 +520,6 @@ export const handleAuth = {
       if (result.meta.changes === 0) {
         // Optional: Let the client know the token was already invalid.
         // A 200 OK is also fine to not reveal token status.
-        console.log(`Sign-out attempt with an invalid token: ${sessionToken}`);
       }
 
       return new Response(JSON.stringify({ success: true, message: 'Signed out successfully' }), {

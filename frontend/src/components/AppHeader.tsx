@@ -25,12 +25,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const { colorMode, toggleColorMode } = useColorMode();
 
   const renderColorToggle = () => (
-    <IconButton
-      aria-label={`Switch to ${colorMode === 'light' ? 'dark' : 'light'} mode`}
-      icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
-      onClick={toggleColorMode}
-      variant="ghost"
-    />
+    <MenuItem onClick={toggleColorMode}>
+      <HStack spacing={2} w="100%" justify="flex-end">
+        <Text>{colorMode === 'light' ? 'Dark' : 'Light'} Mode</Text>
+        {colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+      </HStack>
+    </MenuItem>
   );
 
   const renderAuthSection = () => {
@@ -45,7 +45,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             variant="ghost"
             aria-label="Menu"
           />
-          <MenuList>
+          <MenuList zIndex={9999}>
             <MenuItem>
               <VStack align="start" spacing={1}>
                 <Text fontSize="sm" color="gray.500">You are signed in as</Text>
@@ -78,20 +78,37 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
     return (
       <HStack spacing={4}>
-        {showSupport && (
-          <Button
+        <Menu placement="bottom-end">
+          <MenuButton
+            as={Button}
             variant="ghost"
-            onClick={() => navigate('/donate')}
-            colorScheme="green"
+            rightIcon={<HamburgerIcon />}
+            aria-label="Menu"
           >
-            Support Us
-          </Button>
-        )}
-        <Text>{userEmail}</Text>
-        <Avatar size="sm" name={userEmail || undefined} />
-        <Button variant="ghost" onClick={signOut}>
-          Sign Out
-        </Button>
+            <HStack spacing={2}>
+              <Avatar size="sm" name={userEmail || undefined} />
+              <Text>{userEmail}</Text>
+            </HStack>
+          </MenuButton>
+          <MenuList zIndex={9999} textAlign="right">
+            {showColorToggle && renderColorToggle()}
+            {showSupport && (
+              <MenuItem onClick={() => navigate('/donate')} justifyContent="flex-end" color="green.500" _hover={{ bg: "green.50" }}>
+                Support Us
+              </MenuItem>
+            )}
+            <MenuItem onClick={() => navigate('/points')} justifyContent="flex-end">
+              Points
+            </MenuItem>
+            <MenuItem onClick={() => navigate('/groups')} justifyContent="flex-end">
+              Groups
+            </MenuItem>
+            
+            <MenuItem onClick={signOut} justifyContent="flex-end">
+              Sign Out
+            </MenuItem>
+          </MenuList>
+        </Menu>
       </HStack>
     );
   };
@@ -107,7 +124,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </Link>
         <HStack spacing={4}>
           {renderAuthSection()}
-          {showColorToggle && renderColorToggle()}
         </HStack>
       </Flex>
     </Box>
