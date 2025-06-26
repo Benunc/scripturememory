@@ -1032,6 +1032,99 @@ fi
 # ========================================
 # END LEADERBOARD TESTS
 # ========================================
+
+# ========================================
+# MAGIC LINK PARAMETER TESTS
+# ========================================
+echo "${YELLOW}========================================${NC}"
+echo "${YELLOW}TESTING MAGIC LINK PARAMETERS${NC}"
+echo "${YELLOW}========================================${NC}"
+
+# Test 1: No parameters
+echo "${YELLOW}Test 1: Creating magic link with no parameters...${NC}"
+NO_PARAMS_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"no-params@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+check_status
+NO_PARAMS_TOKEN=$(extract_magic_token "$NO_PARAMS_RESPONSE")
+echo "${BLUE}No params token: $NO_PARAMS_TOKEN${NC}"
+
+# Test 2: Verse set only
+echo "${YELLOW}Test 2: Creating magic link with verse set only...${NC}"
+VERSE_ONLY_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"verse-only@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses"}')
+check_status
+VERSE_ONLY_TOKEN=$(extract_magic_token "$VERSE_ONLY_RESPONSE")
+echo "${BLUE}Verse only token: $VERSE_ONLY_TOKEN${NC}"
+
+# Test 3: Group code only
+echo "${YELLOW}Test 3: Creating magic link with group code only...${NC}"
+GROUP_ONLY_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"group-only@example.com","isRegistration":true,"turnstileToken":"test-token","groupCode":"test-group-123"}')
+check_status
+GROUP_ONLY_TOKEN=$(extract_magic_token "$GROUP_ONLY_RESPONSE")
+echo "${BLUE}Group only token: $GROUP_ONLY_TOKEN${NC}"
+
+# Test 4: Both verse set and group code
+echo "${YELLOW}Test 4: Creating magic link with both verse set and group code...${NC}"
+BOTH_PARAMS_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"both-params@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses","groupCode":"test-group-123"}')
+check_status
+BOTH_PARAMS_TOKEN=$(extract_magic_token "$BOTH_PARAMS_RESPONSE")
+echo "${BLUE}Both params token: $BOTH_PARAMS_TOKEN${NC}"
+
+# Test 5: Invalid group code
+echo "${YELLOW}Test 5: Creating magic link with invalid group code...${NC}"
+INVALID_GROUP_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"invalid-group@example.com","isRegistration":true,"turnstileToken":"test-token","groupCode":"invalid-group-999"}')
+check_status
+INVALID_GROUP_TOKEN=$(extract_magic_token "$INVALID_GROUP_RESPONSE")
+echo "${BLUE}Invalid group token: $INVALID_GROUP_TOKEN${NC}"
+
+# Verify all magic links work
+echo "${YELLOW}Verifying all magic links...${NC}"
+
+# Verify no params
+echo "${YELLOW}Verifying no params magic link...${NC}"
+NO_PARAMS_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$NO_PARAMS_TOKEN")
+check_status
+NO_PARAMS_SESSION=$(extract_token "$NO_PARAMS_VERIFY")
+echo "${BLUE}No params session: $NO_PARAMS_SESSION${NC}"
+
+# Verify verse only
+echo "${YELLOW}Verifying verse only magic link...${NC}"
+VERSE_ONLY_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$VERSE_ONLY_TOKEN")
+check_status
+VERSE_ONLY_SESSION=$(extract_token "$VERSE_ONLY_VERIFY")
+echo "${BLUE}Verse only session: $VERSE_ONLY_SESSION${NC}"
+
+# Verify group only
+echo "${YELLOW}Verifying group only magic link...${NC}"
+GROUP_ONLY_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$GROUP_ONLY_TOKEN")
+check_status
+GROUP_ONLY_SESSION=$(extract_token "$GROUP_ONLY_VERIFY")
+echo "${BLUE}Group only session: $GROUP_ONLY_SESSION${NC}"
+
+# Verify both params
+echo "${YELLOW}Verifying both params magic link...${NC}"
+BOTH_PARAMS_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$BOTH_PARAMS_TOKEN")
+check_status
+BOTH_PARAMS_SESSION=$(extract_token "$BOTH_PARAMS_VERIFY")
+echo "${BLUE}Both params session: $BOTH_PARAMS_SESSION${NC}"
+
+# Verify invalid group
+echo "${YELLOW}Verifying invalid group magic link...${NC}"
+INVALID_GROUP_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$INVALID_GROUP_TOKEN")
+check_status
+INVALID_GROUP_SESSION=$(extract_token "$INVALID_GROUP_VERIFY")
+echo "${BLUE}Invalid group session: $INVALID_GROUP_SESSION${NC}"
+
+echo "${GREEN}✓ All magic link parameter tests passed${NC}"
+
 USERS=(
   "test-anonymize@example.com"
   "test-anonymize2@example.com"
@@ -1039,8 +1132,16 @@ USERS=(
   "group-leader@example.com"
   "group-member@example.com"
   "group-outsider@example.com"
+  "no-params@example.com"
+  "verse-only@example.com"
+  "group-only@example.com"
+  "both-params@example.com"
+  "invalid-group@example.com"
   # Add any other test users created in this script
 )
+
+
+
 # add a question to see if the tester needs a magic link for a specific user, as before
 echo "${YELLOW}Do you want to log in as a test user before deletion? (y/n)${NC}"
 read -r LOGIN_BEFORE_DELETE
@@ -1063,6 +1164,14 @@ if [ "$LOGIN_BEFORE_DELETE" = "y" ]; then
       if [ "$OPEN_LINK_QUESTION" = "y" ]; then
         open "$MAGIC_LINK"
       fi
+      echo "${YELLOW}Continue with deletion after testing? (y/n)${NC}"
+      read -r CONTINUE_AFTER_TEST
+      if [ "$CONTINUE_AFTER_TEST" = "n" ]; then
+        echo "${BLUE}Test completed without deletion.${NC}"
+        echo "${GREEN}Test completed successfully!${NC}"
+        exit 0
+      fi
+      break
     else
       echo "${RED}Invalid selection. Please try again.${NC}"
     fi
@@ -1071,9 +1180,9 @@ fi
 
 # ask if they need to log in as a different user
 echo "${YELLOW}Do you need to log in as a different user? (y/n)${NC}"
-read -r LOGIN_BEFORE_DELETE
+read -r LOGIN_DIFFERENT_USER
 
-if [ "$LOGIN_BEFORE_DELETE" = "y" ]; then
+if [ "$LOGIN_DIFFERENT_USER" = "y" ]; then
   echo "${YELLOW}Select a user to generate a magic link for:${NC}"
   select MAGIC_LINK_EMAIL in "${USERS[@]}"; do
     if [[ -n "$MAGIC_LINK_EMAIL" ]]; then
@@ -1091,12 +1200,42 @@ if [ "$LOGIN_BEFORE_DELETE" = "y" ]; then
       if [ "$OPEN_LINK_QUESTION" = "y" ]; then
         open "$MAGIC_LINK"
       fi
-      echo "Test complete"
-      exit 0
+      echo "${YELLOW}Continue with deletion after testing? (y/n)${NC}"
+      read -r CONTINUE_AFTER_TEST
+      if [ "$CONTINUE_AFTER_TEST" = "n" ]; then
+        echo "${BLUE}Test completed without deletion.${NC}"
+        echo "${GREEN}Test completed successfully!${NC}"
+        exit 0
+      fi
+      break
     else
       echo "${RED}Invalid selection. Please try again.${NC}"
     fi
+  done
+fi
 
+# ========================================
+# USER DELETION
+# ========================================
+# ========================================
+# CONFIRMATION BEFORE DELETION
+# ========================================
+echo "${YELLOW}========================================${NC}"
+echo "${YELLOW}IMPORTANT: About to delete test-anonymize@example.com${NC}"
+echo "${YELLOW}========================================${NC}"
+echo "${RED}⚠️  WARNING: If you are currently logged in as test-anonymize@example.com,${NC}"
+echo "${RED}   please log out first, otherwise the deletion will fail!${NC}"
+echo ""
+echo "${YELLOW}Are you ready to proceed with user deletion? (y/n)${NC}"
+read -r CONFIRM_DELETION
+
+if [ "$CONFIRM_DELETION" != "y" ]; then
+    echo "${BLUE}Deletion cancelled. Test completed without deletion.${NC}"
+    echo "${GREEN}Test completed successfully!${NC}"
+    exit 0
+fi
+
+echo "${GREEN}Proceeding with user deletion...${NC}"
 # Anonymize user
 echo "${YELLOW}Anonymizing user...${NC}"
 DELETE_RESPONSE=$(curl -s -X DELETE http://localhost:8787/auth/delete \

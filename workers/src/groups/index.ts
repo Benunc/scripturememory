@@ -1691,5 +1691,53 @@ export const handleGroups = {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  },
+
+  // Get group by code (name or ID)
+  getGroupByCode: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const url = new URL(request.url);
+      const groupCode = decodeURIComponent(url.pathname.split('/')[3]); // /groups/info/:code
+
+      if (!groupCode) {
+        return new Response(JSON.stringify({ error: 'Group code is required' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Get group by code (name) or ID
+      const group = await db.prepare(`
+        SELECT id, name, description, created_at
+        FROM groups 
+        WHERE name = ? OR id = ?
+      `).bind(groupCode, groupCode).first();
+
+      if (!group) {
+        return new Response(JSON.stringify({ error: 'Group not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response(JSON.stringify({ 
+        group: {
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          created_at: group.created_at
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting group by code:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 }; 

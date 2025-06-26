@@ -96,6 +96,9 @@ router.get('/groups/invitations/:id', handleGroups.getInvitationDetails);
 // Add new existing invitation endpoint
 router.post('/groups/:id/invitations/existing', handleGroups.getExistingInvitation);
 
+// Add new group lookup by code endpoint
+router.get('/groups/info/:code', handleGroups.getGroupByCode);
+
 // Export the fetch handler
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

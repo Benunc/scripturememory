@@ -232,11 +232,12 @@ export const handleAuth = {
   // Send magic link for sign in
   sendMagicLink: async (request: Request, env: Env): Promise<Response> => {
     try {
-      const { email, isRegistration, turnstileToken, verseSet } = await request.json() as { 
+      const { email, isRegistration, turnstileToken, verseSet, groupCode } = await request.json() as { 
         email: string; 
         isRegistration: boolean;
         turnstileToken: string;
         verseSet?: string;
+        groupCode?: string;
       };
 
       if (!email) {
@@ -288,8 +289,8 @@ export const handleAuth = {
 
       // Store in D1
       await db.prepare(
-        'INSERT INTO magic_links (token, email, expires_at, verse_set) VALUES (?, ?, ?, ?)'
-      ).bind(token, email, expiresAt.toISOString(), verseSet || null).run();
+        'INSERT INTO magic_links (token, email, expires_at, verse_set, group_code) VALUES (?, ?, ?, ?, ?)'
+      ).bind(token, email, expiresAt.toISOString(), verseSet || null, groupCode || null).run();
 
       // Send email
       await sendMagicLinkEmail(email, `${request.headers.get('origin')}/auth/verify?token=${token}`, env);
@@ -389,6 +390,36 @@ export const handleAuth = {
           throw error;
         }
       }
+
+      // Add user to group if group_code is provided
+      if (magicLink.group_code) {
+        try {
+          // Get group by name or ID
+          const group = await db.prepare(`
+            SELECT id, name FROM groups 
+            WHERE name = ? OR id = ?
+          `).bind(magicLink.group_code, magicLink.group_code).first();
+
+          if (group) {
+            // Check if user is already a member
+            const existingMember = await db.prepare(`
+              SELECT id FROM group_members 
+              WHERE group_id = ? AND user_id = ?
+            `).bind(group.id, userId).first();
+
+            if (!existingMember) {
+              // Add user to group
+              await db.prepare(`
+                INSERT INTO group_members (group_id, user_id, joined_at)
+                VALUES (?, ?, ?)
+              `).bind(group.id, userId, Date.now()).run();
+            }
+          }
+        } catch (error) {
+          console.error('Error adding user to group:', error);
+          // Don't fail the entire signup if group joining fails
+        }
+      }
     } else {
       userId = Number(existingUser.id);
       
@@ -473,6 +504,36 @@ export const handleAuth = {
             created_at
           ) VALUES (?, 0, 1, 1, 0, 0, ?, ?)
         `).bind(userId, Date.now(), Date.now()).run();
+      }
+    }
+
+    // Add user to group if group_code is provided (for existing users)
+    if (magicLink.group_code) {
+      try {
+        // Get group by name or ID
+        const group = await db.prepare(`
+          SELECT id, name FROM groups 
+          WHERE name = ? OR id = ?
+        `).bind(magicLink.group_code, magicLink.group_code).first();
+
+        if (group) {
+          // Check if user is already a member
+          const existingMember = await db.prepare(`
+            SELECT id FROM group_members 
+            WHERE group_id = ? AND user_id = ?
+          `).bind(group.id, userId).first();
+
+          if (!existingMember) {
+            // Add user to group
+            await db.prepare(`
+              INSERT INTO group_members (group_id, user_id, joined_at)
+              VALUES (?, ?, ?)
+            `).bind(group.id, userId, Date.now()).run();
+          }
+        }
+      } catch (error) {
+        console.error('Error adding existing user to group:', error);
+        // Don't fail the entire login if group joining fails
       }
     }
 
