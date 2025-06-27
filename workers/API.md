@@ -88,7 +88,8 @@ Content-Type: application/json
   "email": "user@example.com",
   "isRegistration": false,
   "turnstileToken": "token-from-cloudflare-turnstile",
-  "verseSet": "optional-verse-set-code"
+  "verseSet": "optional-verse-set-code",
+  "groupCode": "optional-group-code"
 }
 ```
 
@@ -112,6 +113,14 @@ Content-Type: application/json
 - If provided, the verse set will be automatically added to new user accounts during registration
 - Available verse sets: `default`, `childrens_verses`, `gpc_youth`
 - If no verse set is specified, the `default` set is used for new users
+
+**Group Code Feature**
+- Optional `groupCode` parameter can be included to automatically join a group upon authentication
+- The `groupCode` can be either a group name or group ID
+- If provided, the user will be automatically added to the specified group during registration or login
+- Works for both new user registration and existing user login
+- If the group doesn't exist, the authentication will still succeed but no group joining will occur
+- If the user is already a member of the group, no duplicate membership is created
 
 #### Verify Magic Link
 ```http
@@ -1537,6 +1546,46 @@ Authorization: Bearer <token>
 **Error Responses**
 - `401 Unauthorized`: Invalid or missing token
 
+#### Get Group by Code
+```http
+GET /groups/info/:code
+```
+
+**Response (200 OK)**
+```json
+{
+  "group": {
+    "id": 1,
+    "name": "My Study Group",
+    "description": "A group for studying scripture together",
+    "created_at": 1234567890
+  }
+}
+```
+
+**Response (404 Not Found)**
+```json
+{
+  "error": "Group not found"
+}
+```
+
+**Features**
+- Retrieves group information by group code (name or ID)
+- No authentication required - public endpoint
+- Supports both group names and numeric IDs
+- Returns basic group information without member details
+- Useful for verifying group existence before joining
+- URL-encoded group codes are automatically decoded
+
+**Parameters**
+- `:code` - Group name or group ID (URL-encoded if needed)
+
+**Error Responses**
+- `400 Bad Request`: Missing group code
+- `404 Not Found`: Group not found
+- `500 Internal Server Error`: Server error
+
 #### Get Invitation Details
 ```http
 GET /groups/invitations/:id
@@ -1701,6 +1750,7 @@ This section provides a quick reference to all available endpoints organized by 
 ### Group Management Endpoints
 - `POST /groups/create` - Create new group
 - `GET /groups/mine` - List user's groups
+- `GET /groups/info/:code` - Get group information by code (name or ID)
 - `GET /groups/:id/leaders` - Get group leaders
 - `POST /groups/:id/leaders` - Assign group leader
 - `POST /groups/:id/invite` - Invite member to group
@@ -1726,7 +1776,7 @@ The API uses the following main database tables:
 ### Core Tables
 - `users` - User accounts and authentication
 - `sessions` - Active user sessions
-- `magic_links` - Magic link tokens for authentication
+- `magic_links` - Magic link tokens for authentication (includes verse_set and group_code for automatic setup)
 - `verses` - User's scripture verses
 - `word_progress` - Word-by-word progress tracking
 - `verse_attempts` - Complete verse attempt records
