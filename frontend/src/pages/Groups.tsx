@@ -56,6 +56,8 @@ interface Group {
   member_count: number;
   role: 'creator' | 'leader' | 'member';
   user_id?: number;
+  creator_email?: string;
+  created_at?: number;
 }
 
 interface CreateGroupData {
@@ -69,6 +71,11 @@ const Groups: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [canCreateGroup, setCanCreateGroup] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
+  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [selectedVerseSet, setSelectedVerseSet] = useState<string>('');
+  const [assigningUser, setAssigningUser] = useState(false);
+  const [assigningVerseSet, setAssigningVerseSet] = useState(false);
   
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [createForm, setCreateForm] = useState<CreateGroupData>({
@@ -87,6 +94,13 @@ const Groups: React.FC = () => {
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
+  
+  // Super admin state
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [allGroups, setAllGroups] = useState<Group[]>([]);
+  const [activeTab, setActiveTab] = useState(0);
+  const [deletingGroup, setDeletingGroup] = useState<number | null>(null);
+  const [removingMember, setRemovingMember] = useState<{groupId: number, userId: number} | null>(null);
 
   const navigate = useNavigate();
   const toast = useToast();
@@ -112,24 +126,50 @@ const Groups: React.FC = () => {
     }
   };
 
-  // Check if user can create groups (100+ points or 5+ verses mastered)
+  // Check if user can create groups (permission-based)
   useEffect(() => {
     const checkCreatePermission = async () => {
       if (!isAuthenticated || !token) return;
       
       try {
-        const response = await fetch(`${getApiUrl()}/gamification/stats`, {
+        // Check if user has create_groups permission
+        const response = await fetch(`${getApiUrl()}/groups/can-create`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (response.ok) {
-          const stats = await response.json();
-          const hasEnoughPoints = stats.total_points >= 5000;
-          const hasEnoughVerses = stats.verses_mastered >= 5;
-          setCanCreateGroup(hasEnoughPoints || hasEnoughVerses);
+          const data = await response.json();
+          setCanCreateGroup(data.canCreate);
+        } else {
+          // Fallback: check gamification stats for backward compatibility
+          const statsResponse = await fetch(`${getApiUrl()}/gamification/stats`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (statsResponse.ok) {
+            const stats = await statsResponse.json();
+            const hasEnoughPoints = stats.total_points >= 5000;
+            const hasEnoughVerses = stats.verses_mastered >= 5;
+            setCanCreateGroup(hasEnoughPoints || hasEnoughVerses);
+          }
         }
       } catch (error) {
         console.error('Error checking create permission:', error);
+        // Fallback: check gamification stats
+        try {
+          const statsResponse = await fetch(`${getApiUrl()}/gamification/stats`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (statsResponse.ok) {
+            const stats = await statsResponse.json();
+            const hasEnoughPoints = stats.total_points >= 5000;
+            const hasEnoughVerses = stats.verses_mastered >= 5;
+            setCanCreateGroup(hasEnoughPoints || hasEnoughVerses);
+          }
+        } catch (fallbackError) {
+          console.error('Error checking gamification stats:', fallbackError);
+        }
       }
     };
 
@@ -169,6 +209,41 @@ const Groups: React.FC = () => {
     };
 
     loadGroups();
+  }, [isAuthenticated, token]);
+
+  // Check super admin status and load all groups for super admins
+  useEffect(() => {
+    const checkSuperAdminAndLoadAllGroups = async () => {
+      if (!isAuthenticated || !token) return;
+      
+      try {
+        // Check if user has super admin privileges
+        const response = await fetch(`${getApiUrl()}/admin/check-super-admin`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setIsSuperAdmin(data.isSuperAdmin);
+          
+          // If super admin, load all groups
+          if (data.isSuperAdmin) {
+            const allGroupsResponse = await fetch(`${getApiUrl()}/admin/groups`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (allGroupsResponse.ok) {
+              const allGroupsData = await allGroupsResponse.json();
+              setAllGroups(allGroupsData.groups || []);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking super admin status:', error);
+      }
+    };
+
+    checkSuperAdminAndLoadAllGroups();
   }, [isAuthenticated, token]);
 
   // Load profile settings when groups are loaded
@@ -376,6 +451,123 @@ const Groups: React.FC = () => {
     }
   };
 
+  // Super admin functions
+  const handleDeleteGroup = async (groupId: number) => {
+    if (!isAuthenticated || !token) return;
+    
+    try {
+      setDeletingGroup(groupId);
+      
+      const response = await fetch(`${getApiUrl()}/admin/groups/${groupId}/delete`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast({
+          title: 'Success',
+          description: result.message || 'Group deleted successfully',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+        
+        // Refresh groups lists
+        const groupsResponse = await fetch(`${getApiUrl()}/groups/mine`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (groupsResponse.ok) {
+          const groupsData = await groupsResponse.json();
+          setGroups(groupsData.groups || []);
+        }
+        
+        const allGroupsResponse = await fetch(`${getApiUrl()}/admin/groups`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (allGroupsResponse.ok) {
+          const allGroupsData = await allGroupsResponse.json();
+          setAllGroups(allGroupsData.groups || []);
+        }
+      } else {
+        const error = await response.json();
+        toast({
+          title: 'Error',
+          description: error.error || 'Failed to delete group',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete group',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setDeletingGroup(null);
+    }
+  };
+
+  const handleRemoveMember = async (groupId: number, memberId: number) => {
+    if (!isAuthenticated || !token) return;
+    
+    try {
+      setRemovingMember({ groupId, userId: memberId });
+      
+      const response = await fetch(`${getApiUrl()}/admin/groups/${groupId}/members/${memberId}/remove`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast({
+          title: 'Success',
+          description: result.message || 'Member removed successfully',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+        
+        // Refresh all groups list
+        const allGroupsResponse = await fetch(`${getApiUrl()}/admin/groups`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (allGroupsResponse.ok) {
+          const allGroupsData = await allGroupsResponse.json();
+          setAllGroups(allGroupsData.groups || []);
+        }
+      } else {
+        const error = await response.json();
+        toast({
+          title: 'Error',
+          description: error.error || 'Failed to remove member',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to remove member',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setRemovingMember(null);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <Container maxW="container.md" py={8}>
@@ -403,18 +595,21 @@ const Groups: React.FC = () => {
             <VStack align="start" spacing={2}>
               <Heading size="lg">Groups</Heading>
               <Text align="left" color="gray.500" fontSize={{ base: "sm", md: "md" }}>
-                Groups are a way to challenge yourself and others to memorize the Bible together. Users who have amassed at least 5000 points and mastered 5 verses can create a group.
+                Groups are a way to challenge yourself and others to memorize the Bible together. Users with group creation permissions can create new groups.
               </Text>
             </VStack>
 
             {/* Tabs */}
-            <Tabs>
+            <Tabs index={activeTab} onChange={setActiveTab}>
               <TabList overflowX="auto" css={{
                 '&::-webkit-scrollbar': { display: 'none' },
                 scrollbarWidth: 'none',
                 msOverflowStyle: 'none'
               }}>
                 <Tab whiteSpace="nowrap">My Groups</Tab>
+                {isSuperAdmin && (
+                  <Tab whiteSpace="nowrap">All Groups</Tab>
+                )}
                 <Tab whiteSpace="nowrap">Join Group</Tab>
                 <Tab whiteSpace="nowrap">Profile Settings</Tab>
               </TabList>
@@ -431,7 +626,7 @@ const Groups: React.FC = () => {
                             <VStack align="start" spacing={2}>
                               <Heading size="md">Create New Group</Heading>
                               <Text fontSize="sm" color="gray.600">
-                                You've proven your commitment! Start a new scripture study group
+                                You have permission to create groups! Start a new scripture study group
                               </Text>
                             </VStack>
                             <Button 
@@ -519,6 +714,94 @@ const Groups: React.FC = () => {
                     )}
                   </VStack>
                 </TabPanel>
+
+                {/* All Groups Tab - Super Admin Only */}
+                {isSuperAdmin && (
+                  <TabPanel px={{ base: 0, md: 4 }}>
+                    <VStack spacing={6} align="stretch">
+                      <Card>
+                        <CardHeader>
+                          <Heading size="md">All Groups (Super Admin View)</Heading>
+                        </CardHeader>
+                        <CardBody>
+                          <Text color="gray.600" fontSize={{ base: "sm", md: "md" }}>
+                            Manage all groups in the system. You can delete groups and remove members.
+                          </Text>
+                        </CardBody>
+                      </Card>
+
+                      {/* All Groups List */}
+                      {allGroups.length === 0 ? (
+                        <Card>
+                          <CardBody>
+                            <VStack spacing={4} textAlign="center">
+                              <Text fontSize="lg" fontWeight="medium">
+                                No groups found
+                              </Text>
+                              <Text color="gray.600">
+                                There are no active groups in the system.
+                              </Text>
+                            </VStack>
+                          </CardBody>
+                        </Card>
+                      ) : (
+                        <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={{ base: 3, md: 6 }}>
+                          {allGroups.map((group) => (
+                            <Card key={group.id} _hover={{ shadow: 'md' }} transition="shadow 0.2s">
+                              <CardHeader pb={2}>
+                                <VStack align="start" spacing={2}>
+                                  <Heading size="md" fontSize={{ base: "lg", md: "xl" }}>{group.name}</Heading>
+                                  {group.description && (
+                                    <Text fontSize="sm" color="gray.600" noOfLines={2}>
+                                      {group.description}
+                                    </Text>
+                                  )}
+                                </VStack>
+                              </CardHeader>
+                              <CardBody pt={0}>
+                                <VStack spacing={4} align="stretch">
+                                  <Flex justify="space-between" align="center" wrap="wrap" gap={2}>
+                                    <Text fontSize="sm" color="gray.500">
+                                      Created by: {group.creator_email}
+                                    </Text>
+                                  </Flex>
+                                  <Flex justify="space-between" align="center" direction={{ base: "column", sm: "row" }} gap={3}>
+                                    <Text fontSize="sm" color="gray.500">
+                                      {group.member_count} {group.member_count === 1 ? 'member' : 'members'}
+                                    </Text>
+                                    <Text fontSize="sm" color="gray.500">
+                                      {group.created_at ? new Date(group.created_at).toLocaleDateString() : 'Unknown date'}
+                                    </Text>
+                                  </Flex>
+                                  <Flex justify="space-between" align="center" direction={{ base: "column", sm: "row" }} gap={3}>
+                                    <Button 
+                                      size="sm" 
+                                      colorScheme="blue" 
+                                      onClick={() => navigate(`/groups/${group.id}`)}
+                                      width={{ base: "full", sm: "auto" }}
+                                    >
+                                      View Group
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      colorScheme="red" 
+                                      onClick={() => handleDeleteGroup(group.id)}
+                                      isLoading={deletingGroup === group.id}
+                                      loadingText="Deleting..."
+                                      width={{ base: "full", sm: "auto" }}
+                                    >
+                                      Delete Group
+                                    </Button>
+                                  </Flex>
+                                </VStack>
+                              </CardBody>
+                            </Card>
+                          ))}
+                        </SimpleGrid>
+                      )}
+                    </VStack>
+                  </TabPanel>
+                )}
 
                 {/* Join Group Tab */}
                 <TabPanel px={{ base: 0, md: 4 }}>

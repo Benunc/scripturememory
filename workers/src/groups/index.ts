@@ -1,5 +1,6 @@
 import { Env } from '../types';
 import { getDB, getUserId } from '../utils/db';
+import { canCreateGroups } from '../utils/admin';
 
 interface CreateGroupRequest {
   name: string;
@@ -7,6 +8,10 @@ interface CreateGroupRequest {
 }
 
 interface AssignLeaderRequest {
+  email: string;
+}
+
+interface DemoteLeaderRequest {
   email: string;
 }
 
@@ -110,6 +115,17 @@ export const handleGroups = {
         });
       }
 
+      // Check if user can create groups (permission OR gamification requirements)
+      const canCreate = await canCreateGroups(userId, env);
+      if (!canCreate) {
+        return new Response(JSON.stringify({ 
+          error: 'You need permission to create groups. Contact an administrator or earn 5,000+ points or master 5+ verses.'
+        }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       const { name, description } = await request.json() as CreateGroupRequest;
       
       // Validation
@@ -173,8 +189,47 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating group:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Check if user can create groups
+  canCreate: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if user can create groups (permission OR gamification requirements)
+      const canCreate = await canCreateGroups(userId, env);
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        canCreate: canCreate
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      console.error('Error checking create permission:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
         headers: { 'Content-Type': 'application/json' }
@@ -271,17 +326,25 @@ export const handleGroups = {
 
       const db = getDB(env);
 
-      // Check if current user can assign leaders
-      const canAssign = await db.prepare(`
-        SELECT role FROM group_members 
-        WHERE group_id = ? AND user_id = ? AND role IN ('leader', 'creator')
-      `).bind(groupId, userId).first();
+      // Check if user is super admin
+      const isSuperAdmin = await db.prepare(`
+        SELECT 1 FROM super_admins 
+        WHERE user_id = ? AND is_active = TRUE
+      `).bind(userId).first();
 
-      if (!canAssign) {
-        return new Response(JSON.stringify({ error: 'You do not have permission to assign leaders' }), { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
+      // If not super admin, check if user can assign leaders
+      if (!isSuperAdmin) {
+        const canAssign = await db.prepare(`
+          SELECT role FROM group_members 
+          WHERE group_id = ? AND user_id = ? AND role IN ('leader', 'creator')
+        `).bind(groupId, userId).first();
+
+        if (!canAssign) {
+          return new Response(JSON.stringify({ error: 'You do not have permission to assign leaders' }), { 
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
       }
 
       // Find user by email
@@ -302,17 +365,37 @@ export const handleGroups = {
       `).bind(groupId, targetUser.id).first();
 
       if (existingLeader) {
-        return new Response(JSON.stringify({ error: 'User is already a leader' }), { 
+        return new Response(JSON.stringify({ error: 'User is already a leader or creator' }), { 
           status: 400,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      // Add leader
-      await db.prepare(`
-        INSERT INTO group_members (group_id, user_id, role, joined_at)
-        VALUES (?, ?, 'leader', ?)
-      `).bind(groupId, targetUser.id, Date.now()).run();
+      // Check if user is a member of the group
+      const existingMember = await db.prepare(`
+        SELECT 1, is_active FROM group_members WHERE group_id = ? AND user_id = ?
+      `).bind(groupId, targetUser.id).first();
+
+      if (existingMember) {
+        if (existingMember.is_active) {
+          // Update existing member to leader
+          await db.prepare(`
+            UPDATE group_members SET role = 'leader' WHERE group_id = ? AND user_id = ?
+          `).bind(groupId, targetUser.id).run();
+        } else {
+          // Reactivate soft-deleted member as leader
+          await db.prepare(`
+            UPDATE group_members SET is_active = 1, role = 'leader', joined_at = ? 
+            WHERE group_id = ? AND user_id = ?
+          `).bind(Date.now(), groupId, targetUser.id).run();
+        }
+      } else {
+        // Add new member as leader
+        await db.prepare(`
+          INSERT INTO group_members (group_id, user_id, role, joined_at)
+          VALUES (?, ?, 'leader', ?)
+        `).bind(groupId, targetUser.id, Date.now()).run();
+      }
 
       return new Response(JSON.stringify({ 
         success: true,
@@ -322,6 +405,106 @@ export const handleGroups = {
       });
     } catch (error) {
       console.error('Error assigning leader:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Demote a leader to regular member
+  demoteLeader: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const groupId = url.pathname.split('/')[2];
+
+      const { email } = await request.json() as DemoteLeaderRequest;
+
+      if (!email || email.trim().length === 0) {
+        return new Response(JSON.stringify({ error: 'Email is required' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Check if user is super admin
+      const isSuperAdmin = await db.prepare(`
+        SELECT 1 FROM super_admins 
+        WHERE user_id = ? AND is_active = TRUE
+      `).bind(userId).first();
+
+      // If not super admin, check if user can demote leaders
+      if (!isSuperAdmin) {
+        const canDemote = await db.prepare(`
+          SELECT role FROM group_members 
+          WHERE group_id = ? AND user_id = ? AND role IN ('leader', 'creator')
+        `).bind(groupId, userId).first();
+
+        if (!canDemote) {
+          return new Response(JSON.stringify({ error: 'You do not have permission to demote leaders' }), { 
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      // Find user by email
+      const targetUser = await db.prepare(`
+        SELECT id FROM users WHERE email = ?
+      `).bind(email.trim()).first();
+
+      if (!targetUser) {
+        return new Response(JSON.stringify({ error: 'User not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if user is a leader (not creator)
+      const existingLeader = await db.prepare(`
+        SELECT role FROM group_members WHERE group_id = ? AND user_id = ? AND role = 'leader'
+      `).bind(groupId, targetUser.id).first();
+
+      if (!existingLeader) {
+        return new Response(JSON.stringify({ error: 'User is not a leader or is a creator (creators cannot be demoted)' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Demote leader to member
+      await db.prepare(`
+        UPDATE group_members SET role = 'member' WHERE group_id = ? AND user_id = ?
+      `).bind(groupId, targetUser.id).run();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: 'Leader demoted to member successfully'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error demoting leader:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
         headers: { 'Content-Type': 'application/json' }
@@ -389,16 +572,31 @@ export const handleGroups = {
         });
       }
 
-      // Check if user is already a member
+      // Check if user is already a member (including soft-deleted records)
       const existingMember = await db.prepare(`
-        SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?
+        SELECT 1, is_active FROM group_members WHERE group_id = ? AND user_id = ?
       `).bind(groupId, existingUser.id).first();
 
       if (existingMember) {
-        return new Response(JSON.stringify({ error: 'User is already a member of this group' }), { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        if (existingMember.is_active) {
+          return new Response(JSON.stringify({ error: 'User is already a member of this group' }), { 
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else {
+          // Reactivate the soft-deleted member
+          await db.prepare(`
+            UPDATE group_members SET is_active = 1, role = 'member', joined_at = ? 
+            WHERE group_id = ? AND user_id = ?
+          `).bind(Date.now(), groupId, existingUser.id).run();
+
+          return new Response(JSON.stringify({ 
+            success: true,
+            message: `User ${existingUser.email} has been reactivated in group ${groupId}`
+          }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
       }
 
       // Check if invitation already exists
@@ -639,6 +837,20 @@ export const handleGroups = {
 
       const db = getDB(env);
 
+      // Check if requesting user is an admin (leader/creator) or super admin
+      const userRole = await db.prepare(`
+        SELECT role FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND is_active = TRUE
+      `).bind(groupId, userId).first();
+
+      const isSuperAdmin = await db.prepare(`
+        SELECT 1 FROM super_admins 
+        WHERE user_id = ? AND is_active = TRUE
+      `).bind(userId).first();
+
+      const isAdmin = userRole && ['leader', 'creator'].includes(userRole.role);
+      const hasAdminPrivileges = isAdmin || isSuperAdmin;
+
       // Get all members with their roles
       const members = await db.prepare(`
         SELECT 
@@ -659,8 +871,8 @@ export const handleGroups = {
         user_id: member.user_id,
         role: member.role,
         joined_at: member.joined_at,
-        member_email: member.is_public ? member.member_email : 'Anonymous',
-        display_name: member.is_public ? ((member.display_name && member.display_name !== 'null') ? member.display_name : 'Anonymous') : 'Anonymous'
+        member_email: hasAdminPrivileges ? member.member_email : (member.is_public ? member.member_email : 'Anonymous'),
+        display_name: hasAdminPrivileges ? member.member_email : (member.is_public ? ((member.display_name && member.display_name !== 'null') ? member.display_name : 'Anonymous') : 'Anonymous')
       }));
 
       return new Response(JSON.stringify({ 
@@ -994,12 +1206,27 @@ export const handleGroups = {
         WHERE group_id = ? AND user_id = ? AND is_active = TRUE
       `).bind(groupId, userId).first();
 
-      if (!isMember) {
+      // Check if user is super admin
+      const isSuperAdmin = await db.prepare(`
+        SELECT 1 FROM super_admins 
+        WHERE user_id = ? AND is_active = TRUE
+      `).bind(userId).first();
+
+      if (!isMember && !isSuperAdmin) {
         return new Response(JSON.stringify({ error: 'You must be a member of this group to view the leaderboard' }), { 
           status: 403,
           headers: { 'Content-Type': 'application/json' }
         });
       }
+
+      // Check if user is an admin (leader/creator) of this group
+      const userRole = await db.prepare(`
+        SELECT role FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND is_active = TRUE
+      `).bind(groupId, userId).first();
+
+      const isAdmin = userRole && ['leader', 'creator'].includes(userRole.role);
+      const hasAdminPrivileges = isAdmin || isSuperAdmin;
 
       // Build the leaderboard query based on metric and timeframe
       let orderBy = '';
@@ -1047,11 +1274,13 @@ export const handleGroups = {
           gm.user_id,
           gm.display_name,
           gm.is_public,
+          u.email as member_email,
           us.total_points,
           us.verses_mastered,
           us.current_streak,
           us.longest_streak
         FROM group_members gm
+        LEFT JOIN users u ON gm.user_id = u.id
         LEFT JOIN user_stats us ON gm.user_id = us.user_id
         WHERE gm.group_id = ? AND gm.is_active = TRUE ${timeframeFilter}
         ORDER BY ${orderBy}
@@ -1082,22 +1311,22 @@ export const handleGroups = {
         }
 
         // Handle ties (same rank for same values)
-        if (currentValue !== lastValue) {
+        if (Number(currentValue) !== Number(lastValue)) {
           currentRank = processedLeaderboard.length + 1;
         }
 
         processedLeaderboard.push({
-          rank: currentRank,
-          user_id: entry.user_id,
-          display_name: entry.is_public ? ((entry.display_name && entry.display_name !== 'null') ? entry.display_name : 'Anonymous') : 'Anonymous',
-          points: entry.total_points || 0,
-          verses_mastered: entry.verses_mastered || 0,
-          current_streak: entry.current_streak || 0,
-          longest_streak: entry.longest_streak || 0,
-          is_public: entry.is_public
+          rank: Number(currentRank) || 0,
+          user_id: Number(entry.user_id) || 0,
+          display_name: hasAdminPrivileges ? (entry.member_email || 'Anonymous') : (entry.is_public ? (typeof entry.display_name === 'string' && entry.display_name !== 'null' ? entry.display_name : 'Anonymous') : 'Anonymous'),
+          points: Number(entry.total_points) || 0,
+          verses_mastered: Number(entry.verses_mastered) || 0,
+          current_streak: Number(entry.current_streak) || 0,
+          longest_streak: Number(entry.longest_streak) || 0,
+          is_public: !!entry.is_public
         });
 
-        lastValue = currentValue;
+        lastValue = Number(currentValue);
       }
 
       // Get metadata
@@ -1161,7 +1390,13 @@ export const handleGroups = {
         WHERE group_id = ? AND user_id = ? AND is_active = TRUE
       `).bind(groupId, userId).first();
 
-      if (!isMember) {
+      // Check if user is super admin
+      const isSuperAdmin = await db.prepare(`
+        SELECT 1 FROM super_admins 
+        WHERE user_id = ? AND is_active = TRUE
+      `).bind(userId).first();
+
+      if (!isMember && !isSuperAdmin) {
         return new Response(JSON.stringify({ error: 'You must be a member of this group to view group stats' }), { 
           status: 403,
           headers: { 'Content-Type': 'application/json' }
@@ -1376,19 +1611,26 @@ export const handleGroups = {
         }
       }
 
+      let nextRankPoints = nextRank && typeof (nextRank as any).points_needed !== 'undefined' ? Number((nextRank as any).points_needed) : 0;
+      let targetPoints = targetData && typeof (targetData as any).total_points !== 'undefined' ? Number((targetData as any).total_points) : 0;
+      let targetDisplayName = targetData && typeof (targetData as any).display_name !== 'undefined' ? String((targetData as any).display_name) : 'Anonymous';
+      let targetVersesMastered = targetData && typeof (targetData as any).verses_mastered !== 'undefined' ? Number((targetData as any).verses_mastered) : 0;
+      let targetCurrentStreak = targetData && typeof (targetData as any).current_streak !== 'undefined' ? Number((targetData as any).current_streak) : 0;
+      let targetLongestStreak = targetData && typeof (targetData as any).longest_streak !== 'undefined' ? Number((targetData as any).longest_streak) : 0;
+
       const ranking: MemberRanking = {
         user_id: targetData.user_id,
-        display_name: targetData.display_name || 'Anonymous',
+        display_name: targetDisplayName,
         rank: targetRank,
         total_members: totalMembers,
         percentile,
         metrics: {
-          points: targetData.total_points || 0,
-          verses_mastered: targetData.verses_mastered || 0,
-          current_streak: targetData.current_streak || 0,
-          longest_streak: targetData.longest_streak || 0
+          points: targetPoints,
+          verses_mastered: targetVersesMastered,
+          current_streak: targetCurrentStreak,
+          longest_streak: targetLongestStreak
         },
-        next_rank: nextRank
+        next_rank: nextRank ? { rank: Number(nextRank.rank) || 0, points_needed: Number(nextRank.points_needed) || 0 } : undefined
       };
 
       return new Response(JSON.stringify({ 
@@ -1734,6 +1976,132 @@ export const handleGroups = {
       });
     } catch (error) {
       console.error('Error getting group by code:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Directly add user to group (admin function)
+  addUserToGroup: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const groupId = parseInt(url.pathname.split('/')[2]);
+      
+      if (isNaN(groupId)) {
+        return new Response(JSON.stringify({ error: 'Invalid group ID' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const { targetUserId } = await request.json() as { targetUserId: number };
+
+      const db = getDB(env);
+
+      // Check if group exists
+      const group = await db.prepare(`
+        SELECT id, name FROM groups WHERE id = ? AND is_active = 1
+      `).bind(groupId).first();
+
+      if (!group) {
+        return new Response(JSON.stringify({ error: 'Group not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if current user is a leader or creator of this group
+      const userRole = await db.prepare(`
+        SELECT role FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND is_active = 1
+      `).bind(groupId, userId).first();
+
+      // Check if user is super admin
+      const isSuperAdmin = await db.prepare(`
+        SELECT 1 FROM super_admins 
+        WHERE user_id = ? AND is_active = TRUE
+      `).bind(userId).first();
+
+      if ((!userRole || !['leader', 'creator'].includes(userRole.role)) && !isSuperAdmin) {
+        return new Response(JSON.stringify({ error: 'You must be a leader or creator of this group, or a super admin, to add members' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if target user exists
+      const targetUser = await db.prepare(`
+        SELECT id, email FROM users WHERE id = ?
+      `).bind(targetUserId).first();
+
+      if (!targetUser) {
+        return new Response(JSON.stringify({ error: 'Target user not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if user is already a member (including soft-deleted records)
+      const existingMember = await db.prepare(`
+        SELECT 1, is_active FROM group_members WHERE group_id = ? AND user_id = ?
+      `).bind(groupId, targetUserId).first();
+
+      if (existingMember) {
+        if (existingMember.is_active) {
+          return new Response(JSON.stringify({ error: 'User is already a member of this group' }), { 
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else {
+          // Reactivate the soft-deleted member
+          await db.prepare(`
+            UPDATE group_members SET is_active = 1, role = 'member', joined_at = ? 
+            WHERE group_id = ? AND user_id = ?
+          `).bind(Date.now(), groupId, targetUserId).run();
+
+          return new Response(JSON.stringify({ 
+            success: true,
+            message: `User ${targetUser.email} has been reactivated in group ${group.name}`
+          }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      // Add user to group as a member
+      await db.prepare(`
+        INSERT INTO group_members (group_id, user_id, role, joined_at)
+        VALUES (?, ?, 'member', ?)
+      `).bind(groupId, targetUserId, Date.now()).run();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: `User ${targetUser.email} has been added to group ${group.name}`
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      console.error('Error adding user to group:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
         headers: { 'Content-Type': 'application/json' }

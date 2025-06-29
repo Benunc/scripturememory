@@ -5,6 +5,7 @@ import { handleVerses } from './verses';
 import { handleProgress } from './progress';
 import { handleGamification } from './gamification';
 import { handleGroups } from './groups';
+import { handleAdmin } from './admin';
 
 // Create a new router
 const router = Router();
@@ -57,8 +58,9 @@ router.post('/auth/add-verses', handleAuth.addVerseSet);
 // Verse routes
 router.get('/verses', handleVerses.getVerses);
 router.post('/verses', handleVerses.addVerse);
-router.put('/verses/:reference', handleVerses.updateVerse);
-router.delete('/verses/:reference', handleVerses.deleteVerse);
+router.put('/verses/:id', handleVerses.updateVerse);
+router.delete('/verses/:id', handleVerses.deleteVerse);
+router.post('/verses/assign-set', handleVerses.assignVerseSet);
 
 // Progress routes
 router.post('/progress/word', handleProgress.recordWordProgress);
@@ -71,8 +73,11 @@ router.get('/gamification/stats', handleGamification.getUserStats);
 
 // Groups routes
 router.post('/groups/create', handleGroups.createGroup);
+router.get('/groups/can-create', handleGroups.canCreate);
+router.post('/groups/:id/add-user', handleGroups.addUserToGroup);
 router.get('/groups/:id/leaders', handleGroups.getLeaders);
 router.post('/groups/:id/leaders', handleGroups.assignLeader);
+router.post('/groups/:id/leaders/demote', handleGroups.demoteLeader);
 router.post('/groups/:id/invite', handleGroups.inviteMember);
 router.post('/groups/:id/join', handleGroups.joinGroup);
 router.post('/groups/:id/join/:code', handleGroups.joinGroupByCode);
@@ -98,6 +103,18 @@ router.post('/groups/:id/invitations/existing', handleGroups.getExistingInvitati
 
 // Add new group lookup by code endpoint
 router.get('/groups/info/:code', handleGroups.getGroupByCode);
+
+// Admin routes
+router.get('/admin/users', handleAdmin.getAllUsers);
+router.get('/admin/groups', handleAdmin.getAllGroups);
+router.get('/admin/permissions', handleAdmin.getAllPermissions);
+router.get('/admin/permissions/user/:userId', handleAdmin.getUserPermissions);
+router.get('/admin/audit-log', handleAdmin.getAuditLog);
+router.post('/admin/permissions/grant', handleAdmin.grantPermission);
+router.post('/admin/permissions/revoke', handleAdmin.revokePermission);
+router.get('/admin/check-super-admin', handleAdmin.checkSuperAdmin);
+router.delete('/admin/groups/:id/delete', handleAdmin.deleteGroup);
+router.delete('/admin/groups/:id/members/:memberId/remove', handleAdmin.removeMember);
 
 // Export the fetch handler
 export default {

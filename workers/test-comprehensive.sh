@@ -132,7 +132,7 @@ read -r DB_CLEAN
 
 if [ "$DB_CLEAN" != "y" ]; then
     echo "${YELLOW}Cleaning database...${NC}"
-    npx wrangler d1 execute DB --env development --command="PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS group_invitations; DROP TABLE IF EXISTS group_members; DROP TABLE IF EXISTS groups; DROP TABLE IF EXISTS point_events; DROP TABLE IF EXISTS word_progress; DROP TABLE IF EXISTS verse_attempts; DROP TABLE IF EXISTS verse_mastery; DROP TABLE IF EXISTS mastered_verses; DROP TABLE IF EXISTS verses; DROP TABLE IF EXISTS user_stats; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS magic_links; DROP TABLE IF EXISTS users; DROP TABLE IF EXISTS anonymized_users; PRAGMA foreign_keys = ON;" | cat
+    npx wrangler d1 execute DB --env development --command="PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS user_permissions; DROP TABLE IF EXISTS admin_audit_log; DROP TABLE IF EXISTS super_admins; DROP TABLE IF EXISTS group_invitations; DROP TABLE IF EXISTS group_members; DROP TABLE IF EXISTS groups; DROP TABLE IF EXISTS point_events; DROP TABLE IF EXISTS word_progress; DROP TABLE IF EXISTS verse_attempts; DROP TABLE IF EXISTS verse_mastery; DROP TABLE IF EXISTS mastered_verses; DROP TABLE IF EXISTS verses; DROP TABLE IF EXISTS user_stats; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS magic_links; DROP TABLE IF EXISTS users; DROP TABLE IF EXISTS anonymized_users; PRAGMA foreign_keys = ON;" | cat
     check_status
 fi
 
@@ -590,6 +590,19 @@ GROUP_SESSION3=$(extract_token "$GROUP_VERIFY3")
 
 echo "${BLUE}Group test users created successfully${NC}"
 
+# Grant create_groups permission to group-leader@example.com for testing
+echo "${YELLOW}Granting create_groups permission to group-leader@example.com...${NC}"
+GROUP_LEADER_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'group-leader@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
+echo "${BLUE}Group leader ID: $GROUP_LEADER_ID${NC}"
+
+# Grant permission directly in database for testing
+PERMISSION_GRANT=$(npx wrangler d1 execute DB --env development --command="INSERT OR REPLACE INTO user_permissions (user_id, permission_type, granted_by, granted_at, expires_at, is_active) VALUES ($GROUP_LEADER_ID, 'create_groups', $GROUP_LEADER_ID, (unixepoch() * 1000), NULL, TRUE);" | cat)
+check_status
+echo "${BLUE}Granted create_groups permission to group-leader@example.com${NC}"
+
+# Note: manage_users permission is no longer needed since we use group-level permissions
+# Group creators and leaders can manage their own groups
+
 # Test 1: Group Creation
 echo "${YELLOW}Testing group creation...${NC}"
 GROUP_CREATE_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/create \
@@ -685,10 +698,10 @@ PERMISSION_DENIED_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP
 
 echo "${BLUE}Permission denied response: $PERMISSION_DENIED_RESPONSE${NC}"
 
-if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "permission"; then
-    echo "${GREEN}✓ Permission denied works correctly${NC}"
+if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "You do not have permission to assign leaders"; then
+    echo "${GREEN}✓ Non-leaders cannot assign leaders${NC}"
 else
-    echo "${RED}✗ Permission denied failed${NC}"
+    echo "${RED}✗ Non-leaders can assign leaders (should not)${NC}"
     exit 1
 fi
 
@@ -743,17 +756,462 @@ fi
 echo "${GREEN}✓ All group management tests passed${NC}"
 
 # ========================================
+# SUPER ADMIN SETUP
+# ========================================
+echo "${BLUE}🧪 Setting up Super Admin for Testing${NC}"
+echo "=========================================="
+
+# Create super admin user
+echo "${YELLOW}Creating super admin user...${NC}"
+SUPER_ADMIN_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"super-admin@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+check_status
+
+# Extract magic token for super admin
+SUPER_ADMIN_MAGIC_TOKEN=$(extract_magic_token "$SUPER_ADMIN_RESPONSE")
+echo "${BLUE}Super admin magic token: $SUPER_ADMIN_MAGIC_TOKEN${NC}"
+
+# Verify magic link for super admin
+echo "${YELLOW}Verifying super admin magic link...${NC}"
+SUPER_ADMIN_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$SUPER_ADMIN_MAGIC_TOKEN")
+check_status
+
+# Debug: Show the full verification response
+echo "${BLUE}Full verification response:${NC}"
+echo "$SUPER_ADMIN_VERIFY"
+
+# Extract session token for super admin
+SUPER_ADMIN_SESSION=$(extract_token "$SUPER_ADMIN_VERIFY")
+echo "${BLUE}Super admin session token: $SUPER_ADMIN_SESSION${NC}"
+
+# Debug: Check if session token is empty
+if [ -z "$SUPER_ADMIN_SESSION" ]; then
+  echo "${RED}✗ Session token is empty!${NC}"
+  exit 1
+fi
+
+# Debug: Check if session is stored in database
+echo "${YELLOW}Checking if session is stored in database...${NC}"
+SESSION_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT * FROM sessions WHERE token = '$SUPER_ADMIN_SESSION';" | cat)
+echo "${BLUE}Session check: $SESSION_CHECK${NC}"
+if echo "$SESSION_CHECK" | grep -q '"token":'; then
+  echo "${GREEN}✓ Session found in database${NC}"
+else
+  echo "${RED}✗ Session not found in database${NC}"
+  exit 1
+fi
+
+# Verify user was created before setting up super admin privileges
+echo "${YELLOW}Verifying super admin user was created...${NC}"
+USER_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'super-admin@example.com';" | cat)
+if echo "$USER_CHECK" | grep -q '"id":'; then
+  echo "${GREEN}✓ Super admin user created successfully${NC}"
+else
+  echo "${RED}✗ Super admin user not found in database${NC}"
+  exit 1
+fi
+
+# Initialize super admin privileges (this would normally be done via the init script)
+echo "${YELLOW}Initializing super admin privileges...${NC}"
+# Add super admin to the super_admins table
+SUPER_ADMIN_INIT=$(npx wrangler d1 execute DB --env development --command="INSERT OR REPLACE INTO super_admins (user_id, email, added_by, added_at, is_active) SELECT id, email, id, (unixepoch() * 1000), TRUE FROM users WHERE email = 'super-admin@example.com';" | cat)
+check_status
+
+# Grant all permissions to super admin
+echo "${YELLOW}Granting permissions to super admin...${NC}"
+PERMISSIONS=("create_groups" "delete_groups" "manage_users" "view_all_groups")
+for permission in "${PERMISSIONS[@]}"; do
+  PERMISSION_GRANT=$(npx wrangler d1 execute DB --env development --command="INSERT OR REPLACE INTO user_permissions (user_id, permission_type, granted_by, granted_at, expires_at, is_active) SELECT id, '$permission', id, (unixepoch() * 1000), NULL, TRUE FROM users WHERE email = 'super-admin@example.com';" | cat)
+  check_status
+  echo "${BLUE}Granted $permission permission${NC}"
+done
+
+# Verify super admin privileges were set up correctly
+echo "${YELLOW}Verifying super admin privileges...${NC}"
+SUPER_ADMIN_VERIFY=$(npx wrangler d1 execute DB --env development --command="SELECT * FROM super_admins WHERE email = 'super-admin@example.com';" | cat)
+if echo "$SUPER_ADMIN_VERIFY" | grep -q '"user_id":'; then
+  echo "${GREEN}✓ Super admin privileges verified${NC}"
+else
+  echo "${RED}✗ Super admin privileges not found in database${NC}"
+  exit 1
+fi
+
+# Test super admin status check
+echo "${YELLOW}Testing super admin status check...${NC}"
+SUPER_ADMIN_CHECK=$(curl -s -X GET http://localhost:8787/admin/check-super-admin \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+echo "${BLUE}Super admin check response: $SUPER_ADMIN_CHECK${NC}"
+
+if echo "$SUPER_ADMIN_CHECK" | grep -q '"isSuperAdmin":true'; then
+  echo "${GREEN}✓ Super admin status confirmed${NC}"
+else
+  echo "${RED}✗ Super admin status check failed${NC}"
+  exit 1
+fi
+
+echo "${GREEN}✓ Super Admin Setup Completed Successfully!${NC}"
+
+# ========================================
+# REMOVE MEMBER TESTS
+# ========================================
+
+echo "${YELLOW}Testing remove member functionality...${NC}"
+
+# Get user IDs for testing
+GROUP_USER1_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'group-leader@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
+GROUP_USER2_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'group-member@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
+GROUP_OUTSIDER_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'group-outsider@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
+
+echo "${BLUE}Group user 1 ID: $GROUP_USER1_ID${NC}"
+echo "${BLUE}Group user 2 ID: $GROUP_USER2_ID${NC}"
+echo "${BLUE}Group outsider ID: $GROUP_OUTSIDER_ID${NC}"
+
+# First, add group-outsider@example.com to the group so we can test removing them
+echo "${YELLOW}Adding group-outsider@example.com to the group for removal testing...${NC}"
+ADD_OUTSIDER_FOR_REMOVAL_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/add-user \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d "{\"targetUserId\":$GROUP_OUTSIDER_ID}")
+
+echo "${BLUE}Add outsider for removal response: $ADD_OUTSIDER_FOR_REMOVAL_RESPONSE${NC}"
+
+# Test 1: Group leader removing a member (should succeed)
+echo "${YELLOW}Testing group leader removing a member...${NC}"
+REMOVE_MEMBER_RESPONSE=$(curl -s -X DELETE http://localhost:8787/admin/groups/$GROUP_ID/members/$GROUP_OUTSIDER_ID/remove \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+
+echo "${BLUE}Remove member response: $REMOVE_MEMBER_RESPONSE${NC}"
+
+if echo "$REMOVE_MEMBER_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Group leader can remove members${NC}"
+else
+    echo "${RED}✗ Group leader cannot remove members${NC}"
+    exit 1
+fi
+
+# Test 2: Regular member trying to remove another member (should fail)
+echo "${YELLOW}Testing regular member trying to remove another member...${NC}"
+# First, add group-outsider@example.com back to the group
+ADD_OUTSIDER_BACK_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/add-user \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d "{\"targetUserId\":$GROUP_OUTSIDER_ID}")
+
+PERMISSION_DENIED_RESPONSE=$(curl -s -X DELETE http://localhost:8787/admin/groups/$GROUP_ID/members/$GROUP_OUTSIDER_ID/remove \
+  -H "Authorization: Bearer $GROUP_SESSION3")
+
+echo "${BLUE}Permission denied response: $PERMISSION_DENIED_RESPONSE${NC}"
+
+if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "You must be a leader or creator"; then
+    echo "${GREEN}✓ Regular members cannot remove other members${NC}"
+else
+    echo "${RED}✗ Regular members can remove other members (should not)${NC}"
+    exit 1
+fi
+
+# Test 3: Group leader trying to remove themselves (should fail)
+echo "${YELLOW}Testing group leader trying to remove themselves...${NC}"
+SELF_REMOVE_RESPONSE=$(curl -s -X DELETE http://localhost:8787/admin/groups/$GROUP_ID/members/$GROUP_USER1_ID/remove \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+
+echo "${BLUE}Self remove response: $SELF_REMOVE_RESPONSE${NC}"
+
+if echo "$SELF_REMOVE_RESPONSE" | grep -q "cannot remove yourself"; then
+    echo "${GREEN}✓ Group leaders cannot remove themselves${NC}"
+else
+    echo "${RED}✗ Group leaders can remove themselves (should not)${NC}"
+    exit 1
+fi
+
+# Test 4: Super admin removing a member (should succeed)
+echo "${YELLOW}Testing super admin removing a member...${NC}"
+SUPER_ADMIN_REMOVE_RESPONSE=$(curl -s -X DELETE http://localhost:8787/admin/groups/$GROUP_ID/members/$GROUP_OUTSIDER_ID/remove \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+
+echo "${BLUE}Super admin remove response: $SUPER_ADMIN_REMOVE_RESPONSE${NC}"
+
+if echo "$SUPER_ADMIN_REMOVE_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Super admin can remove members${NC}"
+else
+    echo "${RED}✗ Super admin cannot remove members${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ All remove member tests passed${NC}"
+
+# ========================================
+# END REMOVE MEMBER TESTS
+# ========================================
+
+# ========================================
+# MAKE LEADER TESTS
+# ========================================
+
+echo "${YELLOW}Testing make leader functionality...${NC}"
+
+# First, ensure we have a regular member to promote
+echo "${YELLOW}Ensuring group-member@example.com is a regular member...${NC}"
+# Remove them if they're already a leader
+REMOVE_LEADER_RESPONSE=$(curl -s -X DELETE http://localhost:8787/admin/groups/$GROUP_ID/members/$GROUP_USER2_ID/remove \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+
+# Re-add them as a regular member
+ADD_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/add-user \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d "{\"targetUserId\":$GROUP_USER2_ID}")
+
+echo "${BLUE}Re-added member response: $ADD_MEMBER_RESPONSE${NC}"
+
+# Test 1: Group leader promoting a member to leader (should succeed)
+echo "${YELLOW}Testing group leader promoting a member to leader...${NC}"
+MAKE_LEADER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"group-member@example.com"}')
+
+echo "${BLUE}Make leader response: $MAKE_LEADER_RESPONSE${NC}"
+
+if echo "$MAKE_LEADER_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Group leader can promote members to leader${NC}"
+else
+    echo "${RED}✗ Group leader cannot promote members to leader${NC}"
+    exit 1
+fi
+
+# Test 2: Regular member trying to promote another member (should fail)
+echo "${YELLOW}Testing regular member trying to promote another member...${NC}"
+# First, add group-outsider@example.com as a regular member
+ADD_OUTSIDER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/add-user \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d "{\"targetUserId\":$GROUP_OUTSIDER_ID}")
+
+# Get outsider session token
+OUTSIDER_MAGIC_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"group-outsider@example.com","isRegistration":false,"turnstileToken":"test-token"}')
+
+OUTSIDER_MAGIC_TOKEN=$(extract_magic_token "$OUTSIDER_MAGIC_RESPONSE")
+OUTSIDER_VERIFY_RESPONSE=$(curl -s -i "http://localhost:8787/auth/verify?token=$OUTSIDER_MAGIC_TOKEN")
+OUTSIDER_SESSION=$(extract_token "$OUTSIDER_VERIFY_RESPONSE")
+
+PERMISSION_DENIED_MAKE_LEADER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OUTSIDER_SESSION" \
+  -d '{"email":"group-member@example.com"}')
+
+echo "${BLUE}Permission denied make leader response: $PERMISSION_DENIED_MAKE_LEADER_RESPONSE${NC}"
+
+if echo "$PERMISSION_DENIED_MAKE_LEADER_RESPONSE" | grep -q "permission"; then
+    echo "${GREEN}✓ Regular members cannot promote others to leader${NC}"
+else
+    echo "${RED}✗ Regular members can promote others to leader (should not)${NC}"
+    exit 1
+fi
+
+# Test 3: Super admin promoting a member to leader (should succeed)
+echo "${YELLOW}Testing super admin promoting a member to leader...${NC}"
+# First, demote group-member@example.com back to regular member
+DEMOTE_RESPONSE=$(curl -s -X DELETE http://localhost:8787/admin/groups/$GROUP_ID/members/$GROUP_USER2_ID/remove \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+
+# Re-add as regular member
+RE_ADD_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/add-user \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d "{\"targetUserId\":$GROUP_USER2_ID}")
+
+SUPER_ADMIN_MAKE_LEADER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION" \
+  -d '{"email":"group-member@example.com"}')
+
+echo "${BLUE}Super admin make leader response: $SUPER_ADMIN_MAKE_LEADER_RESPONSE${NC}"
+
+if echo "$SUPER_ADMIN_MAKE_LEADER_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Super admin can promote members to leader${NC}"
+else
+    echo "${RED}✗ Super admin cannot promote members to leader${NC}"
+    exit 1
+fi
+
+# Test 4: Trying to promote someone who is already a leader (should fail)
+echo "${YELLOW}Testing promoting someone who is already a leader...${NC}"
+ALREADY_LEADER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"group-member@example.com"}')
+
+echo "${BLUE}Already leader response: $ALREADY_LEADER_RESPONSE${NC}"
+
+if echo "$ALREADY_LEADER_RESPONSE" | grep -q "already a leader"; then
+    echo "${GREEN}✓ Cannot promote someone who is already a leader${NC}"
+else
+    echo "${RED}✗ Can promote someone who is already a leader (should not)${NC}"
+    exit 1
+fi
+
+# Test 5: Trying to promote a non-existent user (should fail)
+echo "${YELLOW}Testing promoting a non-existent user...${NC}"
+NON_EXISTENT_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"nonexistent@example.com"}')
+
+echo "${BLUE}Non-existent user response: $NON_EXISTENT_RESPONSE${NC}"
+
+if echo "$NON_EXISTENT_RESPONSE" | grep -q "not found"; then
+    echo "${GREEN}✓ Cannot promote non-existent user${NC}"
+else
+    echo "${RED}✗ Can promote non-existent user (should not)${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ All make leader tests passed${NC}"
+
+# ========================================
+# END MAKE LEADER TESTS
+# ========================================
+
+# ========================================
+# DEMOTE LEADER TESTS
+# ========================================
+
+echo "${YELLOW}Testing demote leader functionality...${NC}"
+
+# Ensure we have a leader to demote (group-member@example.com should be a leader from previous test)
+echo "${YELLOW}Ensuring group-member@example.com is a leader for demotion testing...${NC}"
+
+# Test 1: Group leader demoting another leader (should succeed)
+echo "${YELLOW}Testing group leader demoting another leader...${NC}"
+DEMOTE_LEADER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders/demote \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"group-member@example.com"}')
+
+echo "${BLUE}Demote leader response: $DEMOTE_LEADER_RESPONSE${NC}"
+
+if echo "$DEMOTE_LEADER_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Group leader can demote other leaders${NC}"
+else
+    echo "${RED}✗ Group leader cannot demote other leaders${NC}"
+    exit 1
+fi
+
+# Test 2: Regular member trying to demote a leader (should fail)
+echo "${YELLOW}Testing regular member trying to demote a leader...${NC}"
+# First, promote group-outsider@example.com back to leader
+PROMOTE_OUTSIDER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"group-outsider@example.com"}')
+
+PERMISSION_DENIED_DEMOTE_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders/demote \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OUTSIDER_SESSION" \
+  -d '{"email":"group-member@example.com"}')
+
+echo "${BLUE}Permission denied demote response: $PERMISSION_DENIED_DEMOTE_RESPONSE${NC}"
+
+if echo "$PERMISSION_DENIED_DEMOTE_RESPONSE" | grep -q "User is not a leader"; then
+    echo "${GREEN}✓ Regular members cannot demote leaders${NC}"
+else
+    echo "${RED}✗ Regular members can demote leaders (should not)${NC}"
+    exit 1
+fi
+
+# Test 3: Super admin demoting a leader (should succeed)
+echo "${YELLOW}Testing super admin demoting a leader...${NC}"
+# First, promote group-member@example.com back to leader
+PROMOTE_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"group-member@example.com"}')
+
+SUPER_ADMIN_DEMOTE_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders/demote \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION" \
+  -d '{"email":"group-member@example.com"}')
+
+echo "${BLUE}Super admin demote response: $SUPER_ADMIN_DEMOTE_RESPONSE${NC}"
+
+if echo "$SUPER_ADMIN_DEMOTE_RESPONSE" | grep -q "success"; then
+    echo "${GREEN}✓ Super admin can demote leaders${NC}"
+else
+    echo "${RED}✗ Super admin cannot demote leaders${NC}"
+    exit 1
+fi
+
+# Test 4: Trying to demote someone who is not a leader (should fail)
+echo "${YELLOW}Testing demoting someone who is not a leader...${NC}"
+NOT_LEADER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders/demote \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"group-member@example.com"}')
+
+echo "${BLUE}Not leader response: $NOT_LEADER_RESPONSE${NC}"
+
+if echo "$NOT_LEADER_RESPONSE" | grep -q "not a leader"; then
+    echo "${GREEN}✓ Cannot demote someone who is not a leader${NC}"
+else
+    echo "${RED}✗ Can demote someone who is not a leader (should not)${NC}"
+    exit 1
+fi
+
+# Test 5: Trying to demote a creator (should fail)
+echo "${YELLOW}Testing demoting a creator...${NC}"
+DEMOTE_CREATOR_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders/demote \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION" \
+  -d '{"email":"group-leader@example.com"}')
+
+echo "${BLUE}Demote creator response: $DEMOTE_CREATOR_RESPONSE${NC}"
+
+if echo "$DEMOTE_CREATOR_RESPONSE" | grep -q "creator"; then
+    echo "${GREEN}✓ Cannot demote a creator${NC}"
+else
+    echo "${RED}✗ Can demote a creator (should not)${NC}"
+    exit 1
+fi
+
+# Test 6: Trying to demote a non-existent user (should fail)
+echo "${YELLOW}Testing demoting a non-existent user...${NC}"
+NON_EXISTENT_DEMOTE_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/leaders/demote \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"email":"nonexistent@example.com"}')
+
+echo "${BLUE}Non-existent demote response: $NON_EXISTENT_DEMOTE_RESPONSE${NC}"
+
+if echo "$NON_EXISTENT_DEMOTE_RESPONSE" | grep -q "not found"; then
+    echo "${GREEN}✓ Cannot demote non-existent user${NC}"
+else
+    echo "${RED}✗ Can demote non-existent user (should not)${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ All demote leader tests passed${NC}"
+
+# ========================================
+# END DEMOTE LEADER TESTS
+# ========================================
+
+# ========================================
 # END GROUP MANAGEMENT TESTS
 # ========================================
 
 # Test group membership and invitations
 echo "${YELLOW}Testing group membership and invitations...${NC}"
 
-# Invite member
+# Invite user to group
 INVITE_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/invite \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $GROUP_SESSION1" \
-  -d '{"email":"group-outsider@example.com"}')
+  -d '{"email":"super-admin@example.com"}')
+
+echo "${BLUE}Invite response: $INVITE_RESPONSE${NC}"
 
 if echo "$INVITE_RESPONSE" | grep -q "success"; then
     echo "${GREEN}✓ Group invitation works${NC}"
@@ -763,13 +1221,15 @@ else
 fi
 
 # Get invitation ID for joining
-INVITATION_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM group_invitations WHERE group_id = $GROUP_ID AND email = 'group-outsider@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
+INVITATION_ID=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM group_invitations WHERE group_id = $GROUP_ID AND email = 'super-admin@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')
 
 # Join group
 JOIN_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/join \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $GROUP_SESSION3" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION" \
   -d "{\"invitationId\":$INVITATION_ID}")
+
+echo "${BLUE}Join response: $JOIN_RESPONSE${NC}"
 
 if echo "$JOIN_RESPONSE" | grep -q "success"; then
     echo "${GREEN}✓ Group joining works${NC}"
@@ -792,13 +1252,15 @@ fi
 # Test permission denied for non-leaders trying to invite
 PERMISSION_DENIED_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/invite \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $GROUP_SESSION3" \
-  -d '{"email":"test@example.com"}')
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION" \
+  -d '{"email":"test-anonymize@example.com"}')
 
-if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "permission"; then
-    echo "${GREEN}✓ Permission denied for non-leaders works${NC}"
+echo "${BLUE}Permission denied response: $PERMISSION_DENIED_RESPONSE${NC}"
+
+if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "You do not have permission to invite"; then
+    echo "${GREEN}✓ Regular members cannot invite other members${NC}"
 else
-    echo "${RED}✗ Permission denied for non-leaders failed${NC}"
+    echo "${RED}✗ Regular members can invite other members (should not)${NC}"
     exit 1
 fi
 
@@ -924,17 +1386,35 @@ GROUP_OUTSIDER_ID=$(npx wrangler d1 execute DB --env development --command="SELE
 echo "${BLUE}Group outsider ID: $GROUP_OUTSIDER_ID${NC}"
 
 # Test group-outsider@example.com (regular member) trying to update group-leader@example.com's display name (should fail)
+# Create a true regular member for permission testing
+echo "${YELLOW}Creating a true regular member for permission testing...${NC}"
+REGULAR_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"true-regular-member@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+check_status
+
+REGULAR_MEMBER_TOKEN=$(extract_magic_token "$REGULAR_MEMBER_RESPONSE")
+REGULAR_MEMBER_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$REGULAR_MEMBER_TOKEN")
+REGULAR_MEMBER_SESSION=$(extract_token "$REGULAR_MEMBER_VERIFY")
+
+# Add regular member to group
+ADD_REGULAR_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/add-user \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"targetUserId":'$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'true-regular-member@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')'}')
+
+# Test true regular member trying to update group-leader@example.com's display name (should fail)
 PERMISSION_DENIED_RESPONSE=$(curl -s -X PUT http://localhost:8787/groups/$GROUP_ID/members/$GROUP_USER1_ID/display-name \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $GROUP_SESSION3" \
+  -H "Authorization: Bearer $REGULAR_MEMBER_SESSION" \
   -d '{"displayName":"Unauthorized Change"}')
 
 echo "${BLUE}Permission denied response: $PERMISSION_DENIED_RESPONSE${NC}"
 
-if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "permission"; then
-    echo "${GREEN}✓ Permission denied validation works${NC}"
+if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "You do not have permission"; then
+    echo "${GREEN}✓ Regular members cannot change other members' display names${NC}"
 else
-    echo "${RED}✗ Permission denied validation failed${NC}"
+    echo "${RED}✗ Regular members can change other members' display names (should not)${NC}"
     exit 1
 fi
 
@@ -1137,82 +1617,44 @@ USERS=(
   "group-only@example.com"
   "both-params@example.com"
   "invalid-group@example.com"
+  "super-admin@example.com"
+  "true-regular-member@example.com"
+  "regular-member@example.com"
   # Add any other test users created in this script
 )
 
+# Loop for unlimited user logins
+while true; do
+  echo "${YELLOW}Do you want to log in as a test user? (y/n)${NC}"
+  read -r LOGIN_USER
 
-
-# add a question to see if the tester needs a magic link for a specific user, as before
-echo "${YELLOW}Do you want to log in as a test user before deletion? (y/n)${NC}"
-read -r LOGIN_BEFORE_DELETE
-
-if [ "$LOGIN_BEFORE_DELETE" = "y" ]; then
-  echo "${YELLOW}Select a user to generate a magic link for:${NC}"
-  select MAGIC_LINK_EMAIL in "${USERS[@]}"; do
-    if [[ -n "$MAGIC_LINK_EMAIL" ]]; then
-      echo "${BLUE}Creating magic link for $MAGIC_LINK_EMAIL...${NC}"
-      MAGIC_LINK_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
-        -H "Content-Type: application/json" \
-        -d "{\"email\":\"$MAGIC_LINK_EMAIL\",\"isRegistration\":false,\"turnstileToken\":\"test-token\"}")
-      MAGIC_TOKEN=$(echo "$MAGIC_LINK_RESPONSE" | grep -o '"message":"token=[^"]*' | cut -d'=' -f2 | cut -d'"' -f1)
-      MAGIC_LINK="http://localhost:5173/auth/verify?token=$MAGIC_TOKEN"
-      echo "${BLUE}Magic link: $MAGIC_LINK${NC}"
-      echo "$MAGIC_LINK" | pbcopy
-      echo "${GREEN}Magic link copied to clipboard${NC}"
-      echo "${YELLOW}Open the link in the browser? (y/n)${NC}"
-      read -r OPEN_LINK_QUESTION
-      if [ "$OPEN_LINK_QUESTION" = "y" ]; then
-        open "$MAGIC_LINK"
+  if [ "$LOGIN_USER" = "y" ]; then
+    echo "${YELLOW}Select a user to generate a magic link for:${NC}"
+    select MAGIC_LINK_EMAIL in "${USERS[@]}"; do
+      if [[ -n "$MAGIC_LINK_EMAIL" ]]; then
+        echo "${BLUE}Creating magic link for $MAGIC_LINK_EMAIL...${NC}"
+        MAGIC_LINK_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+          -H "Content-Type: application/json" \
+          -d "{\"email\":\"$MAGIC_LINK_EMAIL\",\"isRegistration\":false,\"turnstileToken\":\"test-token\"}")
+        MAGIC_TOKEN=$(echo "$MAGIC_LINK_RESPONSE" | grep -o '"message":"token=[^"]*' | cut -d'=' -f2 | cut -d'"' -f1)
+        MAGIC_LINK="http://localhost:5173/auth/verify?token=$MAGIC_TOKEN"
+        echo "${BLUE}Magic link: $MAGIC_LINK${NC}"
+        echo "$MAGIC_LINK" | pbcopy
+        echo "${GREEN}Magic link copied to clipboard${NC}"
+        echo "${YELLOW}Open the link in the browser? (y/n)${NC}"
+        read -r OPEN_LINK_QUESTION
+        if [ "$OPEN_LINK_QUESTION" = "y" ]; then
+          open "$MAGIC_LINK"
+        fi
+        break
+      else
+        echo "${RED}Invalid selection. Please try again.${NC}"
       fi
-      echo "${YELLOW}Continue with deletion after testing? (y/n)${NC}"
-      read -r CONTINUE_AFTER_TEST
-      if [ "$CONTINUE_AFTER_TEST" = "n" ]; then
-        echo "${BLUE}Test completed without deletion.${NC}"
-        echo "${GREEN}Test completed successfully!${NC}"
-        exit 0
-      fi
-      break
-    else
-      echo "${RED}Invalid selection. Please try again.${NC}"
-    fi
-  done
-fi
-
-# ask if they need to log in as a different user
-echo "${YELLOW}Do you need to log in as a different user? (y/n)${NC}"
-read -r LOGIN_DIFFERENT_USER
-
-if [ "$LOGIN_DIFFERENT_USER" = "y" ]; then
-  echo "${YELLOW}Select a user to generate a magic link for:${NC}"
-  select MAGIC_LINK_EMAIL in "${USERS[@]}"; do
-    if [[ -n "$MAGIC_LINK_EMAIL" ]]; then
-      echo "${BLUE}Creating magic link for $MAGIC_LINK_EMAIL...${NC}"
-      MAGIC_LINK_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
-        -H "Content-Type: application/json" \
-        -d "{\"email\":\"$MAGIC_LINK_EMAIL\",\"isRegistration\":false,\"turnstileToken\":\"test-token\"}")
-      MAGIC_TOKEN=$(echo "$MAGIC_LINK_RESPONSE" | grep -o '"message":"token=[^"]*' | cut -d'=' -f2 | cut -d'"' -f1)
-      MAGIC_LINK="http://localhost:5173/auth/verify?token=$MAGIC_TOKEN"
-      echo "${BLUE}Magic link: $MAGIC_LINK${NC}"
-      echo "$MAGIC_LINK" | pbcopy
-      echo "${GREEN}Magic link copied to clipboard${NC}"
-      echo "${YELLOW}Open the link in the browser? (y/n)${NC}"
-      read -r OPEN_LINK_QUESTION
-      if [ "$OPEN_LINK_QUESTION" = "y" ]; then
-        open "$MAGIC_LINK"
-      fi
-      echo "${YELLOW}Continue with deletion after testing? (y/n)${NC}"
-      read -r CONTINUE_AFTER_TEST
-      if [ "$CONTINUE_AFTER_TEST" = "n" ]; then
-        echo "${BLUE}Test completed without deletion.${NC}"
-        echo "${GREEN}Test completed successfully!${NC}"
-        exit 0
-      fi
-      break
-    else
-      echo "${RED}Invalid selection. Please try again.${NC}"
-    fi
-  done
-fi
+    done
+  else
+    break
+  fi
+done
 
 # ========================================
 # USER DELETION
@@ -1332,3 +1774,34 @@ fi
 echo "${GREEN}✓ All user 2 data verified${NC}"
 
 echo "${GREEN}Test completed successfully!${NC}" 
+
+# Test permission denied for non-leaders trying to invite
+echo "${YELLOW}Creating a regular member user for permission testing...${NC}"
+REGULAR_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"regular-member@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+check_status
+
+REGULAR_MEMBER_TOKEN=$(extract_magic_token "$REGULAR_MEMBER_RESPONSE")
+REGULAR_MEMBER_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$REGULAR_MEMBER_TOKEN")
+REGULAR_MEMBER_SESSION=$(extract_token "$REGULAR_MEMBER_VERIFY")
+
+# Add regular member to group
+ADD_REGULAR_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/add-user \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GROUP_SESSION1" \
+  -d '{"targetUserId":'$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'regular-member@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')'}')
+
+PERMISSION_DENIED_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/invite \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $REGULAR_MEMBER_SESSION" \
+  -d '{"email":"test-anonymize@example.com"}')
+
+echo "${BLUE}Permission denied response: $PERMISSION_DENIED_RESPONSE${NC}"
+
+if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "You must be a leader or creator"; then
+    echo "${GREEN}✓ Regular members cannot invite other members${NC}"
+else
+    echo "${RED}✗ Regular members can invite other members (should not)${NC}"
+    exit 1
+fi

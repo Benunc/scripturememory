@@ -43,7 +43,7 @@ read -r DB_CLEAN
 
 if [ "$DB_CLEAN" != "y" ]; then
     echo "${YELLOW}Cleaning database...${NC}"
-    npx wrangler d1 execute DB --env development --command="PRAGMA foreign_keys = OFF; PRAGMA ignore_check_constraints = ON; DROP TABLE IF EXISTS group_invitations; DROP TABLE IF EXISTS group_members; DROP TABLE IF EXISTS group_leaders; DROP TABLE IF EXISTS groups; DROP TABLE IF EXISTS point_events; DROP TABLE IF EXISTS word_progress; DROP TABLE IF EXISTS verse_attempts; DROP TABLE IF EXISTS verse_mastery; DROP TABLE IF EXISTS mastered_verses; DROP TABLE IF EXISTS verses; DROP TABLE IF EXISTS user_stats; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS magic_links; DROP TABLE IF EXISTS anonymized_users; DROP TABLE IF EXISTS users; PRAGMA foreign_keys = ON; PRAGMA ignore_check_constraints = OFF;" | cat
+    npx wrangler d1 execute DB --env development --command="PRAGMA foreign_keys = OFF; PRAGMA ignore_check_constraints = ON; DROP TABLE IF EXISTS user_permissions; DROP TABLE IF EXISTS admin_audit_log; DROP TABLE IF EXISTS super_admins; DROP TABLE IF EXISTS group_invitations; DROP TABLE IF EXISTS group_members; DROP TABLE IF EXISTS group_leaders; DROP TABLE IF EXISTS groups; DROP TABLE IF EXISTS point_events; DROP TABLE IF EXISTS word_progress; DROP TABLE IF EXISTS verse_attempts; DROP TABLE IF EXISTS verse_mastery; DROP TABLE IF EXISTS mastered_verses; DROP TABLE IF EXISTS verses; DROP TABLE IF EXISTS user_stats; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS magic_links; DROP TABLE IF EXISTS anonymized_users; DROP TABLE IF EXISTS users; PRAGMA foreign_keys = ON; PRAGMA ignore_check_constraints = OFF;" | cat
     check_status
 fi
 

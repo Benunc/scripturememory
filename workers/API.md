@@ -912,16 +912,50 @@ Content-Type: application/json
 
 **Features**
 - Assigns a user as a leader of the group
-- Only existing creators/leaders can assign new leaders
+- Super admins can assign leaders to any group
+- Group creators/leaders can assign leaders to their own groups
 - User must exist in the system
 - Prevents duplicate leader assignments
 - User becomes a member if not already one
+- Updates existing member role if user is already a member
 
 **Error Responses**
 - `400 Bad Request`: User not found or already a leader
 - `401 Unauthorized`: Invalid or missing token
 - `403 Forbidden`: User lacks permission to assign leaders
 - `404 Not Found`: Group not found
+
+#### Demote Group Leader
+```http
+POST /groups/{id}/leaders/demote
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "email": "leader@example.com"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Leader demoted to member successfully"
+}
+```
+
+**Features**
+- Demotes a leader back to a regular member
+- Super admins can demote leaders in any group
+- Group creators/leaders can demote leaders in their own groups
+- Cannot demote creators (only leaders can be demoted)
+- User must exist in the system and be a leader
+
+**Error Responses**
+- `400 Bad Request`: User is not a leader or is a creator (creators cannot be demoted)
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User lacks permission to demote leaders
+- `404 Not Found`: Group or user not found
 
 #### Invite Group Member
 ```http
@@ -1864,4 +1898,72 @@ The API uses the following main database tables:
 4. **CORS Issues**: Verify origin headers and preflight requests
 5. **Group Permission Errors**: Verify user roles and group membership
 
-This API documentation should provide comprehensive guidance for developers working with the Scripture Memory application. For additional support, refer to the source code and test files in the repository. 
+This API documentation should provide comprehensive guidance for developers working with the Scripture Memory application. For additional support, refer to the source code and test files in the repository.
+
+## Admin Endpoints
+
+### Get All Users (Admin Only)
+- **GET** `/admin/users`
+- **Description**: Get all users in the system (admin only)
+- **Headers**: `Authorization: Bearer <token>`
+- **Response**: List of all users with their stats
+
+### Get All Groups (Admin Only)
+- **GET** `/admin/groups`
+- **Description**: Get all groups in the system (admin only)
+- **Headers**: `Authorization: Bearer <token>`
+- **Response**: List of all groups with member counts
+
+### Get All Permissions (Admin Only)
+- **GET** `/admin/permissions`
+- **Description**: Get all user permissions in the system (admin only)
+- **Headers**: `Authorization: Bearer <token>`
+- **Response**: List of all user permissions
+
+### Get User Permissions (Admin Only)
+- **GET** `/admin/permissions/user/:userId`
+- **Description**: Get permissions for a specific user (admin only)
+- **Headers**: `Authorization: Bearer <token>`
+- **Response**: List of permissions for the specified user
+
+### Get Audit Log (Admin Only)
+- **GET** `/admin/audit-log`
+- **Description**: Get admin audit log (admin only)
+- **Headers**: `Authorization: Bearer <token>`
+- **Response**: List of admin actions with timestamps
+
+### Grant Permission (Admin Only)
+- **POST** `/admin/permissions/grant`
+- **Description**: Grant a permission to a user (admin only)
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Body**: `{ "targetUserId": number, "permissionType": string, "expiresAt": number? }`
+- **Response**: Success message
+
+### Revoke Permission (Admin Only)
+- **POST** `/admin/permissions/revoke`
+- **Description**: Revoke a permission from a user (admin only)
+- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Body**: `{ "targetUserId": number, "permissionType": string }`
+- **Response**: Success message
+
+### Check Super Admin Status
+- **GET** `/admin/check-super-admin`
+- **Description**: Check if the current user is a super admin
+- **Headers**: `Authorization: Bearer <token>`
+- **Response**: `{ "success": true, "isSuperAdmin": boolean }`
+
+### Delete Group (Super Admin Only)
+- **DELETE** `/admin/groups/:id/delete`
+- **Description**: Delete a group and all its members (super admin only)
+- **Headers**: `Authorization: Bearer <token>`
+- **Response**: Success message with group name
+
+### Remove Member from Group (Super Admin or Group Leader/Creator)
+- **DELETE** `/admin/groups/:id/members/:memberId/remove`
+- **Description**: Remove a member from a group (super admin or group leader/creator)
+- **Headers**: `Authorization: Bearer <token>`
+- **Response**: Success message with member email and group name
+- **Permissions**: 
+  - Super admins can remove members from any group
+  - Group leaders/creators can remove members from groups they lead
+  - Leaders/creators cannot remove themselves (super admins can) 
