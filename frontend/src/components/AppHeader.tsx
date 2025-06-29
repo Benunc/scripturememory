@@ -55,20 +55,19 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 </HStack>
               </VStack>
             </MenuItem>
+            {showColorToggle && renderColorToggle()}
             {showSupport && (
-              <MenuItem onClick={() => navigate('/donate')}>
-                <Button
-                  variant="ghost"
-                  colorScheme="green"
-                  w="100%"
-                  justifyContent="flex-start"
-                  pl={0}
-                >
-                  Support Us
-                </Button>
+              <MenuItem onClick={() => navigate('/donate')} justifyContent="flex-end" color="green.500" _hover={{ bg: "green.50" }}>
+                Support Us
               </MenuItem>
             )}
-            <MenuItem onClick={signOut} pl={3}>
+            <MenuItem onClick={() => navigate('/points')} justifyContent="flex-end">
+              Points
+            </MenuItem>
+            <MenuItem onClick={() => navigate('/groups')} justifyContent="flex-end">
+              Groups
+            </MenuItem>
+            <MenuItem onClick={signOut} justifyContent="flex-end">
               Sign Out
             </MenuItem>
           </MenuList>
