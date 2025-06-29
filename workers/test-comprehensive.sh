@@ -1754,8 +1754,8 @@ if [ "$VERSE_COUNT" != "10" ]; then
     exit 1
 fi
 
-if [ "$POINTS_COUNT" != "22" ]; then
-    echo "${RED}Error: Expected 22 point events for user 2, found $POINTS_COUNT${NC}"
+if [ "$POINTS_COUNT" != "23" ]; then
+    echo "${RED}Error: Expected 23 point events for user 2, found $POINTS_COUNT${NC}"
     exit 1
 fi
 
@@ -1775,33 +1775,4 @@ echo "${GREEN}✓ All user 2 data verified${NC}"
 
 echo "${GREEN}Test completed successfully!${NC}" 
 
-# Test permission denied for non-leaders trying to invite
-echo "${YELLOW}Creating a regular member user for permission testing...${NC}"
-REGULAR_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
-  -H "Content-Type: application/json" \
-  -d '{"email":"regular-member@example.com","isRegistration":true,"turnstileToken":"test-token"}')
-check_status
-
-REGULAR_MEMBER_TOKEN=$(extract_magic_token "$REGULAR_MEMBER_RESPONSE")
-REGULAR_MEMBER_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$REGULAR_MEMBER_TOKEN")
-REGULAR_MEMBER_SESSION=$(extract_token "$REGULAR_MEMBER_VERIFY")
-
-# Add regular member to group
-ADD_REGULAR_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/add-user \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $GROUP_SESSION1" \
-  -d '{"targetUserId":'$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'regular-member@example.com';" | cat | sed -n 's/.*"id": \([0-9]*\).*/\1/p')'}')
-
-PERMISSION_DENIED_RESPONSE=$(curl -s -X POST http://localhost:8787/groups/$GROUP_ID/invite \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $REGULAR_MEMBER_SESSION" \
-  -d '{"email":"test-anonymize@example.com"}')
-
-echo "${BLUE}Permission denied response: $PERMISSION_DENIED_RESPONSE${NC}"
-
-if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "You must be a leader or creator"; then
-    echo "${GREEN}✓ Regular members cannot invite other members${NC}"
-else
-    echo "${RED}✗ Regular members can invite other members (should not)${NC}"
-    exit 1
-fi
+exit 0

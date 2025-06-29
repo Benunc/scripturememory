@@ -1,6 +1,7 @@
 import { Env } from '../types';
 import { getDB, getUserId } from '../utils/db';
 import { canCreateGroups } from '../utils/admin';
+import { getRandomSillyName } from '../utils/sillyNames';
 
 interface CreateGroupRequest {
   name: string;
@@ -167,10 +168,11 @@ export const handleGroups = {
       const groupId = result.meta.last_row_id;
 
       // Add creator as a member with 'creator' role
+      const sillyName = await getRandomSillyName(db);
       await db.prepare(`
-        INSERT INTO group_members (group_id, user_id, role, joined_at)
-        VALUES (?, ?, 'creator', ?)
-      `).bind(groupId, userId, Date.now()).run();
+        INSERT INTO group_members (group_id, user_id, role, joined_at, display_name)
+        VALUES (?, ?, 'creator', ?, ?)
+      `).bind(groupId, userId, Date.now(), sillyName).run();
 
       // Get the created group with creator info
       const group = await db.prepare(`
@@ -282,7 +284,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting leaders:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -391,10 +393,11 @@ export const handleGroups = {
         }
       } else {
         // Add new member as leader
+        const sillyName = await getRandomSillyName(db);
         await db.prepare(`
-          INSERT INTO group_members (group_id, user_id, role, joined_at)
-          VALUES (?, ?, 'leader', ?)
-        `).bind(groupId, targetUser.id, Date.now()).run();
+          INSERT INTO group_members (group_id, user_id, role, joined_at, display_name)
+          VALUES (?, ?, 'leader', ?, ?)
+        `).bind(groupId, targetUser.id, Date.now(), sillyName).run();
       }
 
       return new Response(JSON.stringify({ 
@@ -403,7 +406,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error assigning leader:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -503,7 +506,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error demoting leader:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -631,7 +634,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error inviting member:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -701,10 +704,11 @@ export const handleGroups = {
       }
 
       // Add user to group as member
+      const sillyName = await getRandomSillyName(db);
       await db.prepare(`
-        INSERT INTO group_members (group_id, user_id, role, joined_at)
-        VALUES (?, ?, 'member', ?)
-      `).bind(groupId, userId, Date.now()).run();
+        INSERT INTO group_members (group_id, user_id, role, joined_at, display_name)
+        VALUES (?, ?, 'member', ?, ?)
+      `).bind(groupId, userId, Date.now(), sillyName).run();
 
       // Mark invitation as accepted
       await db.prepare(`
@@ -717,7 +721,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error joining group:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -786,10 +790,11 @@ export const handleGroups = {
       }
 
       // Add user to group as member
+      const sillyName = await getRandomSillyName(db);
       await db.prepare(`
-        INSERT INTO group_members (group_id, user_id, role, joined_at)
-        VALUES (?, ?, 'member', ?)
-      `).bind(groupId, userId, Date.now()).run();
+        INSERT INTO group_members (group_id, user_id, role, joined_at, display_name)
+        VALUES (?, ?, 'member', ?, ?)
+      `).bind(groupId, userId, Date.now(), sillyName).run();
 
       // Mark invitation as accepted
       await db.prepare(`
@@ -802,7 +807,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error joining group:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -881,7 +886,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting members:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -986,7 +991,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating display name:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -1071,7 +1076,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting member profile:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -1145,7 +1150,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating privacy settings:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -1349,7 +1354,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting leaderboard:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -1488,7 +1493,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting group stats:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -1639,7 +1644,7 @@ export const handleGroups = {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting member ranking:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
@@ -1676,436 +1681,112 @@ export const handleGroups = {
         WHERE gm.user_id = ? AND gm.is_active = TRUE AND g.is_active = 1
         ORDER BY g.created_at DESC
       `).bind(userId).all();
-      return new Response(JSON.stringify({
+
+      return new Response(JSON.stringify({ 
         success: true,
         groups: groups.results
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (error) {
-      console.error('Error listing user groups:', error);
+    } catch (error: any) {
+      console.error('Error getting user groups:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Add a user to a group (admin/leader/creator/super admin only)
+  addUserToGroup: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const url = new URL(request.url);
+      const groupId = url.pathname.split('/')[2];
+      const { targetUserId } = await request.json();
+      if (!targetUserId) {
+        return new Response(JSON.stringify({ error: 'targetUserId is required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const db = getDB(env);
+      // Check if user is super admin
+      const isSuperAdmin = await db.prepare(`
+        SELECT 1 FROM super_admins WHERE user_id = ? AND is_active = TRUE
+      `).bind(userId).first();
+      // If not super admin, check if user is a leader or creator of this group
+      if (!isSuperAdmin) {
+        const canAdd = await db.prepare(`
+          SELECT role FROM group_members WHERE group_id = ? AND user_id = ? AND role IN ('leader', 'creator') AND is_active = 1
+        `).bind(groupId, userId).first();
+        if (!canAdd) {
+          return new Response(JSON.stringify({ error: 'You do not have permission to add users to this group' }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      // Check if target user exists
+      const targetUser = await db.prepare(`
+        SELECT id, email FROM users WHERE id = ?
+      `).bind(targetUserId).first();
+      if (!targetUser) {
+        return new Response(JSON.stringify({ error: 'Target user not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      // Check if user is already a member (including soft-deleted)
+      const existingMember = await db.prepare(`
+        SELECT is_active FROM group_members WHERE group_id = ? AND user_id = ?
+      `).bind(groupId, targetUserId).first();
+      if (existingMember) {
+        if (existingMember.is_active) {
+          return new Response(JSON.stringify({ error: 'User is already a member of this group' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else {
+          // Reactivate soft-deleted member
+          const sillyName = await getRandomSillyName(db);
+          await db.prepare(`
+            UPDATE group_members SET is_active = 1, role = 'member', joined_at = ?, display_name = ? WHERE group_id = ? AND user_id = ?
+          `).bind(Date.now(), sillyName, groupId, targetUserId).run();
+          return new Response(JSON.stringify({ success: true, message: `User ${targetUser.email} reactivated in group` }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      // Add as new member
+      const sillyName = await getRandomSillyName(db);
+      await db.prepare(`
+        INSERT INTO group_members (group_id, user_id, role, joined_at, display_name)
+        VALUES (?, ?, 'member', ?, ?)
+      `).bind(groupId, targetUserId, Date.now(), sillyName).run();
+      return new Response(JSON.stringify({ success: true, message: `User ${targetUser.email} added to group` }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      console.error('Error adding user to group:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
   },
-
-  // Get invitation details
-  getInvitationDetails: async (request: Request, env: Env): Promise<Response> => {
-    try {
-      const authHeader = request.headers.get('Authorization');
-      if (!authHeader?.startsWith('Bearer ')) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const token = authHeader.split(' ')[1];
-      const userId = await getUserId(token, env);
-      
-      if (!userId) {
-        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const url = new URL(request.url);
-      const invitationId = url.pathname.split('/')[3]; // /groups/invitations/:id
-
-      const db = getDB(env);
-
-      // Get invitation details
-      const invitation = await db.prepare(`
-        SELECT 
-          gi.id,
-          gi.group_id,
-          gi.email,
-          gi.invited_by,
-          gi.expires_at,
-          gi.is_accepted,
-          g.name as group_name,
-          g.description as group_description,
-          u.email as inviter_email
-        FROM group_invitations gi
-        JOIN groups g ON gi.group_id = g.id
-        JOIN users u ON gi.invited_by = u.id
-        WHERE gi.id = ? AND gi.is_accepted = FALSE AND gi.expires_at > ?
-      `).bind(invitationId, Date.now()).first();
-
-      if (!invitation) {
-        return new Response(JSON.stringify({ error: 'Invitation not found or expired' }), { 
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      return new Response(JSON.stringify({ 
-        invitation: {
-          id: invitation.id,
-          group_id: invitation.group_id,
-          email: invitation.email,
-          invited_by: invitation.invited_by,
-          expires_at: invitation.expires_at,
-          is_accepted: invitation.is_accepted,
-          group_name: invitation.group_name,
-          group_description: invitation.group_description,
-          inviter_email: invitation.inviter_email
-        }
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Error getting invitation details:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  },
-
-  // Get existing invitation for email in group
-  getExistingInvitation: async (request: Request, env: Env): Promise<Response> => {
-    try {
-      const authHeader = request.headers.get('Authorization');
-      if (!authHeader?.startsWith('Bearer ')) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const token = authHeader.split(' ')[1];
-      const userId = await getUserId(token, env);
-      
-      if (!userId) {
-        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const url = new URL(request.url);
-      const groupId = url.pathname.split('/')[2];
-      const { email } = await request.json();
-
-      if (!email || email.trim().length === 0) {
-        return new Response(JSON.stringify({ error: 'Email is required' }), { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const db = getDB(env);
-
-      // Check if current user can invite (leaders and creators)
-      const canInvite = await db.prepare(`
-        SELECT role FROM group_members 
-        WHERE group_id = ? AND user_id = ? AND role IN ('leader', 'creator')
-      `).bind(groupId, userId).first();
-
-      if (!canInvite) {
-        return new Response(JSON.stringify({ error: 'You do not have permission to invite members' }), { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Get existing invitation
-      const invitation = await db.prepare(`
-        SELECT id, invitation_code, expires_at, is_accepted
-        FROM group_invitations 
-        WHERE group_id = ? AND email = ? AND is_accepted = FALSE AND expires_at > ?
-      `).bind(groupId, email.trim(), Date.now()).first();
-
-      if (invitation) {
-        return new Response(JSON.stringify({ 
-          invitation: {
-            id: invitation.id,
-            code: invitation.invitation_code,
-            expires_at: invitation.expires_at,
-            is_accepted: invitation.is_accepted
-          }
-        }), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      } else {
-        return new Response(JSON.stringify({ error: 'No active invitation found for this email' }), { 
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-    } catch (error) {
-      console.error('Error getting existing invitation:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  },
-
-  // Get invitation details by code
-  getInvitationDetailsByCode: async (request: Request, env: Env): Promise<Response> => {
-    try {
-      const authHeader = request.headers.get('Authorization');
-      if (!authHeader?.startsWith('Bearer ')) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const token = authHeader.split(' ')[1];
-      const userId = await getUserId(token, env);
-      
-      if (!userId) {
-        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const url = new URL(request.url);
-      const invitationCode = url.pathname.split('/')[4]; // /groups/invitations/code/:code
-
-      const db = getDB(env);
-
-      // Get invitation details by code
-      const invitation = await db.prepare(`
-        SELECT 
-          gi.id,
-          gi.group_id,
-          gi.email,
-          gi.invited_by,
-          gi.expires_at,
-          gi.is_accepted,
-          gi.invitation_code,
-          g.name as group_name,
-          g.description as group_description,
-          u.email as inviter_email
-        FROM group_invitations gi
-        JOIN groups g ON gi.group_id = g.id
-        JOIN users u ON gi.invited_by = u.id
-        WHERE gi.invitation_code = ? AND gi.is_accepted = 0 AND gi.expires_at > ?
-      `).bind(invitationCode, Date.now()).first();
-
-      if (!invitation) {
-        return new Response(JSON.stringify({ error: 'Invitation not found or expired' }), { 
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Check if the authenticated user's email matches the invited email
-      const user = await db.prepare(`
-        SELECT email FROM users WHERE id = ?
-      `).bind(userId).first();
-
-      if (!user || user.email !== invitation.email) {
-        return new Response(JSON.stringify({ error: 'You are not authorized to view this invitation' }), { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      return new Response(JSON.stringify({ 
-        invitation: {
-          id: invitation.id,
-          group_id: invitation.group_id,
-          email: invitation.email,
-          invited_by: invitation.invited_by,
-          expires_at: invitation.expires_at,
-          is_accepted: invitation.is_accepted,
-          invitation_code: invitation.invitation_code,
-          group_name: invitation.group_name,
-          group_description: invitation.group_description,
-          inviter_email: invitation.inviter_email
-        }
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Error getting invitation details by code:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  },
-
-  // Get group by code (name or ID)
-  getGroupByCode: async (request: Request, env: Env): Promise<Response> => {
-    try {
-      const url = new URL(request.url);
-      const groupCode = decodeURIComponent(url.pathname.split('/')[3]); // /groups/info/:code
-
-      if (!groupCode) {
-        return new Response(JSON.stringify({ error: 'Group code is required' }), { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const db = getDB(env);
-
-      // Get group by code (name) or ID
-      const group = await db.prepare(`
-        SELECT id, name, description, created_at
-        FROM groups 
-        WHERE name = ? OR id = ?
-      `).bind(groupCode, groupCode).first();
-
-      if (!group) {
-        return new Response(JSON.stringify({ error: 'Group not found' }), { 
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      return new Response(JSON.stringify({ 
-        group: {
-          id: group.id,
-          name: group.name,
-          description: group.description,
-          created_at: group.created_at
-        }
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Error getting group by code:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  },
-
-  // Directly add user to group (admin function)
-  addUserToGroup: async (request: Request, env: Env): Promise<Response> => {
-    try {
-      const authHeader = request.headers.get('Authorization');
-      if (!authHeader?.startsWith('Bearer ')) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const token = authHeader.split(' ')[1];
-      const userId = await getUserId(token, env);
-      
-      if (!userId) {
-        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const url = new URL(request.url);
-      const groupId = parseInt(url.pathname.split('/')[2]);
-      
-      if (isNaN(groupId)) {
-        return new Response(JSON.stringify({ error: 'Invalid group ID' }), { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const { targetUserId } = await request.json() as { targetUserId: number };
-
-      const db = getDB(env);
-
-      // Check if group exists
-      const group = await db.prepare(`
-        SELECT id, name FROM groups WHERE id = ? AND is_active = 1
-      `).bind(groupId).first();
-
-      if (!group) {
-        return new Response(JSON.stringify({ error: 'Group not found' }), { 
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Check if current user is a leader or creator of this group
-      const userRole = await db.prepare(`
-        SELECT role FROM group_members 
-        WHERE group_id = ? AND user_id = ? AND is_active = 1
-      `).bind(groupId, userId).first();
-
-      // Check if user is super admin
-      const isSuperAdmin = await db.prepare(`
-        SELECT 1 FROM super_admins 
-        WHERE user_id = ? AND is_active = TRUE
-      `).bind(userId).first();
-
-      if ((!userRole || !['leader', 'creator'].includes(userRole.role)) && !isSuperAdmin) {
-        return new Response(JSON.stringify({ error: 'You must be a leader or creator of this group, or a super admin, to add members' }), { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Check if target user exists
-      const targetUser = await db.prepare(`
-        SELECT id, email FROM users WHERE id = ?
-      `).bind(targetUserId).first();
-
-      if (!targetUser) {
-        return new Response(JSON.stringify({ error: 'Target user not found' }), { 
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Check if user is already a member (including soft-deleted records)
-      const existingMember = await db.prepare(`
-        SELECT 1, is_active FROM group_members WHERE group_id = ? AND user_id = ?
-      `).bind(groupId, targetUserId).first();
-
-      if (existingMember) {
-        if (existingMember.is_active) {
-          return new Response(JSON.stringify({ error: 'User is already a member of this group' }), { 
-            status: 400,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        } else {
-          // Reactivate the soft-deleted member
-          await db.prepare(`
-            UPDATE group_members SET is_active = 1, role = 'member', joined_at = ? 
-            WHERE group_id = ? AND user_id = ?
-          `).bind(Date.now(), groupId, targetUserId).run();
-
-          return new Response(JSON.stringify({ 
-            success: true,
-            message: `User ${targetUser.email} has been reactivated in group ${group.name}`
-          }), {
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-      }
-
-      // Add user to group as a member
-      await db.prepare(`
-        INSERT INTO group_members (group_id, user_id, role, joined_at)
-        VALUES (?, ?, 'member', ?)
-      `).bind(groupId, targetUserId, Date.now()).run();
-
-      return new Response(JSON.stringify({ 
-        success: true,
-        message: `User ${targetUser.email} has been added to group ${group.name}`
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error: any) {
-      console.error('Error adding user to group:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-}; 
+}

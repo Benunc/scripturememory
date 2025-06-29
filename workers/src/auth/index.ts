@@ -3,6 +3,7 @@ import { Env, MagicLink, D1Result } from '../types';
 import { generateToken, verifyToken } from './token';
 import { getUserId } from '../utils/db';
 import { getVerseSet } from './sampleVerses';
+import { getRandomSillyName } from '../utils/sillyNames';
 
 // Rate limiting
 const RATE_LIMIT = 5; // requests per minute
@@ -408,11 +409,12 @@ export const handleAuth = {
             `).bind(group.id, userId).first();
 
             if (!existingMember) {
-              // Add user to group
+              // Add user to group with a silly display name
+              const sillyName = await getRandomSillyName(db);
               await db.prepare(`
-                INSERT INTO group_members (group_id, user_id, joined_at)
-                VALUES (?, ?, ?)
-              `).bind(group.id, userId, Date.now()).run();
+                INSERT INTO group_members (group_id, user_id, joined_at, display_name)
+                VALUES (?, ?, ?, ?)
+              `).bind(group.id, userId, Date.now(), sillyName).run();
             }
           }
         } catch (error) {
@@ -524,11 +526,12 @@ export const handleAuth = {
           `).bind(group.id, userId).first();
 
           if (!existingMember) {
-            // Add user to group
+            // Add user to group with a silly display name
+            const sillyName = await getRandomSillyName(db);
             await db.prepare(`
-              INSERT INTO group_members (group_id, user_id, joined_at)
-              VALUES (?, ?, ?)
-            `).bind(group.id, userId, Date.now()).run();
+              INSERT INTO group_members (group_id, user_id, joined_at, display_name)
+              VALUES (?, ?, ?, ?)
+            `).bind(group.id, userId, Date.now(), sillyName).run();
           }
         }
       } catch (error) {
