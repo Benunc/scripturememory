@@ -34,7 +34,17 @@ export const getUserId = async (token: string, env: Env): Promise<number | null>
       'SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?'
     ).bind(token, Date.now()).first() as Session | null;
 
-    return session ? session.user_id : null;
+    if (session) {
+      // Extend session by 30 days from now
+      const newExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+      await db.prepare(
+        'UPDATE sessions SET expires_at = ? WHERE token = ?'
+      ).bind(newExpiry, token).run();
+      
+      return session.user_id;
+    }
+
+    return null;
   } catch (error) {
     console.error('Error getting user ID:', error);
     return null;
