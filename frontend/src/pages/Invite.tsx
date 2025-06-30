@@ -23,6 +23,7 @@ import { Footer } from '../components/Footer';
 import { MoonIcon, SunIcon } from '@chakra-ui/icons';
 import { useColorMode } from '@chakra-ui/react';
 
+
 // Add Turnstile types
 declare global {
   interface Window {
@@ -55,6 +56,7 @@ const VERSE_SET_DESCRIPTIONS: Record<string, { title: string; description: strin
 export function Invite() {
   const [searchParams] = useSearchParams();
   const verseSet = searchParams.get('verseSet');
+  const groupCode = searchParams.get('groupCode');
   const prefillEmail = searchParams.get('email');
   
   const [email, setEmail] = useState(prefillEmail || '');
@@ -215,8 +217,8 @@ export function Invite() {
         throw new Error('Please complete the security check');
       }
 
-      // Pass the verseSet to the signIn function
-      await signIn(email, true, turnstileToken, verseSet);
+      // Pass the verseSet and groupCode to the signIn function
+      await signIn(email, true, turnstileToken, verseSet || undefined, groupCode || undefined);
       toast({
         title: "Check your email",
         description: "We've sent you a magic link to complete your registration.",
@@ -290,9 +292,13 @@ export function Invite() {
                   </Text>
                 </Box>
               )}
-              <Text fontSize="lg" color="gray.600">
-                Join Scripture Memory with a custom verse set
-              </Text>
+              {groupCode && (
+                <Box mb={4}>
+                  <Text fontSize="lg" color="gray.600">
+                    You'll be added to a group after registration.
+                  </Text>
+                </Box>
+              )}
             </Box>
 
             <Card>
@@ -335,7 +341,6 @@ export function Invite() {
                       <Text>✓ Track your memorization progress</Text>
                       <Text>✓ Get personalized review schedules</Text>
                       <Text>✓ Access your verses anywhere</Text>
-                      <Text>✓ Join a community of believers</Text>
                     </VStack>
                   </Box>
                 </VStack>
