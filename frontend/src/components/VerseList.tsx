@@ -1498,6 +1498,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     setActiveVerseId(null);
     setUserGuess('');
     setGuessFeedback(null);
+    setConsecutiveCorrectGuesses(0);
     setShowOverlay(false);
     
     // Clear recorded words from localStorage for this verse
@@ -1620,7 +1621,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
           void handleStatusChange(reference, ProgressStatus.InProgress, false);
         }
       }
-      
+      setConsecutiveCorrectGuesses(0);
       return newState;
     });
   };
