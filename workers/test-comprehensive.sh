@@ -1604,7 +1604,111 @@ INVALID_GROUP_SESSION=$(extract_token "$INVALID_GROUP_VERIFY")
 echo "${BLUE}Invalid group session: $INVALID_GROUP_SESSION${NC}"
 
 echo "${GREEN}✓ All magic link parameter tests passed${NC}"
+# ========================================
+# SUPER ADMIN TESTS
+# ========================================
+echo "${YELLOW}========================================${NC}"
+echo "${YELLOW}TESTING SUPER ADMIN FUNCTIONALITY${NC}"
+echo "${YELLOW}========================================${NC}"
 
+#test the ability to view verses from a specific user
+echo "${YELLOW}Testing the ability to view verses from a specific user...${NC}"
+
+# Test 1: Super admin viewing verses from a regular user
+echo "${YELLOW}Test 1: Super admin viewing verses from regular user...${NC}"
+SUPER_ADMIN_VIEW_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/users/2/verses" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $SUPER_ADMIN_VIEW_RESPONSE == *"error"* ]]; then
+    echo "${RED}Super admin view failed: $SUPER_ADMIN_VIEW_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Super admin view response: $SUPER_ADMIN_VIEW_RESPONSE${NC}"
+
+# Test 2: Regular user trying to view another user's verses (should fail)
+echo "${YELLOW}Test 2: Regular user trying to view another user's verses (should fail)...${NC}"
+REGULAR_USER_VIEW_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/users/1/verses" \
+  -H "Authorization: Bearer $SESSION_TOKEN")
+check_status
+
+if [[ $REGULAR_USER_VIEW_RESPONSE != *"error"* ]]; then
+    echo "${RED}Regular user view should have failed but succeeded: $REGULAR_USER_VIEW_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Regular user view correctly failed: $REGULAR_USER_VIEW_RESPONSE${NC}"
+
+# Test 3: Super admin viewing verses from non-existent user
+echo "${YELLOW}Test 3: Super admin viewing verses from non-existent user...${NC}"
+NONEXISTENT_USER_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/users/999/verses" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $NONEXISTENT_USER_RESPONSE != *"error"* ]]; then
+    echo "${RED}Non-existent user view should have failed but succeeded: $NONEXISTENT_USER_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Non-existent user view correctly failed: $NONEXISTENT_USER_RESPONSE${NC}"
+
+# Test 4: Super admin viewing verses without userId parameter
+echo "${YELLOW}Test 4: Super admin viewing verses without userId parameter...${NC}"
+NO_USERID_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/users//verses" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $NO_USERID_RESPONSE != *"error"* ]]; then
+    echo "${RED}Missing userId should have failed but succeeded: $NO_USERID_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Missing userId correctly failed: $NO_USERID_RESPONSE${NC}"
+
+# Test 5: Unauthenticated request
+echo "${YELLOW}Test 5: Unauthenticated request...${NC}"
+UNAUTH_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/users/2/verses")
+check_status
+
+if [[ $UNAUTH_RESPONSE != *"error"* ]]; then
+    echo "${RED}Unauthenticated request should have failed but succeeded: $UNAUTH_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Unauthenticated request correctly failed: $UNAUTH_RESPONSE${NC}"
+
+# Test 6: Super admin viewing their own verses
+echo "${YELLOW}Test 6: Super admin viewing their own verses...${NC}"
+SELF_VIEW_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/users/1/verses" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $SELF_VIEW_RESPONSE == *"error"* ]]; then
+    echo "${RED}Self view failed: $SELF_VIEW_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Self view response: $SELF_VIEW_RESPONSE${NC}"
+
+# Test 7: Invalid userId format
+echo "${YELLOW}Test 7: Invalid userId format...${NC}"
+INVALID_USERID_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/users/abc/verses" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $INVALID_USERID_RESPONSE != *"error"* ]]; then
+    echo "${RED}Invalid userId should have failed but succeeded: $INVALID_USERID_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Invalid userId correctly failed: $INVALID_USERID_RESPONSE${NC}"
+
+echo "${GREEN}✓ All admin verse viewing tests passed${NC}"
+
+# ========================================
+# USER LOGIN SECTION
+# ========================================
 USERS=(
   "test-anonymize@example.com"
   "test-anonymize2@example.com"
@@ -1655,6 +1759,8 @@ while true; do
     break
   fi
 done
+
+# ========================================
 
 # ========================================
 # USER DELETION

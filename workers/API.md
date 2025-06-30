@@ -1966,4 +1966,43 @@ This API documentation should provide comprehensive guidance for developers work
 - **Permissions**: 
   - Super admins can remove members from any group
   - Group leaders/creators can remove members from groups they lead
-  - Leaders/creators cannot remove themselves (super admins can) 
+  - Leaders/creators cannot remove themselves (super admins can)
+
+### Get User Verses (Super Admin Only)
+- **GET** `/admin/users/:id/verses`
+- **Description**: Get all verses for a specific user (super admin only)
+- **Headers**: `Authorization: Bearer <token>`
+- **Response**: User information, all their verses with status, and user stats
+- **Response Format**:
+```json
+{
+  "success": true,
+  "user": {
+    "id": 123,
+    "email": "user@example.com"
+  },
+  "verses": [
+    {
+      "reference": "John 3:16",
+      "text": "For God so loved the world...",
+      "status": "mastered",
+      "last_reviewed": "2024-01-15T10:30:00Z",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "stats": {
+    "total_points": 1500,
+    "verses_mastered": 5,
+    "current_streak": 3,
+    "longest_streak": 7,
+    "last_activity_date": "2024-01-15T10:30:00Z"
+  }
+}
+```
+- **Permissions**: Super admin access required
+- **Error Responses**:
+  - `400 Bad Request`: Invalid user ID
+  - `401 Unauthorized`: Missing or invalid authentication
+  - `403 Forbidden`: Super admin access required
+  - `404 Not Found`: User not found 

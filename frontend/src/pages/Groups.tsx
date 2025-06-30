@@ -41,6 +41,9 @@ import {
   FormHelperText,
   useDisclosure,
   Select,
+  Stat,
+  StatLabel,
+  StatNumber,
 } from '@chakra-ui/react';
 import { AddIcon, ViewIcon } from '@chakra-ui/icons';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -101,6 +104,12 @@ const Groups: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [deletingGroup, setDeletingGroup] = useState<number | null>(null);
   const [removingMember, setRemovingMember] = useState<{groupId: number, userId: number} | null>(null);
+  const [selectedUserForVerses, setSelectedUserForVerses] = useState<string>('');
+  const [userVerses, setUserVerses] = useState<any[]>([]);
+  const [userStats, setUserStats] = useState<any>(null);
+  const [loadingUserVerses, setLoadingUserVerses] = useState(false);
+  const [selectedUserEmail, setSelectedUserEmail] = useState<string>('');
+  const [allUsers, setAllUsers] = useState<any[]>([]);
 
   const navigate = useNavigate();
   const toast = useToast();
@@ -226,15 +235,25 @@ const Groups: React.FC = () => {
           const data = await response.json();
           setIsSuperAdmin(data.isSuperAdmin);
           
-          // If super admin, load all groups
+          // If super admin, load all groups and all users
           if (data.isSuperAdmin) {
-            const allGroupsResponse = await fetch(`${getApiUrl()}/admin/groups`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const [allGroupsResponse, allUsersResponse] = await Promise.all([
+              fetch(`${getApiUrl()}/admin/groups`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              }),
+              fetch(`${getApiUrl()}/admin/users`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              })
+            ]);
             
             if (allGroupsResponse.ok) {
               const allGroupsData = await allGroupsResponse.json();
               setAllGroups(allGroupsData.groups || []);
+            }
+            
+            if (allUsersResponse.ok) {
+              const allUsersData = await allUsersResponse.json();
+              setAllUsers(allUsersData.users || []);
             }
           }
         }
@@ -568,6 +587,46 @@ const Groups: React.FC = () => {
     }
   };
 
+  const handleLoadUserVerses = async () => {
+    if (!isAuthenticated || !token || !selectedUserForVerses) return;
+    
+    try {
+      setLoadingUserVerses(true);
+      
+      const response = await fetch(`${getApiUrl()}/admin/users/${selectedUserForVerses}/verses`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setUserVerses(result.verses || []);
+        setUserStats(result.stats);
+        setSelectedUserEmail(result.user.email);
+      } else {
+        const error = await response.json();
+        toast({
+          title: 'Error',
+          description: error.error || 'Failed to load user verses',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load user verses',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoadingUserVerses(false);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <Container maxW="container.md" py={8}>
@@ -609,6 +668,9 @@ const Groups: React.FC = () => {
                 <Tab whiteSpace="nowrap">My Groups</Tab>
                 {isSuperAdmin && (
                   <Tab whiteSpace="nowrap">All Groups</Tab>
+                )}
+                {isSuperAdmin && (
+                  <Tab whiteSpace="nowrap">User Verses</Tab>
                 )}
                 <Tab whiteSpace="nowrap">Join Group</Tab>
                 <Tab whiteSpace="nowrap">Profile Settings</Tab>
@@ -798,6 +860,153 @@ const Groups: React.FC = () => {
                             </Card>
                           ))}
                         </SimpleGrid>
+                      )}
+                    </VStack>
+                  </TabPanel>
+                )}
+
+                {/* User Verses Tab - Super Admin Only */}
+                {isSuperAdmin && (
+                  <TabPanel px={{ base: 0, md: 4 }}>
+                    <VStack spacing={6} align="stretch">
+                      <Card>
+                        <CardHeader>
+                          <Heading size="md">User Verses (Super Admin View)</Heading>
+                        </CardHeader>
+                        <CardBody>
+                          <Text color="gray.600" fontSize={{ base: "sm", md: "md" }}>
+                            View any user's verses and their progress status. Select a user to see their complete verse list.
+                          </Text>
+                        </CardBody>
+                      </Card>
+
+                      {/* User Selection */}
+                      <Card>
+                        <CardBody>
+                          <VStack spacing={4} align="stretch">
+                            <FormControl>
+                              <FormLabel>Select User</FormLabel>
+                              <Select 
+                                value={selectedUserForVerses}
+                                onChange={(e) => setSelectedUserForVerses(e.target.value)}
+                                placeholder="Select a user to view their verses"
+                                size={{ base: "md", md: "lg" }}
+                              >
+                                {allUsers.map((user) => (
+                                  <option key={user.id} value={user.id}>
+                                    {user.email} (ID: {user.id})
+                                  </option>
+                                ))}
+                              </Select>
+                              <FormHelperText fontSize="xs">
+                                Choose a user to view their verses and progress
+                              </FormHelperText>
+                            </FormControl>
+
+                            <Button 
+                              colorScheme="blue" 
+                              onClick={handleLoadUserVerses}
+                              isLoading={loadingUserVerses}
+                              loadingText="Loading Verses..."
+                              isDisabled={!selectedUserForVerses}
+                              size={{ base: "md", md: "lg" }}
+                              width={{ base: "full", md: "auto" }}
+                            >
+                              Load User Verses
+                            </Button>
+                          </VStack>
+                        </CardBody>
+                      </Card>
+
+                      {/* User Stats */}
+                      {userStats && (
+                        <Card>
+                          <CardHeader>
+                            <Heading size="md">User Stats: {selectedUserEmail}</Heading>
+                          </CardHeader>
+                          <CardBody>
+                            <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
+                              <Stat>
+                                <StatLabel>Total Points</StatLabel>
+                                <StatNumber>{userStats.total_points?.toLocaleString() || 0}</StatNumber>
+                              </Stat>
+                              <Stat>
+                                <StatLabel>Verses Mastered</StatLabel>
+                                <StatNumber>{userStats.verses_mastered || 0}</StatNumber>
+                              </Stat>
+                              <Stat>
+                                <StatLabel>Current Streak</StatLabel>
+                                <StatNumber>{userStats.current_streak || 0}</StatNumber>
+                              </Stat>
+                              <Stat>
+                                <StatLabel>Longest Streak</StatLabel>
+                                <StatNumber>{userStats.longest_streak || 0}</StatNumber>
+                              </Stat>
+                            </SimpleGrid>
+                            {userStats.last_activity_date && (
+                              <Text fontSize="sm" color="gray.500" mt={4}>
+                                Last Activity: {new Date(userStats.last_activity_date).toLocaleDateString()}
+                              </Text>
+                            )}
+                          </CardBody>
+                        </Card>
+                      )}
+
+                      {/* User Verses List */}
+                      {userVerses.length > 0 && (
+                        <Card>
+                          <CardHeader>
+                            <Heading size="md">User Verses ({userVerses.length} total)</Heading>
+                          </CardHeader>
+                          <CardBody>
+                            <VStack spacing={3} align="stretch">
+                              {userVerses.map((verse: any) => (
+                                <Box key={verse.reference} p={4} border="1px" borderColor="gray.200" borderRadius="md">
+                                  <VStack align="start" spacing={2}>
+                                    <HStack justify="space-between" width="full">
+                                      <Text fontWeight="bold" fontSize="md">{verse.reference}</Text>
+                                      <Badge 
+                                        colorScheme={
+                                          verse.status === 'mastered' ? 'green' : 
+                                          verse.status === 'learning' ? 'yellow' : 
+                                          verse.status === 'new' ? 'blue' : 'gray'
+                                        }
+                                        fontSize="xs"
+                                      >
+                                        {verse.status}
+                                      </Badge>
+                                    </HStack>
+                                    <Text fontSize="sm" color="gray.600" noOfLines={3}>
+                                      {verse.text}
+                                    </Text>
+                                    <HStack spacing={4} fontSize="xs" color="gray.500">
+                                      <Text>Added: {new Date(verse.created_at).toLocaleDateString()}</Text>
+                                      {verse.last_reviewed && (
+                                        <Text>Last Review: {new Date(verse.last_reviewed).toLocaleDateString()}</Text>
+                                      )}
+                                    </HStack>
+                                  </VStack>
+                                </Box>
+                              ))}
+                            </VStack>
+                          </CardBody>
+                        </Card>
+                      )}
+
+                      {/* No Verses Message */}
+                      {selectedUserForVerses && userVerses.length === 0 && !loadingUserVerses && (
+                        <Card>
+                          <CardBody>
+                            <VStack spacing={4} textAlign="center">
+                              <Text fontSize="lg" fontWeight="medium">
+                                No verses found
+                              </Text>
+                              <Text color="gray.600">
+                                This user hasn't added any verses yet.
+                              </Text>
+                            </VStack>
+                          </CardBody>
+                        </Card>
                       )}
                     </VStack>
                   </TabPanel>

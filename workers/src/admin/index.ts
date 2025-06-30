@@ -676,5 +676,193 @@ export const handleAdmin = {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  },
+
+  // Get user's verses (super admin only)
+  getUserVerses: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      // Require super admin access
+      const userId = await requireSuperAdmin(request, env);
+      
+      const url = new URL(request.url);
+      const targetUserId = parseInt(url.pathname.split('/')[3]); // /admin/users/:id/verses
+      
+      if (isNaN(targetUserId)) {
+        return new Response(JSON.stringify({ error: 'Invalid user ID' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Check if target user exists
+      const user = await db.prepare(`
+        SELECT id, email FROM users WHERE id = ?
+      `).bind(targetUserId).first();
+
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'User not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get all verses for the user
+      const verses = await db.prepare(`
+        SELECT 
+          v.reference,
+          v.text,
+          v.status,
+          v.translation,
+          v.created_at
+        FROM verses v
+        WHERE v.user_id = ?
+        ORDER BY v.created_at DESC
+      `).bind(targetUserId).all();
+
+      // Get user stats
+      const stats = await db.prepare(`
+        SELECT 
+          total_points,
+          verses_mastered,
+          current_streak,
+          longest_streak,
+          last_activity_date
+        FROM user_stats 
+        WHERE user_id = ?
+      `).bind(targetUserId).first();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email
+        },
+        verses: verses.results,
+        stats: stats || {
+          total_points: 0,
+          verses_mastered: 0,
+          current_streak: 0,
+          longest_streak: 0,
+          last_activity_date: null
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (error.message === 'Super admin access required') {
+        return new Response(JSON.stringify({ error: 'Super admin access required' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      console.error('Error getting user verses:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get user's verses by userId query parameter (super admin only)
+  getVerses: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      // Require super admin access
+      const userId = await requireSuperAdmin(request, env);
+      
+      const url = new URL(request.url);
+      const targetUserId = parseInt(url.searchParams.get('userId') || '');
+      
+      if (isNaN(targetUserId)) {
+        return new Response(JSON.stringify({ error: 'Invalid or missing userId parameter' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Check if target user exists
+      const user = await db.prepare(`
+        SELECT id, email FROM users WHERE id = ?
+      `).bind(targetUserId).first();
+
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'User not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get all verses for the user
+      const verses = await db.prepare(`
+        SELECT 
+          v.reference,
+          v.text,
+          v.status,
+          v.translation,
+          v.created_at
+        FROM verses v
+        WHERE v.user_id = ?
+        ORDER BY v.created_at DESC
+      `).bind(targetUserId).all();
+
+      // Get user stats
+      const stats = await db.prepare(`
+        SELECT 
+          total_points,
+          verses_mastered,
+          current_streak,
+          longest_streak,
+          last_activity_date
+        FROM user_stats 
+        WHERE user_id = ?
+      `).bind(targetUserId).first();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email
+        },
+        verses: verses.results,
+        stats: stats || {
+          total_points: 0,
+          verses_mastered: 0,
+          current_streak: 0,
+          longest_streak: 0,
+          last_activity_date: null
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (error.message === 'Super admin access required') {
+        return new Response(JSON.stringify({ error: 'Super admin access required' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      console.error('Error getting user verses:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 }; 

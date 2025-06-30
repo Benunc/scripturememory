@@ -115,6 +115,7 @@ router.post('/admin/permissions/revoke', handleAdmin.revokePermission);
 router.get('/admin/check-super-admin', handleAdmin.checkSuperAdmin);
 router.delete('/admin/groups/:id/delete', handleAdmin.deleteGroup);
 router.delete('/admin/groups/:id/members/:memberId/remove', handleAdmin.removeMember);
+router.get('/admin/users/:id/verses', handleAdmin.getUserVerses);
 
 // Export the fetch handler
 export default {
