@@ -1155,12 +1155,9 @@ const GroupDetails: React.FC = () => {
                                 placeholder="Select a verse set"
                                 size={{ base: "md", md: "lg" }}
                               >
+                                <option value="default">Default Verses</option>
                                 <option value="childrens_verses">Children's Verses</option>
-                                <option value="foundational_verses">Foundational Verses</option>
-                                <option value="gospel_verses">Gospel Verses</option>
-                                <option value="prayer_verses">Prayer Verses</option>
-                                <option value="comfort_verses">Comfort Verses</option>
-                                <option value="wisdom_verses">Wisdom Verses</option>
+                                <option value="gpc_youth">GPC Youth Starter Verses</option>
                               </Select>
                               <FormHelperText fontSize="xs">
                                 Select a verse set to assign to the member
