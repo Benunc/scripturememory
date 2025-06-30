@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@chakra-ui/react';
 import { Verse } from '../types';
-import { useAuth } from './useAuth';
+import { useAuthContext } from '../contexts/AuthContext';
 import { getVerses, addVerse as apiAddVerse, updateVerse as apiUpdateVerse, deleteVerse as apiDeleteVerse } from '../utils/api';
 import { debug } from '../utils/debug';
 
@@ -10,7 +10,7 @@ export function useVerses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const toast = useToast();
-  const { isAuthenticated, token } = useAuth();
+  const { isAuthenticated, token, signOut } = useAuthContext();
 
   useEffect(() => {
     if (!isAuthenticated || !token) {
@@ -37,6 +37,19 @@ export function useVerses() {
       
       const response = await getVerses(token);
       if (response.error) {
+        // Check if this is a session expiration error
+        if (response.error.includes('Invalid or expired session') || response.error.includes('Unauthorized')) {
+          debug.log('verses', 'Session expired, signing out user');
+          toast({
+            title: "Session Expired",
+            description: "Your session has expired. Please sign in again.",
+            status: "info",
+            duration: 3000,
+            isClosable: true,
+          });
+          signOut();
+          return;
+        }
         throw new Error(response.error);
       }
       
@@ -49,17 +62,19 @@ export function useVerses() {
     } catch (err) {
       debug.error('verses', 'Error loading verses:', err);
       setError(err instanceof Error ? err : new Error('Failed to load verses'));
-      toast({
-        title: "Trouble Loading Verses",
-        description: "We're having trouble loading your verses. This is usually temporary and can be fixed by clicking 'Retry'.",
-        status: "warning",
-        duration: null,
-        isClosable: true,
-        position: "top",
-        onCloseComplete: () => {
-          loadVerses();
-        }
-      });
+      
+      // Only show error toast for non-session-expiration errors
+      if (err instanceof Error && 
+          !err.message.includes('Invalid or expired session') && 
+          !err.message.includes('Unauthorized')) {
+        toast({
+          title: "Trouble Loading Verses",
+          description: "We're having trouble loading your verses. Please try again.",
+          status: "warning",
+          duration: 5000,
+          isClosable: true,
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -75,6 +90,19 @@ export function useVerses() {
       
       const response = await apiAddVerse(token, verse);
       if (response.error) {
+        // Check if this is a session expiration error
+        if (response.error.includes('Invalid or expired session') || response.error.includes('Unauthorized')) {
+          debug.log('verses', 'Session expired during verse addition, signing out user');
+          toast({
+            title: "Session Expired",
+            description: "Your session has expired. Please sign in again.",
+            status: "info",
+            duration: 3000,
+            isClosable: true,
+          });
+          signOut();
+          return;
+        }
         throw new Error(response.error);
       }
 
@@ -99,6 +127,19 @@ export function useVerses() {
     try {
       const response = await apiUpdateVerse(token, reference, updates);
       if (response.error) {
+        // Check if this is a session expiration error
+        if (response.error.includes('Invalid or expired session') || response.error.includes('Unauthorized')) {
+          debug.log('verses', 'Session expired during verse update, signing out user');
+          toast({
+            title: "Session Expired",
+            description: "Your session has expired. Please sign in again.",
+            status: "info",
+            duration: 3000,
+            isClosable: true,
+          });
+          signOut();
+          return;
+        }
         throw new Error(response.error);
       }
 
@@ -124,6 +165,19 @@ export function useVerses() {
     try {
       const response = await apiDeleteVerse(token, reference);
       if (response.error) {
+        // Check if this is a session expiration error
+        if (response.error.includes('Invalid or expired session') || response.error.includes('Unauthorized')) {
+          debug.log('verses', 'Session expired during verse deletion, signing out user');
+          toast({
+            title: "Session Expired",
+            description: "Your session has expired. Please sign in again.",
+            status: "info",
+            duration: 3000,
+            isClosable: true,
+          });
+          signOut();
+          return;
+        }
         throw new Error(response.error);
       }
 
