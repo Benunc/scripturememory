@@ -1585,6 +1585,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         message: isCorrect ? (nextWordIndex + words.length >= verseWords.length ? "Great job! Practice again with the reset button." : "Great job! Keep going!") : "Not quite right. Try again or use the hint button."
       });
       
+      // Reset streak for incorrect guesses
+      if (!isCorrect) {
+        setConsecutiveCorrectGuesses(0);
+      }
+      
       // Clear feedback after delay
       setTimeout(() => {
         setGuessFeedback(null);
