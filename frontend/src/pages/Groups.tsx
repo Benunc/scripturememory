@@ -976,7 +976,7 @@ const Groups: React.FC = () => {
                                         {verse.status}
                                       </Badge>
                                     </HStack>
-                                    <Text fontSize="sm" color="gray.600" noOfLines={3}>
+                                    <Text fontSize="sm" color="gray.600">
                                       {verse.text}
                                     </Text>
                                     <HStack spacing={4} fontSize="xs" color="gray.500">
