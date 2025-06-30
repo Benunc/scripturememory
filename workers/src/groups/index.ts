@@ -872,13 +872,29 @@ export const handleGroups = {
       `).bind(groupId).all();
 
       // Process members to handle privacy settings
-      const processedMembers = members.results.map((member: any) => ({
-        user_id: member.user_id,
-        role: member.role,
-        joined_at: member.joined_at,
-        member_email: hasAdminPrivileges ? member.member_email : (member.is_public ? member.member_email : 'Anonymous'),
-        display_name: hasAdminPrivileges ? member.member_email : (member.is_public ? ((member.display_name && member.display_name !== 'null') ? member.display_name : 'Anonymous') : 'Anonymous')
-      }));
+      const processedMembers = members.results.map((member: any) => {
+        const displayName = member.display_name && member.display_name !== 'null' ? member.display_name : 'Anonymous';
+        
+        if (hasAdminPrivileges) {
+          // For admins/leaders: show email with display name in parentheses
+          return {
+            user_id: member.user_id,
+            role: member.role,
+            joined_at: member.joined_at,
+            member_email: `${member.member_email} (${displayName})`,
+            display_name: `${member.member_email} (${displayName})`
+          };
+        } else {
+          // For regular members: show display name or Anonymous based on privacy
+          return {
+            user_id: member.user_id,
+            role: member.role,
+            joined_at: member.joined_at,
+            member_email: member.is_public ? member.member_email : 'Anonymous',
+            display_name: member.is_public ? displayName : 'Anonymous'
+          };
+        }
+      });
 
       return new Response(JSON.stringify({ 
         success: true, 
@@ -1323,7 +1339,9 @@ export const handleGroups = {
         processedLeaderboard.push({
           rank: Number(currentRank) || 0,
           user_id: Number(entry.user_id) || 0,
-          display_name: hasAdminPrivileges ? (entry.member_email || 'Anonymous') : (entry.is_public ? (typeof entry.display_name === 'string' && entry.display_name !== 'null' ? entry.display_name : 'Anonymous') : 'Anonymous'),
+          display_name: hasAdminPrivileges ? 
+            `${entry.member_email || 'Anonymous'} (${entry.display_name && entry.display_name !== 'null' ? entry.display_name : 'Anonymous'})` : 
+            (entry.is_public ? (typeof entry.display_name === 'string' && entry.display_name !== 'null' ? entry.display_name : 'Anonymous') : 'Anonymous'),
           points: Number(entry.total_points) || 0,
           verses_mastered: Number(entry.verses_mastered) || 0,
           current_streak: Number(entry.current_streak) || 0,
