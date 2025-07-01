@@ -1735,15 +1735,28 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     if (activeVerseId === verse.reference) {
       const words = splitVerseText(verse.text);
       const nextWordIndex = findFirstUnrevealedWordIndex(words);
+      const maxWords = 30;
+      
+      // Calculate the visible range centered around the current word
+      const halfWindow = Math.floor(maxWords / 2);
+      let startIndex = Math.max(0, nextWordIndex - halfWindow);
+      let endIndex = Math.min(words.length, startIndex + maxWords);
+      
+      // Adjust if we're near the end
+      if (endIndex === words.length) {
+        startIndex = Math.max(0, endIndex - maxWords);
+      }
 
       return (
         <VStack align="stretch" spacing={3}>
           <Text fontSize="lg" color={textColor}>
-            {words.map((word, index) => {
-              const isRevealed = revealedWords.includes(index);
-              const isNextWord = index === nextWordIndex;
+            {startIndex > 0 && '... '}
+            {words.slice(startIndex, endIndex).map((word, index) => {
+              const actualIndex = startIndex + index;
+              const isRevealed = revealedWords.includes(actualIndex);
+              const isNextWord = actualIndex === nextWordIndex;
               return (
-                <React.Fragment key={index}>
+                <React.Fragment key={actualIndex}>
                   <span 
                     style={{
                       backgroundColor: isNextWord ? 'rgba(66, 153, 225, 0.2)' : 'transparent',
@@ -1755,10 +1768,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                   >
                     {isRevealed ? word : '_____'}
                   </span>
-                  {index < words.length - 1 ? ' ' : ''}
+                  {actualIndex < words.length - 1 ? ' ' : ''}
                 </React.Fragment>
               );
             })}
+            {endIndex < words.length && ' ...'}
           </Text>
           <Flex direction="column" align="center" gap={2}>
             <Flex gap={2} align="center" justify="center" width="100%">
@@ -1869,7 +1883,13 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
     return (
       <Text fontSize="lg" color={textColor}>
-        {splitVerseText(verse.text).map((_, index) => '_____').join(' ')}
+        {(() => {
+          const words = splitVerseText(verse.text);
+          const maxWords = 30; // Show approximately 3 lines worth of blanks
+          const displayWords = words.slice(0, maxWords);
+          const blanks = displayWords.map(() => '_____').join(' ');
+          return words.length > maxWords ? `${blanks} ...` : blanks;
+        })()}
       </Text>
     );
   };
