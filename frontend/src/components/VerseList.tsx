@@ -867,7 +867,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     // Attach emdashes to the preceding word so they don't become separate words
     // Also split on hyphens to separate hyphenated words
     let processedText = text.replace(/—/g, '— ');
-    processedText = processedText.replace(/-/g, '- ');
+    processedText = processedText.replace(/-/g, ' ');
     // Split on whitespace and filter out empty strings
     return processedText.split(/\s+/).filter(word => word.length > 0);
   };
@@ -888,9 +888,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         throw new Error('Verse not found');
       }
 
-      const words = verse.text.split(' ');
+      const words = splitVerseText(verse.text);
       const attempt = masteryState.attempt.trim();
-      const attemptWords = attempt.split(' ');
+      const attemptWords = splitVerseText(attempt);
 
       // Calculate accuracy
       const correctWords = attemptWords.filter((word, index) => 
@@ -1528,8 +1528,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     if (!userGuess.trim()) return;
 
     const words = userGuess.trim().split(/\s+/);
-    const nextWordIndex = findFirstUnrevealedWordIndex(words);
     const verseWords = splitVerseText(verse.text);
+    const nextWordIndex = findFirstUnrevealedWordIndex(verseWords);
     
     // Normalize both the user's guess and the verse words for comparison
     const isCorrect = words.every((word, i) => {
@@ -2136,7 +2136,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                     </Button>
                   ) : (
                     <>
-                      {!showFullVerse[verse.reference] && revealedWords.length < verse.text.split(' ').length && (
+                      {!showFullVerse[verse.reference] && revealedWords.length < splitVerseText(verse.text).length && (
                         <Button
                           size="sm"
                           variant="outline"
