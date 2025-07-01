@@ -211,7 +211,7 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
 
   // Helper function to normalize words
   const normalizeWord = (word: string): string => {
-    return word.toLowerCase().replace(/[.,;:!?'"-]/g, '');
+    return word.toLowerCase().replace(/[.,;:!?'"—_()\[\]/…]/g, '');
   };
 
   // Helper function to get time until next attempt
@@ -859,7 +859,17 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
   // Add helper function to normalize words (remove punctuation and convert to lowercase)
   const normalizeWord = (word: string): string => {
-    return word.toLowerCase().replace(/[.,;:!?'"-]/g, '');
+    return word.toLowerCase().replace(/[.,;:!?'"—_()\[\]/…]/g, '');
+  };
+
+  // Helper function to split verse text properly, handling emdashes and special characters
+  const splitVerseText = (text: string): string[] => {
+    // Attach emdashes to the preceding word so they don't become separate words
+    // Also split on hyphens to separate hyphenated words
+    let processedText = text.replace(/—/g, '— ');
+    processedText = processedText.replace(/-/g, '- ');
+    // Split on whitespace and filter out empty strings
+    return processedText.split(/\s+/).filter(word => word.length > 0);
   };
 
   // Update handleMasteryAttempt to update progress immediately
@@ -1436,7 +1446,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     const verse = verses.find(v => v.reference === activeVerseId);
     if (!verse) return 0;
 
-    const verseWords = verse.text.split(' ');
+    const verseWords = splitVerseText(verse.text);
     for (let i = 0; i < verseWords.length; i++) {
       if (!revealedWords.includes(i)) {
         return i;
@@ -1450,7 +1460,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     const verse = verses.find(v => v.reference === reference);
     if (!verse) return;
 
-    const words = verse.text.split(' ');
+    const words = splitVerseText(verse.text);
     const nextWordIndex = findFirstUnrevealedWordIndex(words);
     
     // Reset streak when using hint
@@ -1519,7 +1529,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
     const words = userGuess.trim().split(/\s+/);
     const nextWordIndex = findFirstUnrevealedWordIndex(words);
-    const verseWords = verse.text.split(' ');
+    const verseWords = splitVerseText(verse.text);
     
     // Normalize both the user's guess and the verse words for comparison
     const isCorrect = words.every((word, i) => {
@@ -1723,7 +1733,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     }
 
     if (activeVerseId === verse.reference) {
-      const words = verse.text.split(' ');
+      const words = splitVerseText(verse.text);
       const nextWordIndex = findFirstUnrevealedWordIndex(words);
 
       return (
@@ -1761,13 +1771,13 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                   if (value.endsWith(' ')) {
                     e.preventDefault();
                     // Remove the space before submitting
-                    const sanitizedValue = value.slice(0, -1).replace(/[^a-zA-Z0-9.,;:!?'"-]/g, '');
+                    const sanitizedValue = value.slice(0, -1).replace(/[^a-zA-Z0-9.,;:!?'"—]/g, '');
                     setUserGuess(sanitizedValue);
                     handleGuessSubmit(verse.reference);
                     return;
                   }
                   // Otherwise just sanitize normally
-                  const sanitizedValue = value.replace(/[^a-zA-Z0-9.,;:!?'"-]/g, '');
+                  const sanitizedValue = value.replace(/[^a-zA-Z0-9.,;:!?'"—]/g, '');
                   setUserGuess(sanitizedValue);
                   if (sanitizedValue.length > 1) {
                     setGuessFeedback(null);
@@ -1776,7 +1786,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                 onKeyDown={(e) => {
                   if (e.key === 'Backspace' && userGuess.endsWith(' ')) {
                     e.preventDefault();
-                    const sanitizedValue = userGuess.slice(0, -1).replace(/[^a-zA-Z0-9.,;:!?'"-]/g, '');
+                    const sanitizedValue = userGuess.slice(0, -1).replace(/[^a-zA-Z0-9.,;:!?'"—]/g, '');
                     setUserGuess(sanitizedValue);
                     handleGuessSubmit(verse.reference);
                     return;
@@ -1859,7 +1869,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
     return (
       <Text fontSize="lg" color={textColor}>
-        {verse.text.split(' ').map((_, index) => '_____').join(' ')}
+        {splitVerseText(verse.text).map((_, index) => '_____').join(' ')}
       </Text>
     );
   };
