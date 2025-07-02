@@ -1409,6 +1409,25 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     }
   };
 
+  // Helper function to reset verse streak on backend
+  const resetVerseStreak = async (reference: string) => {
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) return;
+
+      await fetch(`${getApiUrl()}/progress/reset-streak`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({ verse_reference: reference })
+      });
+    } catch (error) {
+      console.error('Error resetting verse streak:', error);
+    }
+  };
+
   // Update handleStart to use number[] for revealedWords
   const handleStart = (reference: string) => {
     setActiveVerseId(reference);
@@ -1421,6 +1440,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     setGuessFeedback(null);
     setShowOverlay(true);
     setConsecutiveCorrectGuesses(0);
+    void resetVerseStreak(reference);
     
     // Clear recorded words from localStorage for this verse
     setRecordedWords(prev => {
@@ -1465,6 +1485,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     
     // Reset streak when using hint
     setConsecutiveCorrectGuesses(0);
+    void resetVerseStreak(reference);
     
     // Ensure we don't try to reveal beyond the verse length
     if (nextWordIndex >= words.length) {
@@ -1633,6 +1654,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         }
       }
       setConsecutiveCorrectGuesses(0);
+      void resetVerseStreak(reference);
       return newState;
     });
   };

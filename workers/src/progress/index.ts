@@ -444,5 +444,60 @@ export const handleProgress = {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  },
+
+  // Reset verse streak (for hints, show verse, start memorizing)
+  resetVerseStreak: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const { verse_reference } = await request.json() as { verse_reference: string };
+      
+      if (!verse_reference) {
+        return new Response(JSON.stringify({ error: 'Missing verse reference' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+      
+      // Reset the verse streak for this user
+      await db.prepare(`
+        UPDATE user_stats 
+        SET current_verse_streak = 0,
+            current_verse_reference = ?
+        WHERE user_id = ?
+      `).bind(verse_reference, userId).run();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: 'Verse streak reset'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error resetting verse streak:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 }; 

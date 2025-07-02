@@ -65,6 +65,7 @@ router.post('/verses/assign-set', handleVerses.assignVerseSet);
 // Progress routes
 router.post('/progress/word', handleProgress.recordWordProgress);
 router.post('/progress/verse', handleProgress.recordVerseAttempt);
+router.post('/progress/reset-streak', handleProgress.resetVerseStreak);
 router.get('/progress/mastery/:reference', handleProgress.getMasteryProgress);
 
 // Gamification routes
