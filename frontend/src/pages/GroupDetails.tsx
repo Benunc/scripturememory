@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Container,
   VStack,
@@ -97,8 +97,9 @@ interface GroupStats {
 const GroupDetails: React.FC = () => {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated, token } = useAuthContext();
+  const { isAuthenticated, token, isLoading } = useAuthContext();
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,9 +133,35 @@ const GroupDetails: React.FC = () => {
   const [leaderboardSortDirection, setLeaderboardSortDirection] = useState<'asc' | 'desc'>('desc');
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
+  // Read tab from URL params on mount
   useEffect(() => {
-    if (!isAuthenticated || !token || !groupId) {
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      const tabIndex = parseInt(tabParam);
+      if (!isNaN(tabIndex) && tabIndex >= 0 && tabIndex <= 3) { // 0-3 for our 4 tabs
+        setActiveTab(tabIndex);
+      }
+    }
+  }, [searchParams]);
+
+  // Handle tab change and update URL
+  const handleTabChange = (index: number) => {
+    setActiveTab(index);
+    setSearchParams({ tab: index.toString() });
+  };
+
+  useEffect(() => {
+    if (!isLoading && (!isAuthenticated || !token || !groupId)) {
       navigate('/groups');
+      return;
+    }
+
+    if (isLoading) {
+      return; // Don't load data while still checking authentication
+    }
+
+    // Type guard to ensure groupId is defined
+    if (!groupId) {
       return;
     }
 
@@ -233,10 +260,10 @@ const GroupDetails: React.FC = () => {
 
   // Separate useEffect for leaderboard loading
   useEffect(() => {
-    if (isAuthenticated && token && groupId) {
+    if (isAuthenticated && token && groupId && activeTab === 2) {
       reloadLeaderboard();
     }
-  }, [leaderboardTimeframe, leaderboardSortColumn, leaderboardSortDirection]);
+  }, [leaderboardTimeframe, leaderboardSortColumn, leaderboardSortDirection, activeTab, isAuthenticated, token, groupId]);
 
   // Check if user has admin privileges and load admin data
   useEffect(() => {
@@ -806,7 +833,7 @@ const GroupDetails: React.FC = () => {
             </HStack>
 
             {/* Tabs */}
-            <Tabs index={activeTab} onChange={setActiveTab}>
+            <Tabs index={activeTab} onChange={handleTabChange}>
               <TabList overflowX="auto" css={{
                 '&::-webkit-scrollbar': { display: 'none' },
                 scrollbarWidth: 'none',
