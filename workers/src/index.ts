@@ -71,6 +71,8 @@ router.get('/progress/mastery/:reference', handleProgress.getMasteryProgress);
 // Gamification routes
 router.post('/gamification/points', handleGamification.recordPointEvent);
 router.get('/gamification/stats', handleGamification.getUserStats);
+router.get('/gamification/time-based-stats', handleGamification.getTimeBasedStats);
+router.get('/gamification/leaderboard/:groupId', handleGamification.getTimeBasedLeaderboard);
 
 // Groups routes
 router.post('/groups/create', handleGroups.createGroup);

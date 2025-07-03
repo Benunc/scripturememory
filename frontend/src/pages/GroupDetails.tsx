@@ -51,6 +51,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { AppHeader } from '../components/AppHeader';
 import { Footer } from '../components/Footer';
 import { getApiUrl } from '../utils/api';
+import { getCachedData, setCachedData, getLeaderboardCacheKey, clearLeaderboardCache } from '../utils/cache';
 
 interface GroupMember {
   user_id: number;
@@ -69,6 +70,10 @@ interface LeaderboardEntry {
   current_streak: number;
   longest_streak: number;
   is_public: boolean;
+  metric_value?: number;
+  total_events?: number;
+  time_filtered_points?: number;
+  time_filtered_verses_mastered?: number;
 }
 
 interface GroupStats {
@@ -120,6 +125,12 @@ const GroupDetails: React.FC = () => {
   const [removingMember, setRemovingMember] = useState<number | null>(null);
   const [makingLeader, setMakingLeader] = useState<string | null>(null);
   const [demotingLeader, setDemotingLeader] = useState<string | null>(null);
+  
+  // Leaderboard filter state
+  const [leaderboardTimeframe, setLeaderboardTimeframe] = useState<string>('all');
+  const [leaderboardSortColumn, setLeaderboardSortColumn] = useState<string>('points');
+  const [leaderboardSortDirection, setLeaderboardSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated || !token || !groupId) {
@@ -128,10 +139,10 @@ const GroupDetails: React.FC = () => {
     }
 
     const loadGroupData = async () => {
-      setLoading(true);
-      setError(null);
-      
       try {
+        setLoading(true);
+        setError('');
+
         // First check if user is super admin
         let isSuperAdmin = false;
         const superAdminResponse = await fetch(`${getApiUrl()}/admin/check-super-admin`, {
@@ -200,16 +211,6 @@ const GroupDetails: React.FC = () => {
           setMembers(membersData.members || []);
         }
 
-        // Load leaderboard
-        const leaderboardResponse = await fetch(`${getApiUrl()}/groups/${groupId}/leaderboard?metric=points`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (leaderboardResponse.ok) {
-          const leaderboardData = await leaderboardResponse.json();
-          setLeaderboard(leaderboardData.leaderboard || []);
-        }
-
         // Load stats
         const statsResponse = await fetch(`${getApiUrl()}/groups/${groupId}/stats`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -219,10 +220,9 @@ const GroupDetails: React.FC = () => {
           const statsData = await statsResponse.json();
           setStats(statsData.stats);
         }
-
       } catch (error) {
-        setError('Failed to load group data');
         console.error('Error loading group data:', error);
+        setError('Failed to load group data');
       } finally {
         setLoading(false);
       }
@@ -230,6 +230,13 @@ const GroupDetails: React.FC = () => {
 
     loadGroupData();
   }, [isAuthenticated, token, groupId, navigate]);
+
+  // Separate useEffect for leaderboard loading
+  useEffect(() => {
+    if (isAuthenticated && token && groupId) {
+      reloadLeaderboard();
+    }
+  }, [leaderboardTimeframe, leaderboardSortColumn, leaderboardSortDirection]);
 
   // Check if user has admin privileges and load admin data
   useEffect(() => {
@@ -640,7 +647,7 @@ const GroupDetails: React.FC = () => {
         const result = await response.json();
         toast({
           title: 'Success',
-          description: result.message || 'Leader demoted to member successfully',
+          description: result.message || `${memberEmail} has been demoted to member`,
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -659,7 +666,7 @@ const GroupDetails: React.FC = () => {
         const error = await response.json();
         toast({
           title: 'Error',
-          description: error.error || 'Failed to demote leader to member',
+          description: error.error || 'Failed to demote leader',
           status: 'error',
           duration: 3000,
           isClosable: true,
@@ -668,13 +675,67 @@ const GroupDetails: React.FC = () => {
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Failed to demote leader to member',
+        description: 'Failed to demote leader',
         status: 'error',
         duration: 3000,
         isClosable: true,
       });
     } finally {
       setDemotingLeader(null);
+    }
+  };
+
+  // Reload leaderboard with current filters
+  const reloadLeaderboard = async () => {
+    if (!isAuthenticated || !token || !groupId) return;
+    
+    // Generate cache key
+    const cacheKey = getLeaderboardCacheKey(groupId, leaderboardTimeframe, leaderboardSortColumn, leaderboardSortDirection);
+    
+    // Check cache first
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      setLeaderboard(cachedData);
+      return; // No API call needed
+    }
+    
+    try {
+      setLoadingLeaderboard(true);
+      
+      const response = await fetch(`${getApiUrl()}/gamification/leaderboard/${groupId}?timeframe=${leaderboardTimeframe}&metric=${leaderboardSortColumn}&direction=${leaderboardSortDirection}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const leaderboardData = data.leaderboard || [];
+        
+        // Cache the result
+        setCachedData(cacheKey, leaderboardData);
+        setLeaderboard(leaderboardData);
+      } else {
+        console.error('Failed to load leaderboard');
+      }
+    } catch (error) {
+      console.error('Error loading leaderboard:', error);
+    } finally {
+      setLoadingLeaderboard(false);
+    }
+  };
+
+  // Handle filter changes
+  const handleTimeframeChange = (timeframe: string) => {
+    setLeaderboardTimeframe(timeframe);
+  };
+
+  const handleSortChange = (sortColumn: string) => {
+    if (sortColumn === leaderboardSortColumn) {
+      // Toggle direction if clicking the same column
+      setLeaderboardSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+    } else {
+      // Set new column and default to descending
+      setLeaderboardSortColumn(sortColumn);
+      setLeaderboardSortDirection('desc');
     }
   };
 
@@ -991,8 +1052,28 @@ const GroupDetails: React.FC = () => {
 
                 {/* Leaderboard Tab */}
                 <TabPanel px={{ base: 0, md: 4 }}>
-                  <VStack spacing={4} align="stretch">
-                    <Heading size="md" fontSize={{ base: "lg", md: "xl" }}>Leaderboard</Heading>
+                  <VStack spacing={0} align="stretch">
+                    
+                    {/* Filter Controls */}
+                    <HStack justify="space-between" align="center" mb={4}>
+                      <Heading size="md" fontSize={{ base: "lg", md: "xl" }}>Leaderboard</Heading>
+                      <HStack spacing={2}>
+                        {loadingLeaderboard && <Spinner size="sm" />}
+                        <Select 
+                          value={leaderboardTimeframe}
+                          onChange={(e) => handleTimeframeChange(e.target.value)}
+                          size="sm"
+                          maxW="150px"
+                        >
+                          <option value="all">All Time</option>
+                          <option value="this_month">This Month</option>
+                          <option value="last_month">Last Month</option>
+                          <option value="this_year">This Year</option>
+                          <option value="last_year">Last Year</option>
+                        </Select>
+                      </HStack>
+                    </HStack>
+                    
                     <Card>
                       <CardBody p={{ base: 1, md: 6 }}>
                         {/* Mobile-friendly leaderboard */}
@@ -1014,10 +1095,20 @@ const GroupDetails: React.FC = () => {
                                   <Text fontWeight="bold" fontSize="sm">{entry.display_name}</Text>
                                 </HStack>
                                 <SimpleGrid columns={2} spacing={2} width="full">
-                                  <Text fontSize="xs" color="gray.500">Points: {entry.points.toLocaleString()}</Text>
-                                  <Text fontSize="xs" color="gray.500">Verses: {entry.verses_mastered}</Text>
-                                  <Text fontSize="xs" color="gray.500">Current: {entry.current_streak}</Text>
-                                  <Text fontSize="xs" color="gray.500">Longest: {entry.longest_streak}</Text>
+                                  <Text fontSize="xs" color="gray.500">
+                                    Points: {entry.time_filtered_points?.toLocaleString() || '0'}
+                                  </Text>
+                                  <Text fontSize="xs" color="gray.500">
+                                    Verses: {entry.time_filtered_verses_mastered || 0}
+                                  </Text>
+                                </SimpleGrid>
+                                <SimpleGrid columns={2} spacing={2} width="full">
+                                  <Text fontSize="xs" color="gray.500">
+                                    Current: {entry.current_streak}
+                                  </Text>
+                                  <Text fontSize="xs" color="gray.500">
+                                    Longest: {entry.longest_streak}
+                                  </Text>
                                 </SimpleGrid>
                               </VStack>
                             </Box>
@@ -1031,8 +1122,40 @@ const GroupDetails: React.FC = () => {
                               <Tr>
                                 <Th>Rank</Th>
                                 <Th>Member</Th>
-                                <Th>Points</Th>
-                                <Th>Verses</Th>
+                                <Th 
+                                  cursor="pointer" 
+                                  onClick={() => handleSortChange('points')}
+                                  _hover={{ bg: 'blue.50', color: 'gray.800' }}
+                                  _dark={{ _hover: { bg: 'blue.900', color: 'white' } }}
+                                  transition="background-color 0.2s"
+                                  userSelect="none"
+                                >
+                                  <HStack spacing={1}>
+                                    <Text>Points</Text>
+                                    {leaderboardSortColumn === 'points' && (
+                                      <Text fontSize="xs" color="blue.500">
+                                        {leaderboardSortDirection === 'desc' ? '↓' : '↑'}
+                                      </Text>
+                                    )}
+                                  </HStack>
+                                </Th>
+                                <Th 
+                                  cursor="pointer" 
+                                  onClick={() => handleSortChange('verses_mastered')}
+                                  _hover={{ bg: 'blue.50', color: 'gray.800' }}
+                                  _dark={{ _hover: { bg: 'blue.900', color: 'white' } }}
+                                  transition="background-color 0.2s"
+                                  userSelect="none"
+                                >
+                                  <HStack spacing={1}>
+                                    <Text>Verses Mastered</Text>
+                                    {leaderboardSortColumn === 'verses_mastered' && (
+                                      <Text fontSize="xs" color="blue.500">
+                                        {leaderboardSortDirection === 'desc' ? '↓' : '↑'}
+                                      </Text>
+                                    )}
+                                  </HStack>
+                                </Th>
                                 <Th>Current Streak</Th>
                                 <Th>Longest Streak</Th>
                               </Tr>
@@ -1052,8 +1175,8 @@ const GroupDetails: React.FC = () => {
                                     </Badge>
                                   </Td>
                                   <Td>{entry.display_name}</Td>
-                                  <Td>{entry.points.toLocaleString()}</Td>
-                                  <Td>{entry.verses_mastered}</Td>
+                                  <Td>{entry.time_filtered_points?.toLocaleString() || '0'}</Td>
+                                  <Td>{entry.time_filtered_verses_mastered || 0}</Td>
                                   <Td>{entry.current_streak}</Td>
                                   <Td>{entry.longest_streak}</Td>
                                 </Tr>

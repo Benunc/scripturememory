@@ -1707,6 +1707,231 @@ echo "${BLUE}Invalid userId correctly failed: $INVALID_USERID_RESPONSE${NC}"
 echo "${GREEN}✓ All admin verse viewing tests passed${NC}"
 
 # ========================================
+# TIME-BASED STATS TESTS
+# ========================================
+echo "${YELLOW}========================================${NC}"
+echo "${YELLOW}TIME-BASED STATS TESTS${NC}"
+echo "${YELLOW}========================================${NC}"
+
+# Test 1: Get time-based stats for current user (all time)
+echo "${YELLOW}Test 1: Get time-based stats for current user (all time)...${NC}"
+TIME_STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/time-based-stats?timeframe=all" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $TIME_STATS_RESPONSE == *"error"* ]]; then
+    echo "${RED}Time-based stats failed: $TIME_STATS_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Time-based stats response: $TIME_STATS_RESPONSE${NC}"
+
+# Test 2: Get time-based stats for current user (this month)
+echo "${YELLOW}Test 2: Get time-based stats for current user (this month)...${NC}"
+TIME_STATS_MONTH_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/time-based-stats?timeframe=this_month" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $TIME_STATS_MONTH_RESPONSE == *"error"* ]]; then
+    echo "${RED}Time-based stats (this month) failed: $TIME_STATS_MONTH_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Time-based stats (this month) response: $TIME_STATS_MONTH_RESPONSE${NC}"
+
+# Test 3: Get time-based stats for current user (last month)
+echo "${YELLOW}Test 3: Get time-based stats for current user (last month)...${NC}"
+TIME_STATS_LAST_MONTH_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/time-based-stats?timeframe=last_month" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $TIME_STATS_LAST_MONTH_RESPONSE == *"error"* ]]; then
+    echo "${RED}Time-based stats (last month) failed: $TIME_STATS_LAST_MONTH_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Time-based stats (last month) response: $TIME_STATS_LAST_MONTH_RESPONSE${NC}"
+
+# Test 4: Get time-based stats for another user (as super admin)
+echo "${YELLOW}Test 4: Get time-based stats for another user (as super admin)...${NC}"
+TIME_STATS_OTHER_USER_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/time-based-stats?timeframe=all&user_id=2" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $TIME_STATS_OTHER_USER_RESPONSE == *"error"* ]]; then
+    echo "${RED}Time-based stats for other user failed: $TIME_STATS_OTHER_USER_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Time-based stats for other user response: $TIME_STATS_OTHER_USER_RESPONSE${NC}"
+
+# Test 5: Invalid timeframe parameter
+echo "${YELLOW}Test 5: Invalid timeframe parameter...${NC}"
+INVALID_TIMEFRAME_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/time-based-stats?timeframe=invalid" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $INVALID_TIMEFRAME_RESPONSE != *"error"* ]]; then
+    echo "${RED}Invalid timeframe should have failed but succeeded: $INVALID_TIMEFRAME_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Invalid timeframe correctly failed: $INVALID_TIMEFRAME_RESPONSE${NC}"
+
+# Test 6: Unauthorized access (no token)
+echo "${YELLOW}Test 6: Unauthorized access (no token)...${NC}"
+UNAUTHORIZED_TIME_STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/time-based-stats?timeframe=all")
+check_status
+
+if [[ $UNAUTHORIZED_TIME_STATS_RESPONSE != *"error"* ]]; then
+    echo "${RED}Unauthorized access should have failed but succeeded: $UNAUTHORIZED_TIME_STATS_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Unauthorized access correctly failed: $UNAUTHORIZED_TIME_STATS_RESPONSE${NC}"
+
+echo "${GREEN}✓ All time-based stats tests passed${NC}"
+
+# ========================================
+# TIME-BASED LEADERBOARD TESTS
+# ========================================
+echo "${YELLOW}========================================${NC}"
+echo "${YELLOW}TIME-BASED LEADERBOARD TESTS${NC}"
+echo "${YELLOW}========================================${NC}"
+
+# Test 1: Get time-based leaderboard (all time, points)
+echo "${YELLOW}Test 1: Get time-based leaderboard (all time, points)...${NC}"
+TIME_LEADERBOARD_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/leaderboard/1?timeframe=all&metric=points" \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+check_status
+
+if [[ $TIME_LEADERBOARD_RESPONSE == *"error"* ]]; then
+    echo "${RED}Time-based leaderboard failed: $TIME_LEADERBOARD_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Time-based leaderboard response: $TIME_LEADERBOARD_RESPONSE${NC}"
+
+# Test 2: Get time-based leaderboard (this month, verses mastered)
+echo "${YELLOW}Test 2: Get time-based leaderboard (this month, verses mastered)...${NC}"
+TIME_LEADERBOARD_VERSES_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/leaderboard/1?timeframe=this_month&metric=verses_mastered" \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+check_status
+
+if [[ $TIME_LEADERBOARD_VERSES_RESPONSE == *"error"* ]]; then
+    echo "${RED}Time-based leaderboard (verses mastered) failed: $TIME_LEADERBOARD_VERSES_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Time-based leaderboard (verses mastered) response: $TIME_LEADERBOARD_VERSES_RESPONSE${NC}"
+
+# Test 3: Get time-based leaderboard (verses mastered, all time)
+echo "${YELLOW}Test 3: Get time-based leaderboard (verses mastered, all time)...${NC}"
+TIME_LEADERBOARD_VERSES_ALL_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/leaderboard/1?timeframe=all&metric=verses_mastered" \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+check_status
+
+if [[ $TIME_LEADERBOARD_VERSES_ALL_RESPONSE == *"error"* ]]; then
+    echo "${RED}Time-based leaderboard (verses mastered, all time) failed: $TIME_LEADERBOARD_VERSES_ALL_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Time-based leaderboard (verses mastered, all time) response: $TIME_LEADERBOARD_VERSES_ALL_RESPONSE${NC}"
+
+# Test 4: Get time-based leaderboard (points, this year)
+echo "${YELLOW}Test 4: Get time-based leaderboard (points, this year)...${NC}"
+TIME_LEADERBOARD_POINTS_YEAR_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/leaderboard/1?timeframe=this_year&metric=points" \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+check_status
+
+if [[ $TIME_LEADERBOARD_POINTS_YEAR_RESPONSE == *"error"* ]]; then
+    echo "${RED}Time-based leaderboard (points, this year) failed: $TIME_LEADERBOARD_POINTS_YEAR_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Time-based leaderboard (points, this year) response: $TIME_LEADERBOARD_POINTS_YEAR_RESPONSE${NC}"
+
+# Test 5: Invalid metric parameter
+echo "${YELLOW}Test 5: Invalid metric parameter...${NC}"
+INVALID_METRIC_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/leaderboard/1?timeframe=all&metric=accuracy" \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+check_status
+
+if [[ $INVALID_METRIC_RESPONSE != *"error"* ]]; then
+    echo "${RED}Invalid metric should have failed but succeeded: $INVALID_METRIC_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Invalid metric correctly failed: $INVALID_METRIC_RESPONSE${NC}"
+
+# Test 6: Invalid timeframe parameter for leaderboard
+echo "${YELLOW}Test 6: Invalid timeframe parameter for leaderboard...${NC}"
+INVALID_LEADERBOARD_TIMEFRAME_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/leaderboard/1?timeframe=invalid&metric=points" \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+check_status
+
+if [[ $INVALID_LEADERBOARD_TIMEFRAME_RESPONSE != *"error"* ]]; then
+    echo "${RED}Invalid timeframe for leaderboard should have failed but succeeded: $INVALID_LEADERBOARD_TIMEFRAME_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Invalid timeframe for leaderboard correctly failed: $INVALID_LEADERBOARD_TIMEFRAME_RESPONSE${NC}"
+
+# Test 7: Missing group ID
+echo "${YELLOW}Test 7: Missing group ID...${NC}"
+MISSING_GROUP_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/leaderboard/?timeframe=all&metric=points" \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+check_status
+
+if [[ $MISSING_GROUP_RESPONSE != *"error"* ]]; then
+    echo "${RED}Missing group ID should have failed but succeeded: $MISSING_GROUP_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Missing group ID correctly failed: $MISSING_GROUP_RESPONSE${NC}"
+
+# Test 8: Access leaderboard as non-member
+echo "${YELLOW}Test 8: Access leaderboard as non-member...${NC}"
+NON_MEMBER_LEADERBOARD_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/leaderboard/999?timeframe=all&metric=points" \
+  -H "Authorization: Bearer $GROUP_SESSION1")
+check_status
+
+if [[ $NON_MEMBER_LEADERBOARD_RESPONSE != *"error"* ]]; then
+    echo "${RED}Non-member access should have failed but succeeded: $NON_MEMBER_LEADERBOARD_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Non-member access correctly failed: $NON_MEMBER_LEADERBOARD_RESPONSE${NC}"
+
+# Test 9: Access leaderboard as super admin (should work even for non-existent group)
+echo "${YELLOW}Test 9: Access leaderboard as super admin...${NC}"
+SUPER_ADMIN_LEADERBOARD_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/leaderboard/999?timeframe=all&metric=points" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+# This should succeed for super admin even if group doesn't exist (empty leaderboard)
+if [[ $SUPER_ADMIN_LEADERBOARD_RESPONSE == *"error"* ]]; then
+    echo "${RED}Super admin leaderboard access failed: $SUPER_ADMIN_LEADERBOARD_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Super admin leaderboard response: $SUPER_ADMIN_LEADERBOARD_RESPONSE${NC}"
+
+# Test 10: Unauthorized access to leaderboard (no token)
+echo "${YELLOW}Test 10: Unauthorized access to leaderboard (no token)...${NC}"
+UNAUTHORIZED_LEADERBOARD_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/leaderboard/1?timeframe=all&metric=points")
+check_status
+
+if [[ $UNAUTHORIZED_LEADERBOARD_RESPONSE != *"error"* ]]; then
+    echo "${RED}Unauthorized leaderboard access should have failed but succeeded: $UNAUTHORIZED_LEADERBOARD_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Unauthorized leaderboard access correctly failed: $UNAUTHORIZED_LEADERBOARD_RESPONSE${NC}"
+
+echo "${GREEN}✓ All time-based leaderboard tests passed${NC}"
+
+# ========================================
 # USER LOGIN SECTION
 # ========================================
 USERS=(

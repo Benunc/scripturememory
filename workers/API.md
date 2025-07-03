@@ -701,6 +701,128 @@ Content-Type: application/json
 - `400 Bad Request`: Missing required fields
 - `401 Unauthorized`: Invalid or missing token
 
+#### Get Time-Based User Statistics
+```http
+GET /gamification/time-based-stats?timeframe=this_month&user_id=123
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `timeframe` (optional): Time period for stats calculation
+  - `all` (default): All-time statistics
+  - `this_month`: Current month only
+  - `last_month`: Previous month only
+  - `this_year`: Current year only
+  - `last_year`: Previous year only
+- `user_id` (optional): Target user ID (defaults to authenticated user)
+
+**Response (200 OK)**
+```json
+{
+  "timeframe": "this_month",
+  "start_time": 1704067200000,
+  "end_time": 1706745599999,
+  "stats": {
+    "total_points": 450,
+    "total_events": 25,
+    "verses_mastered": 2,
+    "total_attempts": 15,
+    "perfect_attempts": 8,
+    "accuracy": 0.87,
+    "current_streak": 5,
+    "longest_streak": 10
+  },
+  "breakdown": {
+    "mastery_points": 1000,
+    "word_points": 200,
+    "verse_points": 30,
+    "streak_points": 100
+  }
+}
+```
+
+**Features**
+- Returns time-based user statistics for the specified period
+- Calculates points earned, verses mastered, and attempts within the timeframe
+- Provides accuracy percentage based on words correct vs total words attempted
+- Includes detailed breakdown of points by category
+- Supports querying other users' stats (for admins)
+- Current streak and longest streak are always current (not time-based)
+
+**Error Responses**
+- `400 Bad Request`: Invalid timeframe parameter
+- `401 Unauthorized`: Invalid or missing token
+
+#### Get Time-Based Group Leaderboard
+```http
+GET /gamification/leaderboard/:groupId?timeframe=this_month&metric=points&direction=desc
+Authorization: Bearer <token>
+```
+
+**Path Parameters:**
+- `groupId`: Group ID for which to get leaderboard
+
+**Query Parameters:**
+- `timeframe` (optional): Time period for leaderboard calculation
+  - `all` (default): All-time rankings
+  - `this_month`: Current month only
+  - `last_month`: Previous month only
+  - `this_year`: Current year only
+  - `last_year`: Previous year only
+- `metric` (optional): Ranking metric
+  - `points` (default): Total points earned
+  - `verses_mastered`: Number of verses mastered
+- `direction` (optional): Sort direction
+  - `desc` (default): Descending order (highest to lowest)
+  - `asc`: Ascending order (lowest to highest)
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "leaderboard": [
+    {
+      "rank": 1,
+      "user_id": 123,
+      "display_name": "john@example.com (John Doe)",
+      "metric_value": 450,
+      "total_events": 25,
+      "is_public": true
+    },
+    {
+      "rank": 2,
+      "user_id": 456,
+      "display_name": "jane@example.com (Jane Smith)",
+      "metric_value": 380,
+      "total_events": 20,
+      "is_public": true
+    }
+  ],
+  "metadata": {
+    "total_members": 10,
+    "participating_members": 8,
+    "metric": "points",
+    "timeframe": "this_month",
+    "start_time": 1704067200000,
+    "end_time": 1706745599999
+  }
+}
+```
+
+**Features**
+- Shows rankings based on selected metric within the specified timeframe
+- Respects privacy settings (admins see emails, regular members see display names or "Anonymous")
+- Handles ties properly (same rank for equal values)
+- Includes metadata about participation and time boundaries
+- Only accessible to group members or super admins
+- Supports multiple metrics for different types of competition
+
+**Error Responses**
+- `400 Bad Request`: Invalid metric or timeframe parameter, missing group ID
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: User is not a member of the group
+- `404 Not Found`: Group not found
+
 ### Point System
 
 The API implements a point system with the following rewards:
@@ -1780,6 +1902,8 @@ This section provides a quick reference to all available endpoints organized by 
 ### Gamification Endpoints
 - `GET /gamification/stats` - Get user statistics
 - `POST /gamification/points` - Record point event
+- `GET /gamification/time-based-stats` - Get time-based user statistics
+- `GET /gamification/leaderboard/:groupId` - Get time-based group leaderboard
 
 ### Group Management Endpoints
 - `POST /groups/create` - Create new group

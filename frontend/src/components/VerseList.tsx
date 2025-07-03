@@ -349,6 +349,7 @@ const MasteryMode: React.FC<MasteryModeProps> = ({
       borderRadius="md"
       borderWidth="1px"
       borderColor={masteryBorderColor}
+      display={isVisible ? 'block' : 'none'}
     >
       <VStack align="stretch" spacing={4}>
         <Text fontSize="lg" color={masteryTextColor}>
@@ -2266,20 +2267,18 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
             </Box>
           </Collapse>
 
-          <Collapse in={isInMasteryMode}>
-            <MasteryMode
-              verse={verse}
-              attempt={masteryState.attempt}
-              isSubmitting={masteryState.isSubmitting}
-              feedback={masteryState.feedback}
-              progress={masteryState.progress}
-              onAttempt={handleMasteryAttempt}
-              onToggle={handleMasteryToggle}
-              onInput={handleMasteryInput}
-              onKeyDown={handleMasteryKeyDown}
-              isVisible={isInMasteryMode}
-            />
-          </Collapse>
+          <MasteryMode
+            verse={verse}
+            attempt={masteryState.attempt}
+            isSubmitting={masteryState.isSubmitting}
+            feedback={masteryState.feedback}
+            progress={masteryState.progress}
+            onAttempt={handleMasteryAttempt}
+            onToggle={handleMasteryToggle}
+            onInput={handleMasteryInput}
+            onKeyDown={handleMasteryKeyDown}
+            isVisible={isInMasteryMode}
+          />
 
           {verse.status === ProgressStatus.InProgress && !isInMasteryMode && (
             <Button

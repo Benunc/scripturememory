@@ -478,5 +478,527 @@ export const handleGamification = {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  },
+
+  // Get time-based user stats
+  getTimeBasedStats: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const timeframe = url.searchParams.get('timeframe') || 'all';
+      const targetUserId = url.searchParams.get('user_id') ? parseInt(url.searchParams.get('user_id')!, 10) : userId;
+
+      // Validate timeframe
+      const validTimeframes = ['all', 'this_month', 'last_month', 'this_year', 'last_year'];
+      if (!validTimeframes.includes(timeframe)) {
+        return new Response(JSON.stringify({ error: 'Invalid timeframe parameter' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Calculate time boundaries
+      const now = new Date();
+      let startTime = 0;
+      let endTime = Date.now();
+
+      switch (timeframe) {
+        case 'this_month':
+          startTime = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+          break;
+        case 'last_month':
+          // Get the first day of the previous month
+          startTime = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+          // Get the last day of the previous month (day 0 of current month = last day of previous month)
+          endTime = new Date(now.getFullYear(), now.getMonth(), 0).getTime();
+          break;
+        case 'this_year':
+          startTime = new Date(now.getFullYear(), 0, 1).getTime();
+          break;
+        case 'last_year':
+          // Get the first day of the previous year
+          startTime = new Date(now.getFullYear() - 1, 0, 1).getTime();
+          // Get the last day of the previous year (day 0 of month 0 of current year = last day of previous year)
+          endTime = new Date(now.getFullYear(), 0, 0).getTime();
+          break;
+        case 'all':
+        default:
+          startTime = 0;
+          break;
+      }
+
+      // Get points earned in timeframe
+      let pointsResult;
+      if (timeframe === 'all') {
+        pointsResult = await db.prepare(`
+          SELECT 
+            SUM(points) as total_points,
+            COUNT(*) as total_events,
+            SUM(CASE WHEN event_type = 'mastery_achieved' THEN points ELSE 0 END) as mastery_points,
+            SUM(CASE WHEN event_type IN ('word_correct', 'guess_streak') THEN points ELSE 0 END) as word_points,
+            SUM(CASE WHEN event_type = 'verse_added' THEN points ELSE 0 END) as verse_points,
+            SUM(CASE WHEN event_type = 'daily_streak' THEN points ELSE 0 END) as streak_points
+          FROM point_events pe
+          WHERE user_id = ?
+        `).bind(targetUserId).first();
+      } else {
+        pointsResult = await db.prepare(`
+          SELECT 
+            SUM(points) as total_points,
+            COUNT(*) as total_events,
+            SUM(CASE WHEN event_type = 'mastery_achieved' THEN points ELSE 0 END) as mastery_points,
+            SUM(CASE WHEN event_type IN ('word_correct', 'guess_streak') THEN points ELSE 0 END) as word_points,
+            SUM(CASE WHEN event_type = 'verse_added' THEN points ELSE 0 END) as verse_points,
+            SUM(CASE WHEN event_type = 'daily_streak' THEN points ELSE 0 END) as streak_points
+          FROM point_events pe
+          WHERE user_id = ? AND pe.created_at >= ? AND pe.created_at <= ?
+        `).bind(targetUserId, startTime, endTime).first();
+      }
+
+      // Get verses mastered in timeframe
+      let masteryResult;
+      if (timeframe === 'all') {
+        masteryResult = await db.prepare(`
+          SELECT COUNT(*) as verses_mastered
+          FROM mastered_verses mv2
+          WHERE user_id = ?
+        `).bind(targetUserId).first();
+      } else {
+        masteryResult = await db.prepare(`
+          SELECT COUNT(*) as verses_mastered
+          FROM mastered_verses mv2
+          WHERE user_id = ? AND mv2.created_at >= ? AND mv2.created_at <= ?
+        `).bind(targetUserId, startTime, endTime).first();
+      }
+
+      // Get verse attempts in timeframe
+      let attemptsResult;
+      if (timeframe === 'all') {
+        attemptsResult = await db.prepare(`
+          SELECT 
+            COUNT(*) as total_attempts,
+            COUNT(CASE WHEN words_correct = total_words THEN 1 END) as perfect_attempts,
+            SUM(words_correct) as total_words_correct,
+            SUM(total_words) as total_words_attempted
+          FROM verse_attempts 
+          WHERE user_id = ?
+        `).bind(targetUserId).first();
+      } else {
+        attemptsResult = await db.prepare(`
+          SELECT 
+            COUNT(*) as total_attempts,
+            COUNT(CASE WHEN words_correct = total_words THEN 1 END) as perfect_attempts,
+            SUM(words_correct) as total_words_correct,
+            SUM(total_words) as total_words_attempted
+          FROM verse_attempts 
+          WHERE user_id = ? AND created_at >= ? AND created_at <= ?
+        `).bind(targetUserId, startTime, endTime).first();
+      }
+
+      // Get current streak (this is always current, not time-based)
+      const currentStreak = await db.prepare(`
+        SELECT current_streak, longest_streak
+        FROM user_stats 
+        WHERE user_id = ?
+      `).bind(targetUserId).first();
+
+      return new Response(JSON.stringify({
+        timeframe,
+        start_time: startTime,
+        end_time: endTime,
+        stats: {
+          total_points: Number(pointsResult?.total_points) || 0,
+          total_events: Number(pointsResult?.total_events) || 0,
+          verses_mastered: Number(masteryResult?.verses_mastered) || 0,
+          total_attempts: Number(attemptsResult?.total_attempts) || 0,
+          perfect_attempts: Number(attemptsResult?.perfect_attempts) || 0,
+          accuracy: attemptsResult?.total_words_attempted ? 
+            (Number(attemptsResult.total_words_correct) / Number(attemptsResult.total_words_attempted)) : 0,
+          current_streak: Number(currentStreak?.current_streak) || 0,
+          longest_streak: Number(currentStreak?.longest_streak) || 0
+        },
+        breakdown: {
+          mastery_points: Number(pointsResult?.mastery_points) || 0,
+          word_points: Number(pointsResult?.word_points) || 0,
+          verse_points: Number(pointsResult?.verse_points) || 0,
+          streak_points: Number(pointsResult?.streak_points) || 0
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting time-based stats:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get time-based leaderboard for a group
+  getTimeBasedLeaderboard: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const url = new URL(request.url);
+      const pathParts = url.pathname.split('/');
+      const groupId: string = pathParts[3] ?? ''; // /gamification/leaderboard/{groupId}
+      const timeframe = (url.searchParams.get('timeframe') || 'all') as string;
+      const metric = (url.searchParams.get('metric') || 'points') as string;
+      const direction = (url.searchParams.get('direction') || 'desc') as string;
+
+      // Validate parameters
+      const validTimeframes = ['all', 'this_month', 'last_month', 'this_year', 'last_year'];
+      const validMetrics = ['points', 'verses_mastered'];
+      const validDirections = ['asc', 'desc'];
+      
+      if (!validTimeframes.includes(timeframe)) {
+        return new Response(JSON.stringify({ error: 'Invalid timeframe parameter' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (!validMetrics.includes(metric)) {
+        return new Response(JSON.stringify({ error: 'Invalid metric parameter' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (!validDirections.includes(direction)) {
+        return new Response(JSON.stringify({ error: 'Invalid direction parameter' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (!groupId) {
+        return new Response(JSON.stringify({ error: 'Missing group ID' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Check if user is a member of the group or super admin
+      const isMember = await db.prepare(`
+        SELECT 1 FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND is_active = TRUE
+      `).bind(groupId, userId).first();
+
+      const isSuperAdmin = await db.prepare(`
+        SELECT 1 FROM super_admins 
+        WHERE user_id = ? AND is_active = TRUE
+      `).bind(userId).first();
+
+      if (!isMember && !isSuperAdmin) {
+        return new Response(JSON.stringify({ error: 'You must be a member of this group to view the leaderboard' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check admin privileges
+      const userRole = await db.prepare(`
+        SELECT role FROM group_members 
+        WHERE group_id = ? AND user_id = ? AND is_active = TRUE
+      `).bind(groupId, userId).first();
+
+      const isAdmin = userRole && ['leader', 'creator'].includes(userRole.role);
+      const hasAdminPrivileges = isAdmin || isSuperAdmin;
+
+      // Calculate time boundaries
+      const now = new Date();
+      let startTime = 0;
+      let endTime = Date.now();
+
+      switch (timeframe) {
+        case 'this_month':
+          startTime = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+          break;
+        case 'last_month':
+          // Get the first day of the previous month
+          startTime = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+          // Get the last day of the previous month (day 0 of current month = last day of previous month)
+          endTime = new Date(now.getFullYear(), now.getMonth(), 0).getTime();
+          break;
+        case 'this_year':
+          startTime = new Date(now.getFullYear(), 0, 1).getTime();
+          break;
+        case 'last_year':
+          // Get the first day of the previous year
+          startTime = new Date(now.getFullYear() - 1, 0, 1).getTime();
+          // Get the last day of the previous year (day 0 of month 0 of current year = last day of previous year)
+          endTime = new Date(now.getFullYear(), 0, 0).getTime();
+          break;
+        case 'all':
+        default:
+          startTime = 0;
+          break;
+      }
+
+      // Build the leaderboard query based on metric
+      let leaderboardQuery = '';
+      let orderBy = '';
+
+      switch (metric) {
+        case 'points':
+          if (timeframe === 'all') {
+            leaderboardQuery = `
+              SELECT 
+                gm.user_id,
+                gm.display_name,
+                gm.is_public,
+                u.email as member_email,
+                COALESCE(SUM(pe.points), 0) as metric_value,
+                COALESCE(SUM(pe.points), 0) as time_filtered_points,
+                COALESCE((
+                  SELECT COUNT(*) 
+                  FROM mastered_verses mv2 
+                  WHERE mv2.user_id = gm.user_id
+                ), 0) as time_filtered_verses_mastered,
+                COUNT(pe.id) as total_events,
+                us.total_points,
+                us.verses_mastered,
+                us.current_streak,
+                us.longest_streak
+              FROM group_members gm
+              LEFT JOIN users u ON gm.user_id = u.id
+              LEFT JOIN point_events pe ON gm.user_id = pe.user_id
+              LEFT JOIN user_stats us ON gm.user_id = us.user_id
+              WHERE gm.group_id = ? AND gm.is_active = TRUE
+              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak
+              ORDER BY metric_value ${direction.toUpperCase()}
+            `;
+          } else {
+            leaderboardQuery = `
+              SELECT 
+                gm.user_id,
+                gm.display_name,
+                gm.is_public,
+                u.email as member_email,
+                COALESCE(SUM(pe.points), 0) as metric_value,
+                COALESCE(SUM(pe.points), 0) as time_filtered_points,
+                COALESCE((
+                  SELECT COUNT(*) 
+                  FROM mastered_verses mv2 
+                  WHERE mv2.user_id = gm.user_id AND mv2.created_at >= ? AND mv2.created_at <= ?
+                ), 0) as time_filtered_verses_mastered,
+                COUNT(pe.id) as total_events,
+                us.total_points,
+                us.verses_mastered,
+                us.current_streak,
+                us.longest_streak
+              FROM group_members gm
+              LEFT JOIN users u ON gm.user_id = u.id
+              LEFT JOIN point_events pe ON gm.user_id = pe.user_id AND pe.created_at >= ? AND pe.created_at <= ?
+              LEFT JOIN user_stats us ON gm.user_id = us.user_id
+              WHERE gm.group_id = ? AND gm.is_active = TRUE
+              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak
+              ORDER BY metric_value ${direction.toUpperCase()}
+            `;
+          }
+          orderBy = `metric_value ${direction.toUpperCase()}`;
+          break;
+        case 'verses_mastered':
+          if (timeframe === 'all') {
+            leaderboardQuery = `
+              SELECT 
+                gm.user_id,
+                gm.display_name,
+                gm.is_public,
+                u.email as member_email,
+                COALESCE((
+                  SELECT COUNT(*) 
+                  FROM mastered_verses mv2 
+                  WHERE mv2.user_id = gm.user_id
+                ), 0) as metric_value,
+                COALESCE(SUM(pe.points), 0) as time_filtered_points,
+                COALESCE((
+                  SELECT COUNT(*) 
+                  FROM mastered_verses mv2 
+                  WHERE mv2.user_id = gm.user_id
+                ), 0) as time_filtered_verses_mastered,
+                0 as total_events,
+                us.total_points,
+                us.verses_mastered,
+                us.current_streak,
+                us.longest_streak
+              FROM group_members gm
+              LEFT JOIN users u ON gm.user_id = u.id
+              LEFT JOIN point_events pe ON gm.user_id = pe.user_id
+              LEFT JOIN user_stats us ON gm.user_id = us.user_id
+              WHERE gm.group_id = ? AND gm.is_active = TRUE
+              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak
+              ORDER BY metric_value ${direction.toUpperCase()}
+            `;
+          } else {
+            leaderboardQuery = `
+              SELECT 
+                gm.user_id,
+                gm.display_name,
+                gm.is_public,
+                u.email as member_email,
+                COALESCE((
+                  SELECT COUNT(*) 
+                  FROM mastered_verses mv2 
+                  WHERE mv2.user_id = gm.user_id AND mv2.created_at >= ? AND mv2.created_at <= ?
+                ), 0) as metric_value,
+                COALESCE(SUM(pe.points), 0) as time_filtered_points,
+                COALESCE((
+                  SELECT COUNT(*) 
+                  FROM mastered_verses mv2 
+                  WHERE mv2.user_id = gm.user_id AND mv2.created_at >= ? AND mv2.created_at <= ?
+                ), 0) as time_filtered_verses_mastered,
+                0 as total_events,
+                us.total_points,
+                us.verses_mastered,
+                us.current_streak,
+                us.longest_streak
+              FROM group_members gm
+              LEFT JOIN users u ON gm.user_id = u.id
+              LEFT JOIN point_events pe ON gm.user_id = pe.user_id AND pe.created_at >= ? AND pe.created_at <= ?
+              LEFT JOIN user_stats us ON gm.user_id = us.user_id
+              WHERE gm.group_id = ? AND gm.is_active = TRUE
+              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak
+              ORDER BY metric_value ${direction.toUpperCase()}
+            `;
+          }
+          orderBy = `metric_value ${direction.toUpperCase()}`;
+          break;
+      }
+
+      let leaderboard;
+      if (timeframe === 'all') {
+        leaderboard = await db.prepare(leaderboardQuery).bind(groupId).all();
+      } else {
+        // For time-based queries, we need to bind the time parameters multiple times
+        // since they appear in multiple subqueries
+        if (metric === 'points') {
+          leaderboard = await db.prepare(leaderboardQuery).bind(startTime, endTime, startTime, endTime, groupId).all();
+        } else {
+          leaderboard = await db.prepare(leaderboardQuery).bind(startTime, endTime, startTime, endTime, startTime, endTime, groupId).all();
+        }
+      }
+
+      // Process results and add rankings
+      const processedLeaderboard: any[] = [];
+      let currentRank = 1;
+      let lastValue = -1;
+
+      // For ranking, we always want higher values to have better ranks
+      // So we need to sort by metric_value in descending order for ranking, regardless of display order
+      const sortedForRanking = [...leaderboard.results].sort((a, b) => {
+        const aValue = Number(a.metric_value) || 0;
+        const bValue = Number(b.metric_value) || 0;
+        return bValue - aValue; // Always descending for ranking
+      });
+
+      // Create a map of user_id to rank
+      const rankMap = new Map();
+      let rank = 1;
+      let lastRankValue = -1;
+
+      for (const entry of sortedForRanking) {
+        const currentValue = Number(entry.metric_value) || 0;
+        
+        // Handle ties (same rank for same values)
+        if (currentValue !== lastRankValue) {
+          rank = rankMap.size + 1;
+        }
+        
+        rankMap.set(entry.user_id, rank);
+        lastRankValue = currentValue;
+      }
+
+      // Now process the results in the requested sort order
+      for (const entry of leaderboard.results) {
+        const currentValue = Number(entry.metric_value) || 0;
+        const userRank = rankMap.get(entry.user_id) || 1;
+
+        processedLeaderboard.push({
+          rank: userRank,
+          user_id: Number(entry.user_id) || 0,
+          display_name: hasAdminPrivileges ? 
+            `${String(entry.member_email || 'Anonymous')} (${entry.display_name && entry.display_name !== 'null' ? String(entry.display_name) : 'Anonymous'})` : 
+            (entry.is_public ? (typeof entry.display_name === 'string' && entry.display_name !== 'null' ? String(entry.display_name) : 'Anonymous') : 'Anonymous'),
+          points: Number(entry.total_points) || 0,
+          verses_mastered: Number(entry.verses_mastered) || 0,
+          current_streak: Number(entry.current_streak) || 0,
+          longest_streak: Number(entry.longest_streak) || 0,
+          metric_value: currentValue,
+          time_filtered_points: Number(entry.time_filtered_points as any) || 0,
+          time_filtered_verses_mastered: Number(entry.time_filtered_verses_mastered as any) || 0,
+          total_events: Number(entry.total_events) || 0,
+          is_public: !!entry.is_public
+        });
+      }
+
+      // Get metadata
+      const totalMembers = await db.prepare(`
+        SELECT COUNT(*) as count FROM group_members 
+        WHERE group_id = ? AND is_active = TRUE
+      `).bind(groupId).first();
+
+      const participatingMembers = processedLeaderboard.length;
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        leaderboard: processedLeaderboard,
+        metadata: {
+          total_members: totalMembers?.count || 0,
+          participating_members: participatingMembers,
+          metric,
+          timeframe,
+          start_time: startTime,
+          end_time: endTime
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting time-based leaderboard:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 }; 
