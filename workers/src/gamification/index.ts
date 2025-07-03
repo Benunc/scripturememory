@@ -502,11 +502,11 @@ export const handleGamification = {
       }
 
       const url = new URL(request.url);
-      const timeframe = url.searchParams.get('timeframe') || 'all';
+      const timeframe = (url.searchParams.get('timeframe') || 'all') as string;
       const targetUserId = url.searchParams.get('user_id') ? parseInt(url.searchParams.get('user_id')!, 10) : userId;
 
-      // Validate timeframe
-      const validTimeframes = ['all', 'this_month', 'last_month', 'this_year', 'last_year'];
+      // Update valid timeframes
+      const validTimeframes = ['all', 'this_week', 'last_week', 'this_month', 'last_month', 'this_year', 'last_year', 'custom'];
       if (!validTimeframes.includes(timeframe)) {
         return new Response(JSON.stringify({ error: 'Invalid timeframe parameter' }), { 
           status: 400,
@@ -522,24 +522,60 @@ export const handleGamification = {
       let endTime = Date.now();
 
       switch (timeframe) {
+        case 'this_week': {
+          const currentDay = now.getDay();
+          const daysToSubtract = currentDay === 0 ? 0 : currentDay;
+          startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToSubtract).getTime();
+          break;
+        }
+        case 'last_week': {
+          const lastWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() - 7);
+          startTime = lastWeekStart.getTime();
+          const lastWeekEnd = new Date(lastWeekStart.getFullYear(), lastWeekStart.getMonth(), lastWeekStart.getDate() + 6);
+          endTime = lastWeekEnd.getTime();
+          break;
+        }
         case 'this_month':
           startTime = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
           break;
         case 'last_month':
-          // Get the first day of the previous month
           startTime = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
-          // Get the last day of the previous month (day 0 of current month = last day of previous month)
           endTime = new Date(now.getFullYear(), now.getMonth(), 0).getTime();
           break;
         case 'this_year':
           startTime = new Date(now.getFullYear(), 0, 1).getTime();
           break;
         case 'last_year':
-          // Get the first day of the previous year
           startTime = new Date(now.getFullYear() - 1, 0, 1).getTime();
-          // Get the last day of the previous year (day 0 of month 0 of current year = last day of previous year)
           endTime = new Date(now.getFullYear(), 0, 0).getTime();
           break;
+        case 'custom': {
+          const startDate = url.searchParams.get('start_date');
+          const endDate = url.searchParams.get('end_date');
+          if (!startDate || !endDate) {
+            return new Response(JSON.stringify({ error: 'Custom timeframe requires start_date and end_date parameters' }), { 
+              status: 400,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          const startTimestamp = new Date(startDate).getTime();
+          const endTimestamp = new Date(endDate).getTime();
+          if (isNaN(startTimestamp) || isNaN(endTimestamp)) {
+            return new Response(JSON.stringify({ error: 'Invalid date format. Use YYYY-MM-DD format' }), { 
+              status: 400,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          if (startTimestamp > endTimestamp) {
+            return new Response(JSON.stringify({ error: 'Start date must be before end date' }), { 
+              status: 400,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          startTime = startTimestamp;
+          endTime = endTimestamp;
+          break;
+        }
         case 'all':
         default:
           startTime = 0;
@@ -683,7 +719,7 @@ export const handleGamification = {
       const direction = (url.searchParams.get('direction') || 'desc') as string;
 
       // Validate parameters
-      const validTimeframes = ['all', 'this_month', 'last_month', 'this_year', 'last_year'];
+      const validTimeframes = ['all', 'this_week', 'last_week', 'this_month', 'last_month', 'this_year', 'last_year', 'custom'];
       const validMetrics = ['points', 'verses_mastered'];
       const validDirections = ['asc', 'desc'];
       
@@ -750,24 +786,60 @@ export const handleGamification = {
       let endTime = Date.now();
 
       switch (timeframe) {
+        case 'this_week': {
+          const currentDay = now.getDay();
+          const daysToSubtract = currentDay === 0 ? 0 : currentDay;
+          startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToSubtract).getTime();
+          break;
+        }
+        case 'last_week': {
+          const lastWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() - 7);
+          startTime = lastWeekStart.getTime();
+          const lastWeekEnd = new Date(lastWeekStart.getFullYear(), lastWeekStart.getMonth(), lastWeekStart.getDate() + 6);
+          endTime = lastWeekEnd.getTime();
+          break;
+        }
         case 'this_month':
           startTime = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
           break;
         case 'last_month':
-          // Get the first day of the previous month
           startTime = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
-          // Get the last day of the previous month (day 0 of current month = last day of previous month)
           endTime = new Date(now.getFullYear(), now.getMonth(), 0).getTime();
           break;
         case 'this_year':
           startTime = new Date(now.getFullYear(), 0, 1).getTime();
           break;
         case 'last_year':
-          // Get the first day of the previous year
           startTime = new Date(now.getFullYear() - 1, 0, 1).getTime();
-          // Get the last day of the previous year (day 0 of month 0 of current year = last day of previous year)
           endTime = new Date(now.getFullYear(), 0, 0).getTime();
           break;
+        case 'custom': {
+          const startDate = url.searchParams.get('start_date');
+          const endDate = url.searchParams.get('end_date');
+          if (!startDate || !endDate) {
+            return new Response(JSON.stringify({ error: 'Custom timeframe requires start_date and end_date parameters' }), { 
+              status: 400,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          const startTimestamp = new Date(startDate).getTime();
+          const endTimestamp = new Date(endDate).getTime();
+          if (isNaN(startTimestamp) || isNaN(endTimestamp)) {
+            return new Response(JSON.stringify({ error: 'Invalid date format. Use YYYY-MM-DD format' }), { 
+              status: 400,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          if (startTimestamp > endTimestamp) {
+            return new Response(JSON.stringify({ error: 'Start date must be before end date' }), { 
+              status: 400,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          startTime = startTimestamp;
+          endTime = endTimestamp;
+          break;
+        }
         case 'all':
         default:
           startTime = 0;

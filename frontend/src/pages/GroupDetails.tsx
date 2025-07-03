@@ -691,6 +691,7 @@ const GroupDetails: React.FC = () => {
     
     // Generate cache key
     const cacheKey = getLeaderboardCacheKey(groupId, leaderboardTimeframe, leaderboardSortColumn, leaderboardSortDirection);
+    const url = `${getApiUrl()}/gamification/leaderboard/${groupId}?timeframe=${leaderboardTimeframe}&metric=${leaderboardSortColumn}&direction=${leaderboardSortDirection}`;
     
     // Check cache first
     const cachedData = getCachedData(cacheKey);
@@ -702,7 +703,7 @@ const GroupDetails: React.FC = () => {
     try {
       setLoadingLeaderboard(true);
       
-      const response = await fetch(`${getApiUrl()}/gamification/leaderboard/${groupId}?timeframe=${leaderboardTimeframe}&metric=${leaderboardSortColumn}&direction=${leaderboardSortDirection}`, {
+      const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -1053,7 +1054,6 @@ const GroupDetails: React.FC = () => {
                 {/* Leaderboard Tab */}
                 <TabPanel px={{ base: 0, md: 4 }}>
                   <VStack spacing={0} align="stretch">
-                    
                     {/* Filter Controls */}
                     <HStack justify="space-between" align="center" mb={4}>
                       <Heading size="md" fontSize={{ base: "lg", md: "xl" }}>Leaderboard</Heading>
@@ -1066,6 +1066,8 @@ const GroupDetails: React.FC = () => {
                           maxW="150px"
                         >
                           <option value="all">All Time</option>
+                          <option value="this_week">This Week</option>
+                          <option value="last_week">Last Week</option>
                           <option value="this_month">This Month</option>
                           <option value="last_month">Last Month</option>
                           <option value="this_year">This Year</option>

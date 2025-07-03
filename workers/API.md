@@ -710,11 +710,22 @@ Authorization: Bearer <token>
 **Query Parameters:**
 - `timeframe` (optional): Time period for stats calculation
   - `all` (default): All-time statistics
+  - `this_week`: Current week (Sunday to today)
+  - `last_week`: Previous week (Sunday to Saturday)
   - `this_month`: Current month only
   - `last_month`: Previous month only
   - `this_year`: Current year only
   - `last_year`: Previous year only
+  - `custom`: Custom date range (requires `start_date` and `end_date`)
+- `start_date` (required if `timeframe=custom`): Start date in `YYYY-MM-DD` format
+- `end_date` (required if `timeframe=custom`): End date in `YYYY-MM-DD` format
 - `user_id` (optional): Target user ID (defaults to authenticated user)
+
+**Custom Date Example:**
+```http
+GET /gamification/time-based-stats?timeframe=custom&start_date=2024-07-01&end_date=2024-07-07
+Authorization: Bearer <token>
+```
 
 **Response (200 OK)**
 ```json
@@ -750,7 +761,7 @@ Authorization: Bearer <token>
 - Current streak and longest streak are always current (not time-based)
 
 **Error Responses**
-- `400 Bad Request`: Invalid timeframe parameter
+- `400 Bad Request`: Invalid timeframe parameter, missing or invalid custom date parameters
 - `401 Unauthorized`: Invalid or missing token
 
 #### Get Time-Based Group Leaderboard
@@ -765,16 +776,27 @@ Authorization: Bearer <token>
 **Query Parameters:**
 - `timeframe` (optional): Time period for leaderboard calculation
   - `all` (default): All-time rankings
+  - `this_week`: Current week (Sunday to today)
+  - `last_week`: Previous week (Sunday to Saturday)
   - `this_month`: Current month only
   - `last_month`: Previous month only
   - `this_year`: Current year only
   - `last_year`: Previous year only
+  - `custom`: Custom date range (requires `start_date` and `end_date`)
+- `start_date` (required if `timeframe=custom`): Start date in `YYYY-MM-DD` format
+- `end_date` (required if `timeframe=custom`): End date in `YYYY-MM-DD` format
 - `metric` (optional): Ranking metric
   - `points` (default): Total points earned
   - `verses_mastered`: Number of verses mastered
 - `direction` (optional): Sort direction
   - `desc` (default): Descending order (highest to lowest)
   - `asc`: Ascending order (lowest to highest)
+
+**Custom Date Example:**
+```http
+GET /gamification/leaderboard/1?timeframe=custom&start_date=2024-07-01&end_date=2024-07-07&metric=points
+Authorization: Bearer <token>
+```
 
 **Response (200 OK)**
 ```json
