@@ -69,6 +69,7 @@ interface LeaderboardEntry {
   verses_mastered: number;
   current_streak: number;
   longest_streak: number;
+  longest_word_guess_streak: number;
   is_public: boolean;
   metric_value?: number;
   total_events?: number;
@@ -132,6 +133,7 @@ const GroupDetails: React.FC = () => {
   const [leaderboardSortColumn, setLeaderboardSortColumn] = useState<string>('points');
   const [leaderboardSortDirection, setLeaderboardSortDirection] = useState<'asc' | 'desc'>('desc');
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [allMembersWordStreaks, setAllMembersWordStreaks] = useState<LeaderboardEntry[]>([]);
 
   // Read tab from URL params on mount
   useEffect(() => {
@@ -262,6 +264,7 @@ const GroupDetails: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated && token && groupId && activeTab === 2) {
       reloadLeaderboard();
+      reloadAllMembersWordStreaks();
     }
   }, [leaderboardTimeframe, leaderboardSortColumn, leaderboardSortDirection, activeTab, isAuthenticated, token, groupId]);
 
@@ -751,6 +754,29 @@ const GroupDetails: React.FC = () => {
     }
   };
 
+  const reloadAllMembersWordStreaks = async () => {
+    if (!isAuthenticated || !token || !groupId) return;
+    
+    try {
+      // Fetch all group members' data with all-time timeframe to get longest word guess streaks
+      const url = `${getApiUrl()}/gamification/leaderboard/${groupId}?timeframe=all&metric=points&direction=desc`;
+      
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const allMembersData = data.leaderboard || [];
+        setAllMembersWordStreaks(allMembersData);
+      } else {
+        console.error('Failed to load all members word streaks');
+      }
+    } catch (error) {
+      console.error('Error loading all members word streaks:', error);
+    }
+  };
+
   // Handle filter changes
   const handleTimeframeChange = (timeframe: string) => {
     setLeaderboardTimeframe(timeframe);
@@ -1185,8 +1211,8 @@ const GroupDetails: React.FC = () => {
                                     )}
                                   </HStack>
                                 </Th>
-                                <Th>Current Streak</Th>
-                                <Th>Longest Streak</Th>
+                                <Th>Current Log-in Streak</Th>
+                                <Th>Longest Log-in Streak</Th>
                               </Tr>
                             </Thead>
                             <Tbody>
@@ -1215,6 +1241,48 @@ const GroupDetails: React.FC = () => {
                         </Box>
                       </CardBody>
                     </Card>
+
+                    {/* Longest Word Guess Streak Table */}
+                    <Box mt={6}>
+                      <Heading size="md" mb={4} fontSize={{ base: "lg", md: "xl" }} textAlign="left">Longest Word Guess Streaks</Heading>
+                      <Card>
+                        <CardBody>
+                          <Box overflowX="auto">
+                            <Table variant="simple">
+                              <Thead>
+                                <Tr>
+                                  <Th>Rank</Th>
+                                  <Th>Member</Th>
+                                  <Th>Longest Word Guess Streak</Th>
+                                </Tr>
+                              </Thead>
+                              <Tbody>
+                                {allMembersWordStreaks
+                                  .filter(entry => entry.longest_word_guess_streak > 0)
+                                  .sort((a, b) => b.longest_word_guess_streak - a.longest_word_guess_streak)
+                                  .map((entry, index) => (
+                                    <Tr key={entry.user_id}>
+                                      <Td>
+                                        <Badge 
+                                          colorScheme={
+                                            index === 0 ? 'gold' : 
+                                            index === 1 ? 'gray' : 
+                                            index === 2 ? 'orange' : 'gray'
+                                          }
+                                        >
+                                          #{index + 1}
+                                        </Badge>
+                                      </Td>
+                                      <Td>{entry.display_name}</Td>
+                                      <Td>{entry.longest_word_guess_streak}</Td>
+                                    </Tr>
+                                  ))}
+                              </Tbody>
+                            </Table>
+                          </Box>
+                        </CardBody>
+                      </Card>
+                    </Box>
                   </VStack>
                 </TabPanel>
 

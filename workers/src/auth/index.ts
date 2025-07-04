@@ -636,6 +636,7 @@ export const handleAuth = {
           u.last_login_at,
           us.longest_streak,
           us.current_streak,
+          us.longest_word_guess_streak,
           us.verses_mastered,
           us.total_attempts,
           us.total_points
@@ -692,6 +693,7 @@ export const handleAuth = {
           last_login_at,
           longest_streak,
           current_streak,
+          longest_word_guess_streak,
           verses_mastered,
           total_attempts,
           total_points,
@@ -703,13 +705,14 @@ export const handleAuth = {
           total_mastered_verses,
           total_verse_mastery,
           deleted_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         user.id,
         userData?.created_at,
         userData?.last_login_at,
         userData?.longest_streak || 0,
         userData?.current_streak || 0,
+        userData?.longest_word_guess_streak || 0,
         userData?.verses_mastered || 0,
         userData?.total_attempts || 0,
         userData?.total_points || 0,

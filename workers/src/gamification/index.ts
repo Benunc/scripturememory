@@ -279,6 +279,28 @@ export const handleGamification = {
           created_at || Date.now()
         ).run();
 
+        // Handle word_correct events - update longest word guess streak
+        if (event_type === 'word_correct' && metadata?.streak_length && typeof metadata.streak_length === 'number') {
+          const streakLength = metadata.streak_length;
+          
+          // Get current longest streak
+          const currentStats = await db.prepare(`
+            SELECT longest_word_guess_streak FROM user_stats WHERE user_id = ?
+          `).bind(userId).first() as { longest_word_guess_streak: number } | null;
+          
+          const currentLongest = currentStats?.longest_word_guess_streak || 0;
+          const newLongest = Math.max(currentLongest, streakLength);
+          
+          // Update longest streak if this is a new record
+          if (newLongest > currentLongest) {
+            await db.prepare(`
+              UPDATE user_stats 
+              SET longest_word_guess_streak = ?
+              WHERE user_id = ?
+            `).bind(newLongest, userId).run();
+          }
+        }
+
         // Then check if user stats exist
         const stats = await db.prepare(`
           SELECT 1 FROM user_stats WHERE user_id = ?
@@ -379,6 +401,7 @@ export const handleGamification = {
             total_points: 0,
             current_streak: 0,
             longest_streak: 0,
+            longest_word_guess_streak: 0,
             verses_mastered: 0,
             total_attempts: 0,
             perfect_attempts: 0,
@@ -720,7 +743,7 @@ export const handleGamification = {
 
       // Validate parameters
       const validTimeframes = ['all', 'this_week', 'last_week', 'this_month', 'last_month', 'this_year', 'last_year', 'custom'];
-      const validMetrics = ['points', 'verses_mastered'];
+      const validMetrics = ['points', 'verses_mastered', 'longest_word_guess_streak'];
       const validDirections = ['asc', 'desc'];
       
       if (!validTimeframes.includes(timeframe)) {
@@ -870,13 +893,14 @@ export const handleGamification = {
                 us.total_points,
                 us.verses_mastered,
                 us.current_streak,
-                us.longest_streak
+                us.longest_streak,
+                us.longest_word_guess_streak
               FROM group_members gm
               LEFT JOIN users u ON gm.user_id = u.id
               LEFT JOIN point_events pe ON gm.user_id = pe.user_id
               LEFT JOIN user_stats us ON gm.user_id = us.user_id
               WHERE gm.group_id = ? AND gm.is_active = TRUE
-              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak
+              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak, us.longest_word_guess_streak
               ORDER BY metric_value ${direction.toUpperCase()}
             `;
           } else {
@@ -897,13 +921,14 @@ export const handleGamification = {
                 us.total_points,
                 us.verses_mastered,
                 us.current_streak,
-                us.longest_streak
+                us.longest_streak,
+                us.longest_word_guess_streak
               FROM group_members gm
               LEFT JOIN users u ON gm.user_id = u.id
               LEFT JOIN point_events pe ON gm.user_id = pe.user_id AND pe.created_at >= ? AND pe.created_at <= ?
               LEFT JOIN user_stats us ON gm.user_id = us.user_id
               WHERE gm.group_id = ? AND gm.is_active = TRUE
-              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak
+              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak, us.longest_word_guess_streak
               ORDER BY metric_value ${direction.toUpperCase()}
             `;
           }
@@ -932,13 +957,14 @@ export const handleGamification = {
                 us.total_points,
                 us.verses_mastered,
                 us.current_streak,
-                us.longest_streak
+                us.longest_streak,
+                us.longest_word_guess_streak
               FROM group_members gm
               LEFT JOIN users u ON gm.user_id = u.id
               LEFT JOIN point_events pe ON gm.user_id = pe.user_id
               LEFT JOIN user_stats us ON gm.user_id = us.user_id
               WHERE gm.group_id = ? AND gm.is_active = TRUE
-              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak
+              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak, us.longest_word_guess_streak
               ORDER BY metric_value ${direction.toUpperCase()}
             `;
           } else {
@@ -963,13 +989,74 @@ export const handleGamification = {
                 us.total_points,
                 us.verses_mastered,
                 us.current_streak,
-                us.longest_streak
+                us.longest_streak,
+                us.longest_word_guess_streak
               FROM group_members gm
               LEFT JOIN users u ON gm.user_id = u.id
               LEFT JOIN point_events pe ON gm.user_id = pe.user_id AND pe.created_at >= ? AND pe.created_at <= ?
               LEFT JOIN user_stats us ON gm.user_id = us.user_id
               WHERE gm.group_id = ? AND gm.is_active = TRUE
-              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak
+              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak, us.longest_word_guess_streak
+              ORDER BY metric_value ${direction.toUpperCase()}
+            `;
+          }
+          orderBy = `metric_value ${direction.toUpperCase()}`;
+          break;
+        case 'longest_word_guess_streak':
+          if (timeframe === 'all') {
+            leaderboardQuery = `
+              SELECT 
+                gm.user_id,
+                gm.display_name,
+                gm.is_public,
+                u.email as member_email,
+                COALESCE(us.longest_word_guess_streak, 0) as metric_value,
+                COALESCE(SUM(pe.points), 0) as time_filtered_points,
+                COALESCE((
+                  SELECT COUNT(*) 
+                  FROM mastered_verses mv2 
+                  WHERE mv2.user_id = gm.user_id
+                ), 0) as time_filtered_verses_mastered,
+                0 as total_events,
+                us.total_points,
+                us.verses_mastered,
+                us.current_streak,
+                us.longest_streak,
+                us.longest_word_guess_streak
+              FROM group_members gm
+              LEFT JOIN users u ON gm.user_id = u.id
+              LEFT JOIN point_events pe ON gm.user_id = pe.user_id
+              LEFT JOIN user_stats us ON gm.user_id = us.user_id
+              WHERE gm.group_id = ? AND gm.is_active = TRUE
+              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak, us.longest_word_guess_streak
+              ORDER BY metric_value ${direction.toUpperCase()}
+            `;
+          } else {
+            leaderboardQuery = `
+              SELECT 
+                gm.user_id,
+                gm.display_name,
+                gm.is_public,
+                u.email as member_email,
+                COALESCE(us.longest_word_guess_streak, 0) as metric_value,
+                COALESCE(SUM(pe.points), 0) as time_filtered_points,
+                COALESCE((
+                  SELECT COUNT(*) 
+                  FROM mastered_verses mv2 
+                  WHERE mv2.user_id = gm.user_id AND mv2.created_at >= ? AND mv2.created_at <= ?
+                ), 0) as time_filtered_verses_mastered,
+                0 as total_events,
+                us.total_points,
+                us.verses_mastered,
+                us.current_streak,
+                us.longest_streak,
+                us.longest_word_guess_streak
+              FROM group_members gm
+              LEFT JOIN users u ON gm.user_id = u.id
+              LEFT JOIN point_events pe ON gm.user_id = pe.user_id AND pe.created_at >= ? AND pe.created_at <= ?
+              LEFT JOIN user_stats us ON gm.user_id = us.user_id
+              WHERE gm.group_id = ? AND gm.is_active = TRUE
+              GROUP BY gm.user_id, gm.display_name, gm.is_public, u.email, us.total_points, us.verses_mastered, us.current_streak, us.longest_streak, us.longest_word_guess_streak
               ORDER BY metric_value ${direction.toUpperCase()}
             `;
           }
@@ -984,6 +1071,8 @@ export const handleGamification = {
         // For time-based queries, we need to bind the time parameters multiple times
         // since they appear in multiple subqueries
         if (metric === 'points') {
+          leaderboard = await db.prepare(leaderboardQuery).bind(startTime, endTime, startTime, endTime, groupId).all();
+        } else if (metric === 'longest_word_guess_streak') {
           leaderboard = await db.prepare(leaderboardQuery).bind(startTime, endTime, startTime, endTime, groupId).all();
         } else {
           leaderboard = await db.prepare(leaderboardQuery).bind(startTime, endTime, startTime, endTime, startTime, endTime, groupId).all();
@@ -1035,6 +1124,7 @@ export const handleGamification = {
           verses_mastered: Number(entry.verses_mastered) || 0,
           current_streak: Number(entry.current_streak) || 0,
           longest_streak: Number(entry.longest_streak) || 0,
+          longest_word_guess_streak: Number(entry.longest_word_guess_streak) || 0,
           metric_value: currentValue,
           time_filtered_points: Number(entry.time_filtered_points as any) || 0,
           time_filtered_verses_mastered: Number(entry.time_filtered_verses_mastered as any) || 0,

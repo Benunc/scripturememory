@@ -33,7 +33,7 @@ interface UpdatePrivacyRequest {
 }
 
 interface LeaderboardQuery {
-  metric?: 'points' | 'verses_mastered' | 'current_streak' | 'longest_streak';
+  metric?: 'points' | 'verses_mastered' | 'current_streak' | 'longest_streak' | 'longest_word_guess_streak';
   timeframe?: 'all' | 'week' | 'month' | 'year';
 }
 
@@ -45,6 +45,7 @@ interface LeaderboardEntry {
   verses_mastered: number;
   current_streak: number;
   longest_streak: number;
+  longest_word_guess_streak: number;
   is_public: boolean;
 }
 
@@ -1265,6 +1266,9 @@ export const handleGroups = {
         case 'longest_streak':
           orderBy = 'us.longest_streak DESC';
           break;
+        case 'longest_word_guess_streak':
+          orderBy = 'us.longest_word_guess_streak DESC';
+          break;
       }
 
       // Add timeframe filtering if needed
@@ -1299,7 +1303,8 @@ export const handleGroups = {
           us.total_points,
           us.verses_mastered,
           us.current_streak,
-          us.longest_streak
+          us.longest_streak,
+          us.longest_word_guess_streak
         FROM group_members gm
         LEFT JOIN users u ON gm.user_id = u.id
         LEFT JOIN user_stats us ON gm.user_id = us.user_id
@@ -1329,6 +1334,9 @@ export const handleGroups = {
           case 'longest_streak':
             currentValue = entry.longest_streak || 0;
             break;
+          case 'longest_word_guess_streak':
+            currentValue = entry.longest_word_guess_streak || 0;
+            break;
         }
 
         // Handle ties (same rank for same values)
@@ -1346,6 +1354,7 @@ export const handleGroups = {
           verses_mastered: Number(entry.verses_mastered) || 0,
           current_streak: Number(entry.current_streak) || 0,
           longest_streak: Number(entry.longest_streak) || 0,
+          longest_word_guess_streak: Number(entry.longest_word_guess_streak) || 0,
           is_public: !!entry.is_public
         });
 

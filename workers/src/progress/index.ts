@@ -91,10 +91,10 @@ export const handleProgress = {
         if (is_correct) {
           // Get current verse streak from user_stats
           const stats = await db.prepare(`
-            SELECT current_verse_streak, current_verse_reference
+            SELECT current_verse_streak, current_verse_reference, longest_word_guess_streak
             FROM user_stats 
             WHERE user_id = ?
-          `).bind(userId).first() as { current_verse_streak: number, current_verse_reference: string } | null;
+          `).bind(userId).first() as { current_verse_streak: number, current_verse_reference: string, longest_word_guess_streak: number } | null;
 
           if (stats) {
             // If this is the same verse as the current streak, increment it
@@ -113,6 +113,10 @@ export const handleProgress = {
           const multiplier = 1 + ((streakLength - 1) * POINTS.STREAK_MULTIPLIER);
           pointsEarned = Math.round(POINTS.WORD_CORRECT * multiplier);
 
+          // Check if this is a new longest word guess streak
+          const currentLongest = stats?.longest_word_guess_streak || 0;
+          const newLongest = Math.max(currentLongest, streakLength);
+
           if (!stats) {
             // Create initial stats if they don't exist
             await db.prepare(`
@@ -126,15 +130,17 @@ export const handleProgress = {
                 last_activity_date,
                 created_at,
                 current_verse_streak,
-                current_verse_reference
-              ) VALUES (?, ?, 1, 1, 0, 0, ?, ?, ?, ?)
+                current_verse_reference,
+                longest_word_guess_streak
+              ) VALUES (?, ?, 1, 1, 0, 0, ?, ?, ?, ?, ?)
             `).bind(
               userId, 
               pointsEarned, 
               created_at || Date.now(), 
               created_at || Date.now(),
               streakLength,
-              verse_reference
+              verse_reference,
+              newLongest
             ).run();
           } else {
             // Update existing stats
@@ -143,13 +149,15 @@ export const handleProgress = {
               SET total_points = total_points + ?,
                   last_activity_date = ?,
                   current_verse_streak = ?,
-                  current_verse_reference = ?
+                  current_verse_reference = ?,
+                  longest_word_guess_streak = ?
               WHERE user_id = ?
             `).bind(
               pointsEarned, 
               created_at || Date.now(),
               streakLength,
               verse_reference,
+              newLongest,
               userId
             ).run();
           }
@@ -171,7 +179,8 @@ export const handleProgress = {
               word_index, 
               word, 
               streak_length: streakLength,
-              multiplier: multiplier 
+              multiplier: multiplier,
+              is_new_longest: streakLength > currentLongest
             }),
             created_at || Date.now()
           ).run();

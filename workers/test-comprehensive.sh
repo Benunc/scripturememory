@@ -326,7 +326,21 @@ check_status
 
 # Test long verse streak with Jeremiah 29:11 (which is automatically added for new users)
 echo "${YELLOW}Testing long verse streak with Jeremiah 29:11...${NC}"
+# Test initial state - should be 0
+echo "${YELLOW}Checking initial longest word guess streak...${NC}"
+INITIAL_STREAK_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT longest_word_guess_streak FROM user_stats WHERE user_id = 2;" | cat)
+check_status
+echo "${BLUE}Initial streak data:${NC}"
+echo "$INITIAL_STREAK_CHECK"
 
+# Extract the initial streak value
+INITIAL_STREAK_JSON=$(echo "$INITIAL_STREAK_CHECK" | sed -n '/\[/,/\]/p')
+INITIAL_STREAK_VALUE=$(echo "$INITIAL_STREAK_JSON" | grep -A1 '"longest_word_guess_streak":' | grep "longest_word_guess_streak" | awk '{print $2}' | tr -d ',')
+
+if [ "$INITIAL_STREAK_VALUE" != "0" ]; then
+    echo "${RED}Error: Expected initial longest word guess streak of 0, found $INITIAL_STREAK_VALUE${NC}"
+    exit 1
+fi
 # Record a long streak of correct word guesses
 for i in {0..14}; do
   TIMESTAMP=$((BASE_TIMESTAMP + (i * 3600000))) # 1 hour apart
@@ -382,6 +396,122 @@ for i in {1..5}; do
   check_status
   echo "${BLUE}Added guess streak points: $POINTS at $TIMESTAMP${NC}"
 done
+
+# ========================================
+# LONGEST WORD GUESS STREAK TESTS
+# ========================================
+echo "${YELLOW}Testing longest word guess streak functionality...${NC}"
+
+# Test word guess streak of 16 (should update longest streak)
+echo "${YELLOW}Testing word guess streak of 16...${NC}"
+for i in {1..16}; do
+  TIMESTAMP=$((BASE_TIMESTAMP + (i * 7200000))) # 2 hours apart
+  STREAK_RESPONSE=$(curl -s -X POST http://localhost:8787/gamification/points \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2" \
+    -d "{\"event_type\":\"word_correct\",\"points\":1.0,\"metadata\":{\"streak_length\":$i},\"created_at\":$TIMESTAMP}")
+  check_status
+  echo "${BLUE}Added word guess streak event: length $i at $TIMESTAMP${NC}"
+done
+
+# Check that longest streak was updated to 16
+echo "${YELLOW}Checking longest streak after 16-word streak...${NC}"
+STREAK_3_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT longest_word_guess_streak FROM user_stats WHERE user_id = 2;" | cat)
+check_status
+echo "${BLUE}Longest streak after 16-word streak:${NC}"
+echo "$STREAK_3_CHECK"
+STREAK_3_JSON=$(echo "$STREAK_3_CHECK" | sed -n '/\[/,/\]/p')
+STREAK_3_VALUE=$(echo "$STREAK_3_JSON" | grep -A1 '"longest_word_guess_streak":' | grep "longest_word_guess_streak" | awk '{print $2}' | tr -d ',')
+
+if [ "$STREAK_3_VALUE" != "16" ]; then
+    echo "${RED}Error: Expected longest word guess streak of 16, found $STREAK_3_VALUE${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Longest word guess streak updated to 16${NC}"
+
+# Test shorter streak (should NOT update longest streak)
+echo "${YELLOW}Testing shorter word guess streak of 2 (should not update longest)...${NC}"
+for i in {1..2}; do
+  TIMESTAMP=$((BASE_TIMESTAMP + (i * 14400000))) # 4 hours apart
+  STREAK_RESPONSE=$(curl -s -X POST http://localhost:8787/gamification/points \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN2" \
+    -d "{\"event_type\":\"word_correct\",\"points\":1.0,\"metadata\":{\"streak_length\":$i},\"created_at\":$TIMESTAMP}")
+  check_status
+  echo "${BLUE}Added word guess streak event: length $i at $TIMESTAMP${NC}"
+done
+
+# Check that longest streak remains 5
+echo "${YELLOW}Checking longest streak after shorter streak...${NC}"
+STREAK_SHORT_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT longest_word_guess_streak FROM user_stats WHERE user_id = 2;" | cat)
+check_status
+STREAK_SHORT_JSON=$(echo "$STREAK_SHORT_CHECK" | sed -n '/\[/,/\]/p')
+STREAK_SHORT_VALUE=$(echo "$STREAK_SHORT_JSON" | grep -A1 '"longest_word_guess_streak":' | grep "longest_word_guess_streak" | awk '{print $2}' | tr -d ',')
+
+if [ "$STREAK_SHORT_VALUE" != "16" ]; then
+    echo "${RED}Error: Expected longest word guess streak to remain 16, found $STREAK_SHORT_VALUE${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Longest word guess streak correctly remains 16${NC}"
+
+# Test incorrect word guess (should reset current streak but not affect longest)
+echo "${YELLOW}Testing incorrect word guess (should not affect longest streak)...${NC}"
+INCORRECT_RESPONSE=$(curl -s -X POST http://localhost:8787/gamification/points \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN2" \
+  -d "{\"event_type\":\"word_incorrect\",\"points\":0.0,\"metadata\":{\"streak_length\":0},\"created_at\":$((BASE_TIMESTAMP + 18000000))}")
+check_status
+echo "${BLUE}Added incorrect word guess event${NC}"
+
+# Check that longest streak still remains 16
+echo "${YELLOW}Checking longest streak after incorrect guess...${NC}"
+STREAK_INCORRECT_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT longest_word_guess_streak FROM user_stats WHERE user_id = 2;" | cat)
+check_status
+STREAK_INCORRECT_JSON=$(echo "$STREAK_INCORRECT_CHECK" | sed -n '/\[/,/\]/p')
+STREAK_INCORRECT_VALUE=$(echo "$STREAK_INCORRECT_JSON" | grep -A1 '"longest_word_guess_streak":' | grep "longest_word_guess_streak" | awk '{print $2}' | tr -d ',')
+
+if [ "$STREAK_INCORRECT_VALUE" != "16" ]; then
+    echo "${RED}Error: Expected longest word guess streak to remain 16 after incorrect guess, found $STREAK_INCORRECT_VALUE${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Longest word guess streak correctly remains 16 after incorrect guess${NC}"
+
+# Test that longest streak appears in user stats
+echo "${YELLOW}Testing longest word guess streak in user stats...${NC}"
+STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+check_status
+echo "${BLUE}Stats response:${NC}"
+echo "$STATS_RESPONSE"
+
+# Check if longest_word_guess_streak appears in the response
+if ! echo "$STATS_RESPONSE" | grep -q "longest_word_guess_streak"; then
+    echo "${RED}Error: longest_word_guess_streak not found in stats response${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Longest word guess streak appears in user stats${NC}"
+
+# Test that longest streak appears in user stats
+echo "${YELLOW}Testing longest word guess streak in user stats...${NC}"
+STATS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats" \
+  -H "Authorization: Bearer $SESSION_TOKEN2")
+check_status
+echo "${BLUE}Stats response:${NC}"
+echo "$STATS_RESPONSE"
+
+# Check if longest_word_guess_streak appears in the response
+if ! echo "$STATS_RESPONSE" | grep -q "longest_word_guess_streak"; then
+    echo "${RED}Error: longest_word_guess_streak not found in stats response${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Longest word guess streak appears in user stats${NC}"
+
+echo "${GREEN}✓ All longest word guess streak tests passed${NC}"
 
 # Test adding verse set to existing user (user 2)
 echo "${YELLOW}Testing add verse set to existing user...${NC}"
@@ -2085,8 +2215,8 @@ if [ "$VERSE_COUNT" != "10" ]; then
     exit 1
 fi
 
-if [ "$POINTS_COUNT" != "23" ]; then
-    echo "${RED}Error: Expected 23 point events for user 2, found $POINTS_COUNT${NC}"
+if [ "$POINTS_COUNT" != "44" ]; then
+    echo "${RED}Error: Expected 44 point events for user 2, found $POINTS_COUNT${NC}"
     exit 1
 fi
 
