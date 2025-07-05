@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuthContext } from './AuthContext';
 import { debug } from '../utils/debug';
 import { getApiUrl } from '../utils/api';
 
 interface PointsContextType {
   points: number;
+  longestWordGuessStreak: number;
   updatePoints: (points: number) => void;
   refreshPoints: () => Promise<void>;
 }
@@ -25,7 +26,12 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const storedPoints = localStorage.getItem('points');
     return storedPoints ? parseInt(storedPoints, 10) : 0;
   });
-  const { isAuthenticated } = useAuth();
+  const [longestWordGuessStreak, setLongestWordGuessStreak] = useState(() => {
+    // Initialize from localStorage if available
+    const storedStreak = localStorage.getItem('longest_word_guess_streak');
+    return storedStreak ? parseInt(storedStreak, 10) : 0;
+  });
+  const { isAuthenticated } = useAuthContext();
   const [lastRefresh, setLastRefresh] = useState(0);
   const REFRESH_COOLDOWN = 5000; // 5 seconds between refreshes
 
@@ -58,8 +64,11 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const data = await response.json();
       debug.log('api', 'Received points data:', data);
       const newPoints = data.total_points || 0;
+      const newLongestWordGuessStreak = data.longest_word_guess_streak || 0;
       setPoints(newPoints);
+      setLongestWordGuessStreak(newLongestWordGuessStreak);
       localStorage.setItem('points', newPoints.toString());
+      localStorage.setItem('longest_word_guess_streak', newLongestWordGuessStreak.toString());
       setLastRefresh(now);
     } catch (error) {
       debug.error('api', 'Error fetching points:', error);
@@ -81,7 +90,7 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [isAuthenticated]);
 
   return (
-    <PointsContext.Provider value={{ points, updatePoints, refreshPoints }}>
+    <PointsContext.Provider value={{ points, longestWordGuessStreak, updatePoints, refreshPoints }}>
       {children}
     </PointsContext.Provider>
   );

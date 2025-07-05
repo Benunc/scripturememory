@@ -998,7 +998,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         await onStatusChange(reference, ProgressStatus.Mastered);
         // Wait for the backend to process mastery and points
         await new Promise(resolve => setTimeout(resolve, 2000));
-        // Refresh points from server
+        // Refresh points and streaks from server
         await refreshPoints();
       }
     } catch (err) {
@@ -1603,6 +1603,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
           // Update streak based on backend calculation
           const streak = parseInt(localStorage.getItem('streak') || '0', 10) + data.streak_length;
           localStorage.setItem('streak', streak.toString());
+          
+          // Refresh points and streaks from server to get updated longest word guess streak
+          void refreshPoints();
 
           // Add the word to revealedWords if it's correct
           setRevealedWords(prev => [...prev, wordIndex]);

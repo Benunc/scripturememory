@@ -44,6 +44,7 @@ interface PointsStats {
   total_points: number;
   current_streak: number;
   longest_streak: number;
+  longest_word_guess_streak: number;
   verses_mastered: number;
   total_attempts: number;
   perfect_attempts: number;
@@ -264,13 +265,18 @@ export const PointsStats: React.FC = () => {
             >
               <Heading size="md" pb={10} mb={0}>Streaks</Heading>
               <Box display="flex" flexDirection="column" justifyContent="center" flex={1}>
-                <StatLabel>Current Streak</StatLabel>
-                <StatNumber>{stats.current_streak} days</StatNumber>
+                <StatLabel>Current Login Streak</StatLabel>
+                <StatNumber>{stats.current_streak} {stats.current_streak === 1 ? 'day' : 'days'}</StatNumber>
                 <StatHelpText>Don't break the chain!</StatHelpText>
                 <Box mt={4}>
-                  <StatLabel>Longest Streak</StatLabel>
-                  <StatNumber fontSize="lg">{stats.longest_streak} days</StatNumber>
+                  <StatLabel>Longest Login Streak</StatLabel>
+                  <StatNumber fontSize="lg">{stats.longest_streak} {stats.longest_streak === 1 ? 'day' : 'days'}</StatNumber>
                   <StatHelpText>Your best streak</StatHelpText>
+                </Box>
+                <Box mt={4}>
+                  <StatLabel>Best Word Guess Streak</StatLabel>
+                  <StatNumber fontSize="lg">{stats.longest_word_guess_streak} {stats.longest_word_guess_streak === 1 ? 'word' : 'words'}</StatNumber>
+                  <StatHelpText>Your best word guessing streak</StatHelpText>
                 </Box>
               </Box>
             </Stat>
