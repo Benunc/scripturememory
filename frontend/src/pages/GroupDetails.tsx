@@ -127,6 +127,7 @@ const GroupDetails: React.FC = () => {
   const [removingMember, setRemovingMember] = useState<number | null>(null);
   const [makingLeader, setMakingLeader] = useState<string | null>(null);
   const [demotingLeader, setDemotingLeader] = useState<string | null>(null);
+  const [assigningVerseSetToAll, setAssigningVerseSetToAll] = useState(false);
   
   // Leaderboard filter state
   const [leaderboardTimeframe, setLeaderboardTimeframe] = useState<string>('all');
@@ -540,6 +541,58 @@ const GroupDetails: React.FC = () => {
       });
     } finally {
       setAssigningVerseSet(false);
+    }
+  };
+
+  // Assign verse set to all group members (super admin function)
+  const handleAssignVerseSetToAllMembers = async () => {
+    if (!isAuthenticated || !token || !selectedVerseSet || !groupId) return;
+    
+    try {
+      setAssigningVerseSetToAll(true);
+      
+      const response = await fetch(`${getApiUrl()}/verses/assign-set-to-all-members`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          verseSet: selectedVerseSet,
+          groupId: groupId
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast({
+          title: 'Success',
+          description: result.message,
+          status: 'success',
+          duration: 8000,
+          isClosable: true,
+        });
+        setSelectedVerseSet('');
+      } else {
+        const error = await response.json();
+        toast({
+          title: 'Error',
+          description: error.error || 'Failed to assign verse set to all members',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to assign verse set to all members',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setAssigningVerseSetToAll(false);
     }
   };
 
@@ -1378,6 +1431,7 @@ const GroupDetails: React.FC = () => {
                                 <option value="default">Default Verses</option>
                                 <option value="childrens_verses">Children's Verses</option>
                                 <option value="gpc_youth">GPC Youth Starter Verses</option>
+                                <option value="philippians_1_chapter_challenge">Philippians 1 Chapter Challenge</option>
                               </Select>
                               <FormHelperText fontSize="xs">
                                 Select a verse set to assign to the member
@@ -1398,6 +1452,52 @@ const GroupDetails: React.FC = () => {
                           </VStack>
                         </CardBody>
                       </Card>
+
+                      {/* Assign Verse Set to All Members - Available for super admins and group leaders */}
+                      {(isSuperAdmin || userRole === 'leader' || userRole === 'creator') && (
+                        <Card>
+                          <CardHeader>
+                            <Heading size="md">Assign Verse Set to All Members</Heading>
+                          </CardHeader>
+                          <CardBody>
+                            <VStack spacing={4} align="stretch">
+                              <Text color="gray.600" fontSize={{ base: "sm", md: "md" }}>
+                                Assign a verse set to all members of this group
+                              </Text>
+                              
+                              <FormControl>
+                                <FormLabel>Select Verse Set</FormLabel>
+                                <Select 
+                                  value={selectedVerseSet}
+                                  onChange={(e) => setSelectedVerseSet(e.target.value)}
+                                  placeholder="Select a verse set"
+                                  size={{ base: "md", md: "lg" }}
+                                >
+                                  <option value="default">Default Verses</option>
+                                  <option value="childrens_verses">Children's Verses</option>
+                                  <option value="gpc_youth">GPC Youth Starter Verses</option>
+                                  <option value="philippians_1_chapter_challenge">Philippians 1 Chapter Challenge</option>
+                                </Select>
+                                <FormHelperText fontSize="xs">
+                                  Select a verse set to assign to all members
+                                </FormHelperText>
+                              </FormControl>
+
+                              <Button 
+                                colorScheme="blue" 
+                                onClick={handleAssignVerseSetToAllMembers}
+                                isLoading={assigningVerseSetToAll}
+                                loadingText="Assigning Verse Set..."
+                                isDisabled={!selectedVerseSet}
+                                size={{ base: "md", md: "lg" }}
+                                width={{ base: "full", md: "auto" }}
+                              >
+                                Assign Verse Set to All Members
+                              </Button>
+                            </VStack>
+                          </CardBody>
+                        </Card>
+                      )}
                     </VStack>
                   </TabPanel>
                 )}

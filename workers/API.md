@@ -2152,3 +2152,57 @@ This API documentation should provide comprehensive guidance for developers work
   - `401 Unauthorized`: Missing or invalid authentication
   - `403 Forbidden`: Super admin access required
   - `404 Not Found`: User not found 
+
+### Assign Verse Set to User (Admin Function)
+- **POST** `/verses/assign-set`
+- **Description**: Assign a verse set to a specific user in a group (admin function)
+- **Headers**: `Authorization: Bearer <token>`
+- **Body**:
+```json
+{
+  "targetUserId": 123,
+  "verseSet": "default",
+  "groupId": 456
+}
+```
+- **Response**: Success message with details about the assignment
+- **Permissions**: 
+  - Super admins can assign verse sets to any user in any group
+  - Group leaders/creators can assign verse sets to members of their groups
+
+### Assign Verse Set to All Group Members (Super Admin or Group Leader Function)
+- **POST** `/verses/assign-set-to-all-members`
+- **Description**: Assign a verse set to all members of a group (super admin or group leader/creator)
+- **Headers**: `Authorization: Bearer <token>`
+- **Body**:
+```json
+{
+  "verseSet": "default",
+  "groupId": 456
+}
+```
+- **Response**: Success message with details about the assignment to all members
+- **Permissions**: 
+  - Super admins can assign verse sets to all members of any group
+  - Group leaders/creators can assign verse sets to all members of their groups
+- **Response Format**:
+```json
+{
+  "success": true,
+  "message": "Assigned default to all 5 members of group Test Group. Total new verses added: 15",
+  "details": {
+    "groupName": "Test Group",
+    "verseSet": "default",
+    "totalMembers": 5,
+    "totalVersesAdded": 15,
+    "results": [
+      {
+        "userId": 123,
+        "email": "user@example.com",
+        "addedCount": 3,
+        "errors": []
+      }
+    ]
+  }
+}
+``` 

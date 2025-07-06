@@ -482,5 +482,176 @@ export const handleVerses = {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  },
+
+  // Assign verse set to all group members (super admin function)
+  assignVerseSetToAllMembers: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const { verseSet, groupId } = await request.json() as { 
+        verseSet: string; 
+        groupId: number;
+      };
+
+      if (!groupId) {
+        return new Response(JSON.stringify({ error: 'Group ID is required' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Check if user is super admin
+      const isSuperAdmin = await db.prepare(`
+        SELECT 1 FROM super_admins 
+        WHERE user_id = ? AND is_active = TRUE
+      `).bind(userId).first();
+
+      // If not super admin, check if user is a leader or creator of this group
+      if (!isSuperAdmin) {
+        const userRole = await db.prepare(`
+          SELECT role FROM group_members 
+          WHERE group_id = ? AND user_id = ? AND is_active = 1
+        `).bind(groupId, userId).first();
+
+        if (!userRole || !['leader', 'creator'].includes(userRole.role)) {
+          return new Response(JSON.stringify({ error: 'You must be a leader or creator of this group, or a super admin, to assign verse sets to all members' }), { 
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      // Check if group exists
+      const group = await db.prepare(`
+        SELECT id, name FROM groups WHERE id = ? AND is_active = 1
+      `).bind(groupId).first();
+
+      if (!group) {
+        return new Response(JSON.stringify({ error: 'Group not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get all active members of the group
+      const groupMembers = await db.prepare(`
+        SELECT u.id, u.email 
+        FROM users u
+        JOIN group_members gm ON u.id = gm.user_id
+        WHERE gm.group_id = ? AND gm.is_active = 1
+      `).bind(groupId).all();
+
+      if (!groupMembers.results.length) {
+        return new Response(JSON.stringify({ error: 'No active members found in this group' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get verses from the specified verse set
+      const { getVerseSet } = await import('../auth/sampleVerses');
+      const verseSetData = getVerseSet(verseSet);
+      
+      if (!verseSetData) {
+        return new Response(JSON.stringify({ error: 'Invalid verse set' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Add verses to all group members
+      let totalAddedCount = 0;
+      let processedMembers = 0;
+      const results: Array<{ userId: number; email: string; addedCount: number; errors: string[] }> = [];
+
+      for (const member of groupMembers.results) {
+        const memberId = member.id as number;
+        const memberEmail = member.email as string;
+        let memberAddedCount = 0;
+        const memberErrors: string[] = [];
+
+        for (const verse of verseSetData) {
+          try {
+            // Check if verse already exists for this user
+            const existingVerse = await db.prepare(`
+              SELECT 1 FROM verses 
+              WHERE user_id = ? AND reference = ?
+            `).bind(memberId, verse.reference).first();
+
+            if (!existingVerse) {
+              // Insert the verse
+              await db.prepare(`
+                INSERT INTO verses (
+                  user_id,
+                  reference,
+                  text,
+                  translation,
+                  created_at
+                ) VALUES (?, ?, ?, ?, ?)
+              `).bind(
+                memberId,
+                verse.reference,
+                verse.text,
+                'NIV', // Default translation
+                Date.now()
+              ).run();
+              memberAddedCount++;
+              totalAddedCount++;
+            }
+          } catch (error) {
+            const errorMsg = `Error adding verse ${verse.reference}: ${error}`;
+            console.error(errorMsg);
+            memberErrors.push(errorMsg);
+          }
+        }
+
+        results.push({
+          userId: memberId,
+          email: memberEmail,
+          addedCount: memberAddedCount,
+          errors: memberErrors
+        });
+        processedMembers++;
+      }
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: `Assigned ${verseSet} to all ${processedMembers} members of group ${group.name}. Total new verses added: ${totalAddedCount}`,
+        details: {
+          groupName: group.name,
+          verseSet,
+          totalMembers: processedMembers,
+          totalVersesAdded: totalAddedCount,
+          results
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      console.error('Error assigning verse set to all members:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 }; 

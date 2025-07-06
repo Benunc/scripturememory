@@ -61,6 +61,7 @@ router.post('/verses', handleVerses.addVerse);
 router.put('/verses/:id', handleVerses.updateVerse);
 router.delete('/verses/:id', handleVerses.deleteVerse);
 router.post('/verses/assign-set', handleVerses.assignVerseSet);
+router.post('/verses/assign-set-to-all-members', handleVerses.assignVerseSetToAllMembers);
 
 // Progress routes
 router.post('/progress/word', handleProgress.recordWordProgress);
