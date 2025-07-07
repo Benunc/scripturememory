@@ -43,6 +43,26 @@ export const handleProgress = {
         });
       }
 
+      // Handle reset signal (special case for reset button)
+      if (word_index === -1 && word === 'RESET' && !is_correct) {
+        const db = getDB(env);
+        // Reset the verse streak for this user and verse
+        await db.prepare(`
+          UPDATE user_stats 
+          SET current_verse_streak = 0,
+              current_verse_reference = ?
+          WHERE user_id = ?
+        `).bind(verse_reference, userId).run();
+
+        return new Response(JSON.stringify({ 
+          success: true,
+          streak_length: 0,
+          points_earned: 0
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       // Verify verse exists and belongs to user
       const verse = await getDB(env).prepare(
         'SELECT * FROM verses WHERE user_id = ? AND reference = ?'

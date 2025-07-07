@@ -7,6 +7,7 @@ interface PointsContextType {
   points: number;
   longestWordGuessStreak: number;
   updatePoints: (points: number) => void;
+  updateLongestWordGuessStreak: (streak: number) => void;
   refreshPoints: () => Promise<void>;
 }
 
@@ -66,9 +67,14 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const newPoints = data.total_points || 0;
       const newLongestWordGuessStreak = data.longest_word_guess_streak || 0;
       setPoints(newPoints);
-      setLongestWordGuessStreak(newLongestWordGuessStreak);
+      
+      // Only update longest word guess streak if server value is higher
+      if (newLongestWordGuessStreak > longestWordGuessStreak) {
+        setLongestWordGuessStreak(newLongestWordGuessStreak);
+        localStorage.setItem('longest_word_guess_streak', newLongestWordGuessStreak.toString());
+      }
+      
       localStorage.setItem('points', newPoints.toString());
-      localStorage.setItem('longest_word_guess_streak', newLongestWordGuessStreak.toString());
       setLastRefresh(now);
     } catch (error) {
       debug.error('api', 'Error fetching points:', error);
@@ -84,13 +90,18 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     void refreshPoints();
   };
 
+  const updateLongestWordGuessStreak = (streak: number) => {
+    setLongestWordGuessStreak(streak);
+    localStorage.setItem('longest_word_guess_streak', streak.toString());
+  };
+
   // Refresh points when component mounts and when auth state changes
   useEffect(() => {
     void refreshPoints();
   }, [isAuthenticated]);
 
   return (
-    <PointsContext.Provider value={{ points, longestWordGuessStreak, updatePoints, refreshPoints }}>
+    <PointsContext.Provider value={{ points, longestWordGuessStreak, updatePoints, updateLongestWordGuessStreak, refreshPoints }}>
       {children}
     </PointsContext.Provider>
   );

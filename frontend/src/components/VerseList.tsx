@@ -60,6 +60,7 @@ import {
   useId as useIdHook,
   useBoolean as useBooleanHook,
   useClipboard as useClipboardHook,
+  Spinner,
 } from '@chakra-ui/react';
 import { ChevronDownIcon, ChevronUpIcon, DeleteIcon, EditIcon, InfoIcon, RepeatIcon, StarIcon, TimeIcon } from '@chakra-ui/icons';
 import { ProgressStatus } from '../utils/progress';
@@ -586,7 +587,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     });
   }, []);
 
-  // Update syncProgress to batch updates
+  // Update syncProgress to batch updates more efficiently
   const syncProgress = useCallback(() => {
     if (syncTimeoutRef.current) {
       clearTimeout(syncTimeoutRef.current);
@@ -605,48 +606,77 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         // Sort queue by timestamp to ensure correct order
         const sortedQueue = [...wordProgressQueue].sort((a, b) => a.timestamp - b.timestamp);
         
-        // Process in batches of 3
-        for (let i = 0; i < sortedQueue.length; i += 3) {
-          const batch = sortedQueue.slice(i, i + 3);
-          
-          // Send batch
-          for (const progress of batch) {
-            const response = await fetch(`${getApiUrl()}/progress/word`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionToken}`
-              },
-              body: JSON.stringify(progress)
-            });
+        // Process words sequentially to maintain proper streak calculation
+        for (const progress of sortedQueue) {
+          const response = await fetch(`${getApiUrl()}/progress/word`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionToken}`
+            },
+            body: JSON.stringify(progress)
+          });
 
-            if (!response.ok) {
-              throw new Error('Failed to sync progress');
-            }
-          }
-
-          // Add a delay between batches equal to the debounce time
-          if (i + 3 < sortedQueue.length) {
-            await new Promise(resolve => setTimeout(resolve, 3500));
+          if (!response.ok) {
+            throw new Error('Failed to sync progress');
           }
         }
 
         // Clear the queue after successful sync
         setWordProgressQueue([]);
         
-        // Only refresh points from API every 5 minutes
-        const lastPointsRefresh = localStorage.getItem('last_points_refresh');
-        const now = Date.now();
-        if (!lastPointsRefresh || (now - parseInt(lastPointsRefresh)) > 5 * 60 * 1000) {
-          await refreshPoints();
-          localStorage.setItem('last_points_refresh', now.toString());
-        }
+        // Refresh points from server after successful sync to get updated longest word guess streak
+        await refreshPoints();
+        localStorage.setItem('last_points_refresh', Date.now().toString());
       } catch (error) {
         debug.error('api', 'Error syncing progress:', error);
       } finally {
         setIsSyncing(false);
       }
-    }, 3500); // 3.5 second debounce
+    }, 2000); // Reduced debounce time from 3.5s to 2s for more responsive syncing
+  }, [isAuthenticated, wordProgressQueue, isSyncing, refreshPoints]);
+
+  // Force immediate sync without debounce
+  const forceSync = useCallback(async () => {
+    if (!isAuthenticated || wordProgressQueue.length === 0 || isSyncing) return;
+
+    setIsSyncing(true);
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) {
+        throw new Error('No session token found');
+      }
+
+      // Sort queue by timestamp to ensure correct order
+      const sortedQueue = [...wordProgressQueue].sort((a, b) => a.timestamp - b.timestamp);
+      
+      // Process words sequentially to maintain proper streak calculation
+      for (const progress of sortedQueue) {
+        const response = await fetch(`${getApiUrl()}/progress/word`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionToken}`
+          },
+          body: JSON.stringify(progress)
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to sync progress');
+        }
+      }
+
+      // Clear the queue after successful sync
+      setWordProgressQueue([]);
+      
+      // Refresh points from server after successful sync to get updated longest word guess streak
+      await refreshPoints();
+      localStorage.setItem('last_points_refresh', Date.now().toString());
+    } catch (error) {
+      debug.error('api', 'Error syncing progress:', error);
+    } finally {
+      setIsSyncing(false);
+    }
   }, [isAuthenticated, wordProgressQueue, isSyncing, refreshPoints]);
 
   // Add cleanup for timeout
@@ -713,6 +743,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
   // Add state for tracking consecutive correct guesses
   const [consecutiveCorrectGuesses, setConsecutiveCorrectGuesses] = useState<number>(0);
+  const { updateLongestWordGuessStreak } = usePoints();
 
   // Add state for overlay
   const [showOverlay, setShowOverlay] = useState(false);
@@ -1522,7 +1553,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   };
 
   // Update handleReset to use number[] for revealedWords
-  const handleReset = (reference: string, clearProgress: boolean = false) => {
+  const handleReset = async (reference: string, clearProgress: boolean = false) => {
     setRevealedWords([]);
     setShowFullVerse(prev => ({
       ...prev,
@@ -1540,9 +1571,32 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       localStorage.setItem('recordedWords', JSON.stringify(newRecordedWords));
       return newRecordedWords;
     });
+
+    // Send a reset signal to the server to break the streak
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (sessionToken) {
+        await fetch(`${getApiUrl()}/progress/word`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionToken}`
+          },
+          body: JSON.stringify({
+            verse_reference: reference,
+            word_index: -1, // Special index to indicate reset
+            word: 'RESET',
+            is_correct: false,
+            timestamp: Date.now()
+          })
+        });
+      }
+    } catch (error) {
+      debug.error('api', 'Error sending reset signal:', error);
+    }
   };
 
-  // Update handleGuessSubmit to always award points for correct guesses
+  // Update handleGuessSubmit to use batching and immediate UI updates
   const handleGuessSubmit = async (reference: string) => {
     const verse = verses.find(v => v.reference === reference);
     if (!verse) return;
@@ -1559,85 +1613,123 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       return normalizeWord(verseWord) === normalizeWord(word);
     });
 
-    try {
-      const sessionToken = localStorage.getItem('session_token');
-      if (!sessionToken) {
-        throw new Error('No session token found');
-      }
+    // Immediately update UI for better responsiveness
+    setUserGuess('');
+    setGuessFeedback({
+      isCorrect: isCorrect,
+      message: isCorrect ? (nextWordIndex + words.length >= verseWords.length ? "Great job! Practice again with the reset button." : "Great job! Keep going!") : "Not quite right. Try again or use the hint button."
+    });
 
-      // Record progress for each word
-      for (let i = 0; i < words.length; i++) {
-        const wordIndex = nextWordIndex + i;
-        const word = words[i];
-        const verseWord = verseWords[wordIndex];
-        const wordIsCorrect = normalizeWord(verseWord) === normalizeWord(word);
+    // Reset streak for incorrect guesses
+    if (!isCorrect) {
+      setConsecutiveCorrectGuesses(0);
+    }
 
-        const response = await fetch(`${getApiUrl()}/progress/word`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionToken}`
-          },
-          body: JSON.stringify({
-            verse_reference: verse.reference,
-            word_index: wordIndex,
-            word: word,
-            is_correct: wordIsCorrect,
-            timestamp: Date.now()
-          })
-        });
+    // Clear feedback after delay
+    setTimeout(() => {
+      setGuessFeedback(null);
+    }, 8000);
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-          throw new Error(errorData?.error || 'Failed to record progress');
-        }
+    // Calculate points and streaks locally for immediate feedback
+    let totalPointsEarned = 0;
+    let totalStreakLength = 0;
+    const correctWordIndices: number[] = [];
+    const currentLongestStreak = parseInt(localStorage.getItem('longest_word_guess_streak') || '0', 10);
+    let newLongestStreak = currentLongestStreak;
 
-        const data = await response.json();
+    for (let i = 0; i < words.length; i++) {
+      const wordIndex = nextWordIndex + i;
+      const word = words[i];
+      const verseWord = verseWords[wordIndex];
+      const wordIsCorrect = normalizeWord(verseWord) === normalizeWord(word);
+
+      if (wordIsCorrect) {
+        // Calculate points locally (1 point for first word, streak position for consecutive)
+        const currentStreak = consecutiveCorrectGuesses + i + 1;
+        const pointsForWord = currentStreak;
+        totalPointsEarned += pointsForWord;
+        totalStreakLength = currentStreak;
+        correctWordIndices.push(wordIndex);
         
-        if (wordIsCorrect) {
-          // Update points based on backend calculation
-          const newPoints = parseInt(localStorage.getItem('points') || '0', 10) + data.points_earned;
-          localStorage.setItem('points', newPoints.toString());
-          updatePoints(newPoints);
-          
-          // Update streak based on backend calculation
-          const streak = parseInt(localStorage.getItem('streak') || '0', 10) + data.streak_length;
-          localStorage.setItem('streak', streak.toString());
-          
-          // Refresh points and streaks from server to get updated longest word guess streak
-          void refreshPoints();
-
-          // Add the word to revealedWords if it's correct
-          setRevealedWords(prev => [...prev, wordIndex]);
-          
-          // Update activeVerseId to ensure we're tracking the next word
-          setActiveVerseId(reference);
+        // Update longest word guess streak if this streak is longer
+        if (currentStreak > newLongestStreak) {
+          newLongestStreak = currentStreak;
         }
       }
+    }
 
-      // Update UI
-      setUserGuess('');
-      setGuessFeedback({
-        isCorrect: isCorrect,
-        message: isCorrect ? (nextWordIndex + words.length >= verseWords.length ? "Great job! Practice again with the reset button." : "Great job! Keep going!") : "Not quite right. Try again or use the hint button."
-      });
-      
-      // Reset streak for incorrect guesses
-      if (!isCorrect) {
-        setConsecutiveCorrectGuesses(0);
+    // Update UI immediately with local calculations
+    if (totalPointsEarned > 0) {
+      const currentPoints = parseInt(localStorage.getItem('points') || '0', 10);
+      const newPoints = currentPoints + totalPointsEarned;
+      localStorage.setItem('points', newPoints.toString());
+      updatePoints(newPoints);
+
+      // Update streak locally
+      const currentStreak = parseInt(localStorage.getItem('streak') || '0', 10);
+      const newStreak = currentStreak + totalStreakLength;
+      localStorage.setItem('streak', newStreak.toString());
+
+      // Update longest word guess streak if beaten
+      if (newLongestStreak > currentLongestStreak) {
+        updateLongestWordGuessStreak(newLongestStreak);
       }
-      
-      // Clear feedback after delay
-      setTimeout(() => {
-        setGuessFeedback(null);
-      }, 8000);
 
-    } catch (error) {
-      console.error('Error recording progress:', error);
-      setGuessFeedback({
-        isCorrect: false,
-        message: 'Failed to record progress. Please try again.'
-      });
+          // Add correct words to revealedWords immediately
+    setRevealedWords(prev => [...prev, ...correctWordIndices]);
+    
+    // Update activeVerseId to ensure we're tracking the next word
+    setActiveVerseId(reference);
+
+    // Update consecutive correct guesses
+    setConsecutiveCorrectGuesses(prev => prev + words.filter((word, i) => {
+      const verseWord = verseWords[nextWordIndex + i];
+      return normalizeWord(verseWord) === normalizeWord(word);
+    }).length);
+
+    // Check if this completes the verse and force sync if so
+    const newRevealedWords = [...revealedWords, ...correctWordIndices];
+    if (newRevealedWords.length >= verseWords.length) {
+      // Verse is completed, force immediate sync
+      setTimeout(() => {
+        void forceSync();
+      }, 100); // Very short delay to ensure queue is updated
+    }
+    }
+
+    // Queue word progress for batched API submission instead of immediate API calls
+    const timestamp = Date.now();
+    const wordProgressItems: WordProgress[] = words.map((word, i) => {
+      const wordIndex = nextWordIndex + i;
+      const verseWord = verseWords[wordIndex];
+      const wordIsCorrect = normalizeWord(verseWord) === normalizeWord(word);
+      
+      return {
+        verse_reference: verse.reference,
+        word_index: wordIndex,
+        word: word,
+        is_correct: wordIsCorrect,
+        timestamp: timestamp + i // Ensure proper ordering
+      };
+    });
+
+    // Add to queue for batched processing
+    setWordProgressQueue(prev => [...prev, ...wordProgressItems]);
+
+    // Trigger sync after a short delay to allow for more words to be queued
+    setTimeout(() => {
+      syncProgress();
+    }, 1000); // 1 second delay for batching
+
+    // Refresh points from server more frequently to get updated longest word guess streak
+    // But still avoid refreshing on every single word to maintain performance
+    const lastPointsRefresh = localStorage.getItem('last_points_refresh');
+    const now = Date.now();
+    if (!lastPointsRefresh || (now - parseInt(lastPointsRefresh)) > 30 * 1000) { // 30 seconds instead of 5 minutes
+      setTimeout(() => {
+        void refreshPoints();
+        localStorage.setItem('last_points_refresh', now.toString());
+      }, 2000); // 2 second delay to avoid blocking UI
     }
   };
 
@@ -1900,6 +1992,14 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                 >
                   {guessFeedback.message}
                 </Text>
+              )}
+              {isSyncing && (
+                <HStack spacing={2}>
+                  <Spinner size="xs" />
+                  <Text fontSize="xs" color="gray.500">
+                    Saving progress...
+                  </Text>
+                </HStack>
               )}
             </Box>
           </Flex>
