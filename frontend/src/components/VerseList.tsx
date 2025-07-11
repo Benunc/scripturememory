@@ -1673,6 +1673,31 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       // Update longest word guess streak if beaten
       if (newLongestStreak > currentLongestStreak) {
         updateLongestWordGuessStreak(newLongestStreak);
+        
+        // Immediately send the new longest streak to the server
+        try {
+          const sessionToken = localStorage.getItem('session_token');
+          if (sessionToken) {
+            await fetch(`${getApiUrl()}/gamification/points`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionToken}`
+              },
+              body: JSON.stringify({
+                event_type: 'word_correct',
+                points: 0, // No additional points, just updating the streak
+                metadata: {
+                  streak_length: newLongestStreak,
+                  is_new_longest: true
+                },
+                created_at: Date.now()
+              })
+            });
+          }
+        } catch (error) {
+          debug.error('api', 'Error updating longest streak on server:', error);
+        }
       }
 
           // Add correct words to revealedWords immediately
