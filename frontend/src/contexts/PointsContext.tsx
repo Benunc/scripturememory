@@ -98,6 +98,59 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Refresh points when component mounts and when auth state changes
   useEffect(() => {
     void refreshPoints();
+    
+    // Check if localStorage has a higher longest streak than server and update if needed
+    const checkAndUpdateLongestStreak = async () => {
+      if (!isAuthenticated) return;
+      
+      try {
+        const sessionToken = localStorage.getItem('session_token');
+        if (!sessionToken) return;
+
+        const storedStreak = parseInt(localStorage.getItem('longest_word_guess_streak') || '0', 10);
+        if (storedStreak === 0) return; // No local streak to check
+
+        // Get current server streak
+        const response = await fetch(`${getApiUrl()}/gamification/stats`, {
+          headers: {
+            'Authorization': `Bearer ${sessionToken}`
+          }
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const serverStreak = data.longest_word_guess_streak || 0;
+
+        // If localStorage has a higher streak, update the server
+        if (storedStreak > serverStreak) {
+          debug.log('api', `Updating server longest streak from ${serverStreak} to ${storedStreak}`);
+          await fetch(`${getApiUrl()}/gamification/points`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionToken}`
+            },
+            body: JSON.stringify({
+              event_type: 'word_correct',
+              points: 0,
+              metadata: {
+                streak_length: storedStreak,
+                is_new_longest: true
+              },
+              created_at: Date.now()
+            })
+          });
+        }
+      } catch (error) {
+        debug.error('api', 'Error checking/updating longest streak on mount:', error);
+      }
+    };
+
+    // Run the check after a short delay to ensure auth is ready
+    setTimeout(() => {
+      void checkAndUpdateLongestStreak();
+    }, 1000);
   }, [isAuthenticated]);
 
   return (
