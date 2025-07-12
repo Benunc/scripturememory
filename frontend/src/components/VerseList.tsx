@@ -1169,6 +1169,14 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
             setAnnouncedWord('Reset. Press S to start memorizing.');
           }
           break;
+        case 'b':
+          // Go back 10 words
+          if (activeVerseId === verseReference) {
+            e.preventDefault();
+            handleGoBack10Words(verseReference);
+            setAnnouncedWord('Going back 10 words. Your streak has been reset.');
+          }
+          break;
         case 'f':
           // Toggle full verse
           e.preventDefault();
@@ -1594,6 +1602,54 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     } catch (error) {
       debug.error('api', 'Error sending reset signal:', error);
     }
+  };
+
+  // Add handler for going back 10 words in practice mode
+  const handleGoBack10Words = (reference: string) => {
+    const verse = verses.find(v => v.reference === reference);
+    if (!verse) return;
+
+    const verseWords = splitVerseText(verse.text);
+    const currentRevealedCount = revealedWords.length;
+    
+    // Calculate how many words to go back (minimum of 10 or all revealed words)
+    const wordsToGoBack = Math.min(10, currentRevealedCount);
+    
+    if (wordsToGoBack === 0) {
+      // No words to go back
+      setGuessFeedback({
+        isCorrect: false,
+        message: "No words to go back to. Start memorizing first!"
+      });
+      setTimeout(() => setGuessFeedback(null), 3000);
+      return;
+    }
+
+    // Remove the last N words from revealedWords
+    const newRevealedWords = revealedWords.slice(0, -wordsToGoBack);
+    setRevealedWords(newRevealedWords);
+    
+    // Reset the consecutive correct guesses streak
+    setConsecutiveCorrectGuesses(0);
+    
+    // Reset the verse streak on the backend
+    void resetVerseStreak(reference);
+    
+    // Provide user feedback
+    setGuessFeedback({
+      isCorrect: true,
+      message: `Went back ${wordsToGoBack} word${wordsToGoBack !== 1 ? 's' : ''}. Your streak has been reset.`
+    });
+    
+    // Clear feedback after delay
+    setTimeout(() => {
+      setGuessFeedback(null);
+    }, 4000);
+    
+    // Focus the input
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
   };
 
   // Update handleGuessSubmit to use batching and immediate UI updates
@@ -2333,6 +2389,32 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                           }}
                         >
                           Show Hint {renderKeyboardShortcut('S')}
+                        </Button>
+                      )}
+                      {revealedWords.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleGoBack10Words(verse.reference);
+                          }}
+                          onKeyDown={(e) => {
+                            e.stopPropagation();
+                            handleGoBack10Words(verse.reference);
+                          }}
+                          role="button"
+                          aria-label={`Go back 10 words for ${verse.reference}`}
+                          _focus={{
+                            outline: 'none',
+                            boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                          }}
+                          _focusVisible={{
+                            outline: 'none',
+                            boxShadow: '0 0 0 3px var(--chakra-colors-blue-300)',
+                          }}
+                        >
+                          Go Back 10 Words {renderKeyboardShortcut('B')}
                         </Button>
                       )}
                       <Button
