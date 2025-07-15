@@ -513,7 +513,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   const [announcedWord, setAnnouncedWord] = useState<string>('');
   const toast = useToast();
   const { isAuthenticated, userEmail, signOut } = useAuth({});
-  const { refreshPoints, updatePoints } = usePoints();
+  const { refreshPoints, updatePoints, updateCurrentStreak, updateLongestWordGuessStreak } = usePoints();
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Move all color mode hooks to component level
@@ -544,6 +544,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   const errorBg = useColorModeValue('red.50', 'red.900');
   const shortcutsModalBg = useColorModeValue('white', 'gray.800');
   const shortcutsModalColor = useColorModeValue('gray.800', 'white');
+  const verseCardBg = useColorModeValue('white', 'gray.800');
+  const verseCardHoverBg = useColorModeValue('gray.50', 'gray.700');
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [verseToDelete, setVerseToDelete] = useState<string | null>(null);
@@ -743,7 +745,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
   // Add state for tracking consecutive correct guesses
   const [consecutiveCorrectGuesses, setConsecutiveCorrectGuesses] = useState<number>(0);
-  const { updateLongestWordGuessStreak } = usePoints();
+
+  // Sync consecutive correct guesses with PointsContext
+  useEffect(() => {
+    updateCurrentStreak(consecutiveCorrectGuesses);
+  }, [consecutiveCorrectGuesses, updateCurrentStreak]);
 
   // Add state for overlay
   const [showOverlay, setShowOverlay] = useState(false);
@@ -1482,6 +1488,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     setConsecutiveCorrectGuesses(0);
     void resetVerseStreak(reference);
     
+    // Reset current streak when starting a new verse
+    updateCurrentStreak(0);
+    
     // Clear recorded words from localStorage for this verse
     setRecordedWords(prev => {
       const newRecordedWords = prev.filter(word => word.verse_reference !== reference);
@@ -1669,22 +1678,41 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       return normalizeWord(verseWord) === normalizeWord(word);
     });
 
+    // Check if this will complete the verse
+    const willCompleteVerse = nextWordIndex + words.length >= verseWords.length;
+    
     // Immediately update UI for better responsiveness
     setUserGuess('');
-    setGuessFeedback({
-      isCorrect: isCorrect,
-      message: isCorrect ? (nextWordIndex + words.length >= verseWords.length ? "Great job! Practice again with the reset button." : "Great job! Keep going!") : "Not quite right. Try again or use the hint button."
-    });
+    
+    // Set appropriate feedback message
+    if (isCorrect) {
+      if (willCompleteVerse) {
+        setGuessFeedback({
+          isCorrect: true,
+          message: "Perfect! Verse completed. Your streak has been reset for the next verse."
+        });
+      } else {
+        setGuessFeedback({
+          isCorrect: true,
+          message: "Great job! Keep going!"
+        });
+      }
+    } else {
+      setGuessFeedback({
+        isCorrect: false,
+        message: "Not quite right. Try again or use the hint button."
+      });
+    }
 
     // Reset streak for incorrect guesses
     if (!isCorrect) {
       setConsecutiveCorrectGuesses(0);
     }
 
-    // Clear feedback after delay
+    // Clear feedback after delay (longer for completion message)
     setTimeout(() => {
       setGuessFeedback(null);
-    }, 8000);
+    }, willCompleteVerse ? 5000 : 8000);
 
     // Calculate points and streaks locally for immediate feedback
     let totalPointsEarned = 0;
@@ -1771,10 +1799,14 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     // Check if this completes the verse and force sync if so
     const newRevealedWords = [...revealedWords, ...correctWordIndices];
     if (newRevealedWords.length >= verseWords.length) {
-      // Verse is completed, force immediate sync
+      // Verse is completed, reset streak and force immediate sync
+      // Use a small delay to ensure the completion feedback is shown first
       setTimeout(() => {
+        setConsecutiveCorrectGuesses(0);
+        updateCurrentStreak(0);
+        void resetVerseStreak(reference);
         void forceSync();
-      }, 100); // Very short delay to ensure queue is updated
+      }, 200); // Small delay to ensure feedback is processed first
     }
     }
 
@@ -2285,9 +2317,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         opacity={!isActive && showOverlay ? 0.25 : 1}
         filter={!isActive && showOverlay ? "blur(1px)" : "none"}
         transition="all 0.1s ease-in-out"
-        bg={useColorModeValue('white', 'gray.800')}
+        bg={verseCardBg}
         _hover={{
-          bg: useColorModeValue('gray.50', 'gray.700')
+          bg: verseCardHoverBg
         }}
       >
         <VStack align="stretch" spacing={2}>

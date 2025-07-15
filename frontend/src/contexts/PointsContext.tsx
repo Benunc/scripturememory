@@ -6,8 +6,10 @@ import { getApiUrl } from '../utils/api';
 interface PointsContextType {
   points: number;
   longestWordGuessStreak: number;
+  currentStreak: number;
   updatePoints: (points: number) => void;
   updateLongestWordGuessStreak: (streak: number) => void;
+  updateCurrentStreak: (streak: number) => void;
   refreshPoints: () => Promise<void>;
 }
 
@@ -30,6 +32,11 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [longestWordGuessStreak, setLongestWordGuessStreak] = useState(() => {
     // Initialize from localStorage if available
     const storedStreak = localStorage.getItem('longest_word_guess_streak');
+    return storedStreak ? parseInt(storedStreak, 10) : 0;
+  });
+  const [currentStreak, setCurrentStreak] = useState(() => {
+    // Initialize from localStorage if available
+    const storedStreak = localStorage.getItem('current_word_guess_streak');
     return storedStreak ? parseInt(storedStreak, 10) : 0;
   });
   const { isAuthenticated } = useAuthContext();
@@ -95,6 +102,11 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.setItem('longest_word_guess_streak', streak.toString());
   };
 
+  const updateCurrentStreak = (streak: number) => {
+    setCurrentStreak(streak);
+    localStorage.setItem('current_word_guess_streak', streak.toString());
+  };
+
   // Refresh points when component mounts and when auth state changes
   useEffect(() => {
     void refreshPoints();
@@ -154,7 +166,7 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [isAuthenticated]);
 
   return (
-    <PointsContext.Provider value={{ points, longestWordGuessStreak, updatePoints, updateLongestWordGuessStreak, refreshPoints }}>
+    <PointsContext.Provider value={{ points, longestWordGuessStreak, currentStreak, updatePoints, updateLongestWordGuessStreak, updateCurrentStreak, refreshPoints }}>
       {children}
     </PointsContext.Provider>
   );
