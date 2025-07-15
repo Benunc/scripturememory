@@ -25,6 +25,7 @@ export const PointsDisplay: React.FC<PointsDisplayProps> = ({ initialPoints = 0 
   const [isBouncing, setIsBouncing] = useState(false);
   const [isNewBestStreak, setIsNewBestStreak] = useState(false);
   const [hasCelebratedThisStreak, setHasCelebratedThisStreak] = useState(false);
+  const [isInNewBestStreakSession, setIsInNewBestStreakSession] = useState(false);
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthContext();
   const { points, longestWordGuessStreak, currentStreak, refreshPoints } = usePoints();
@@ -49,8 +50,8 @@ export const PointsDisplay: React.FC<PointsDisplayProps> = ({ initialPoints = 0 
     
     if (currentStreak >= longestWordGuessStreak) {
       return greenColor; // At or past best streak - show green!
-    } else if (ratio >= 0.8) {
-      return redColor; // Very close
+    } else if (ratio >= 0.8 && !isInNewBestStreakSession) {
+      return redColor; // Very close, but only if not in a new best streak session
     } else if (ratio >= 0.6) {
       return orangeColor; // Getting close
     } else if (ratio >= 0.4) {
@@ -63,13 +64,13 @@ export const PointsDisplay: React.FC<PointsDisplayProps> = ({ initialPoints = 0 
   const currentStreakColor = getCurrentStreakColor();
   
   // Check if current streak is very close to best streak for pulsing effect
-  const isVeryClose = longestWordGuessStreak > 0 && currentStreak / longestWordGuessStreak >= 0.8 && currentStreak < longestWordGuessStreak;
+  const isVeryClose = longestWordGuessStreak > 0 && currentStreak / longestWordGuessStreak >= 0.8 && currentStreak < longestWordGuessStreak && !isInNewBestStreakSession;
   
   // Check if this is a new best streak ever
   const isNewBestStreakEver = currentStreak >= longestWordGuessStreak && currentStreak > 0;
   
   // Check if current streak is close (red color) for jiggling effect
-  const isClose = longestWordGuessStreak > 0 && currentStreak / longestWordGuessStreak >= 0.8 && currentStreak < longestWordGuessStreak;
+  const isClose = longestWordGuessStreak > 0 && currentStreak / longestWordGuessStreak >= 0.8 && currentStreak < longestWordGuessStreak && !isInNewBestStreakSession;
 
   // Handle points update animation
   useEffect(() => {
@@ -85,6 +86,7 @@ export const PointsDisplay: React.FC<PointsDisplayProps> = ({ initialPoints = 0 
     // Reset celebration flag when streak resets to 0
     if (currentStreak === 0) {
       setHasCelebratedThisStreak(false);
+      setIsInNewBestStreakSession(false);
     }
     
     // Check if current streak just reached the best streak level for the first time in this attempt
@@ -98,6 +100,7 @@ export const PointsDisplay: React.FC<PointsDisplayProps> = ({ initialPoints = 0 
       setIsBouncing(true);
       setIsNewBestStreak(true);
       setHasCelebratedThisStreak(true); // Mark that we've celebrated this streak
+      setIsInNewBestStreakSession(true); // Mark that we're in a new best streak session
       setTimeout(() => setShowConfetti(false), 3000); // Hide confetti after 3 seconds
       setTimeout(() => setIsBouncing(false), 2000); // Stop bouncing after 2 seconds
       setTimeout(() => setIsNewBestStreak(false), 2000); // Stop new best streak state after 2 seconds
