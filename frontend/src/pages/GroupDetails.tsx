@@ -483,20 +483,8 @@ const GroupDetails: React.FC = () => {
         return;
       }
       
-      // Get the user ID from allUsers
-      const user = allUsers.find(u => u.email === selectedGroupMember);
-      if (!user) {
-        toast({
-          title: 'Error',
-          description: 'User not found in system',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        });
-        return;
-      }
-      
-      // Directly assign verse set to user
+      // Use the user_id from the member object directly
+      // This works for both super admins and group leaders
       const response = await fetch(`${getApiUrl()}/verses/assign-set`, {
         method: 'POST',
         headers: {
@@ -504,7 +492,7 @@ const GroupDetails: React.FC = () => {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          targetUserId: user.id,
+          targetUserId: member.user_id,
           verseSet: selectedVerseSet,
           groupId: groupId
         })

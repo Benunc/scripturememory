@@ -41,7 +41,7 @@ interface VerseAttempt {
 export async function updateStreak(userId: number, env: Env, eventTimestamp?: number): Promise<void> {
   const db = getDB(env);
   
-  // Get user's last activity date
+  // Get user's last activity date and streak info
   const stats = await db.prepare(`
     SELECT last_activity_date, current_streak, longest_streak 
     FROM user_stats 
@@ -78,11 +78,70 @@ export async function updateStreak(userId: number, env: Env, eventTimestamp?: nu
     return;
   }
 
-  // Only increment streak if last activity was yesterday
-  // This ensures we only count one activity per day
+  // Check if we need to reset the streak counter for a new day
+  // If the last activity was yesterday, we should reset the streak counter to 0
+  // so that the next activity today will increment it properly
   if (lastActivity.getUTCDate() === yesterday.getUTCDate() && 
       lastActivity.getUTCMonth() === yesterday.getUTCMonth() && 
       lastActivity.getUTCFullYear() === yesterday.getUTCFullYear()) {
+    // Reset streak counter to 0 for today, but keep the streak count
+    await db.prepare(`
+      UPDATE user_stats 
+      SET current_streak = 0,
+          last_activity_date = ?
+      WHERE user_id = ?
+    `).bind(eventTimestamp || Date.now(), userId).run();
+    
+    // Now increment the streak since we just reset it
+    const newStreak = stats.current_streak + 1;
+    const longestStreak = Math.max(newStreak, stats.longest_streak);
+
+    await db.prepare(`
+      UPDATE user_stats 
+      SET current_streak = ?,
+          longest_streak = ?,
+          last_activity_date = ?
+      WHERE user_id = ?
+    `).bind(newStreak, longestStreak, eventTimestamp || Date.now(), userId).run();
+
+    // Award points for maintaining streak
+    if (newStreak > 1) {  // Only award points for streaks > 1 day
+      await db.prepare(`
+        INSERT INTO point_events (
+          user_id,
+          event_type,
+          points,
+          metadata,
+          created_at
+        ) VALUES (?, 'daily_streak', ?, ?, ?)
+      `).bind(
+        userId,
+        POINTS.DAILY_STREAK,
+        JSON.stringify({ streak_days: newStreak }),
+        eventTimestamp || Date.now()
+      ).run();
+
+      // Update total points
+      await db.prepare(`
+        UPDATE user_stats 
+        SET total_points = total_points + ?
+        WHERE user_id = ?
+      `).bind(POINTS.DAILY_STREAK, userId).run();
+    }
+    return;
+  }
+
+  // Check if we should increment the streak
+  // We increment if:
+  // 1. Last activity was today but we haven't incremented the streak for today yet
+  const shouldIncrementStreak = 
+    // Last activity was today but we haven't incremented for today yet
+    (lastActivity.getUTCDate() === currentTime.getUTCDate() && 
+     lastActivity.getUTCMonth() === currentTime.getUTCMonth() && 
+     lastActivity.getUTCFullYear() === currentTime.getUTCFullYear() &&
+     stats.current_streak === 0); // Only increment if streak is 0 (meaning we haven't counted today yet)
+
+  if (shouldIncrementStreak) {
     const newStreak = stats.current_streak + 1;
     const longestStreak = Math.max(newStreak, stats.longest_streak);
 

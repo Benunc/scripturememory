@@ -481,14 +481,11 @@ export const handleAuth = {
             `).bind(50, userId).run();
           }
         } else {
-          // Ensure minimum streak of 1 and update last activity date
+          // Last activity was today, just update the activity date without affecting streak
+          // This prevents streak reset when logging in on multiple devices
           await db.prepare(`
             UPDATE user_stats 
-            SET current_streak = CASE 
-                WHEN current_streak = 0 THEN 1 
-                ELSE current_streak 
-              END,
-              last_activity_date = ?
+            SET last_activity_date = ?
             WHERE user_id = ?
           `).bind(Date.now(), userId).run();
         }
