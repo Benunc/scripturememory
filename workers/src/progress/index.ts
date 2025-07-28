@@ -278,6 +278,33 @@ export const handleProgress = {
 
       const db = getDB(env);
       try {
+        // Check 24-hour cooldown for perfect attempts
+        const isPerfectAttempt = words_correct === total_words;
+        if (isPerfectAttempt) {
+          const lastPerfectAttempt = await db.prepare(`
+            SELECT created_at
+            FROM verse_attempts
+            WHERE user_id = ? AND verse_reference = ? AND words_correct = total_words
+            ORDER BY created_at DESC
+            LIMIT 1
+          `).bind(userId, verse_reference).first();
+
+          if (lastPerfectAttempt) {
+            const now = Date.now();
+            const hoursSinceLastPerfect = (now - (lastPerfectAttempt.created_at as number)) / (1000 * 60 * 60);
+            
+            if (hoursSinceLastPerfect < 24) {
+              const hoursRemaining = Math.ceil(24 - hoursSinceLastPerfect);
+              return new Response(JSON.stringify({ 
+                error: `24-hour cooldown active. You can make your next attempt in ${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}.` 
+              }), { 
+                status: 429,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        }
+
         // Update streak before recording attempt
         await updateStreak(userId, env, created_at);
 

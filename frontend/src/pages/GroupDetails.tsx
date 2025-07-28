@@ -1432,6 +1432,7 @@ const GroupDetails: React.FC = () => {
                                 <option value="childrens_verses">Children's Verses</option>
                                 <option value="gpc_youth">GPC Youth Starter Verses</option>
                                 <option value="philippians_1_chapter_challenge">Philippians 1 Chapter Challenge</option>
+                                <option value="romans_8_chapter_challenge">Romans 8 Chapter Challenge</option>
                               </Select>
                               <FormHelperText fontSize="xs">
                                 Select a verse set to assign to the member
@@ -1477,6 +1478,7 @@ const GroupDetails: React.FC = () => {
                                   <option value="childrens_verses">Children's Verses</option>
                                   <option value="gpc_youth">GPC Youth Starter Verses</option>
                                   <option value="philippians_1_chapter_challenge">Philippians 1 Chapter Challenge</option>
+                                  <option value="romans_8_chapter_challenge">Romans 8 Chapter Challenge</option>
                                 </Select>
                                 <FormHelperText fontSize="xs">
                                   Select a verse set to assign to all members

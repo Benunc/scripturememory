@@ -978,6 +978,24 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         return; // Don't record attempts below 80%
       }
 
+      // Check 24-hour cooldown for perfect attempts
+      if (accuracy === 1) {
+        const timeUntilNext = await getTimeUntilNextAttempt(reference);
+        if (timeUntilNext && timeUntilNext !== '') {
+          setMasteryState(prev => ({
+            ...prev,
+            feedback: {
+              isCorrect: false,
+              message: `24-hour cooldown active. You can make your next attempt in ${timeUntilNext}.`,
+              attempt: masteryState.attempt
+            },
+            attempt: '',
+            isSubmitting: false
+          }));
+          return;
+        }
+      }
+
       // Only make the API call if accuracy is >= 80%
       const response = await fetch(`${getApiUrl()}/progress/verse`, {
         method: 'POST',
@@ -992,7 +1010,13 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         })
       });
 
-      if (!response.ok) throw new Error('Failed to record attempt');
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 429 && errorData.error?.includes('24-hour cooldown')) {
+          throw new Error(errorData.error);
+        }
+        throw new Error('Failed to record attempt');
+      }
 
       // Fetch updated mastery progress from the backend
       const progressResponse = await fetch(`${getApiUrl()}/progress/mastery/${reference}`, {
@@ -1758,30 +1782,32 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       if (newLongestStreak > currentLongestStreak) {
         updateLongestWordGuessStreak(newLongestStreak);
         
-        // Immediately send the new longest streak to the server
-        try {
-          const sessionToken = localStorage.getItem('session_token');
-          if (sessionToken) {
-            await fetch(`${getApiUrl()}/gamification/points`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionToken}`
-              },
-              body: JSON.stringify({
-                event_type: 'word_correct',
-                points: 0, // No additional points, just updating the streak
-                metadata: {
-                  streak_length: newLongestStreak,
-                  is_new_longest: true
+        // Send the new longest streak to the server asynchronously (non-blocking)
+        void (async () => {
+          try {
+            const sessionToken = localStorage.getItem('session_token');
+            if (sessionToken) {
+              await fetch(`${getApiUrl()}/gamification/points`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${sessionToken}`
                 },
-                created_at: Date.now()
-              })
-            });
+                body: JSON.stringify({
+                  event_type: 'word_correct',
+                  points: 0, // No additional points, just updating the streak
+                  metadata: {
+                    streak_length: newLongestStreak,
+                    is_new_longest: true
+                  },
+                  created_at: Date.now()
+                })
+              });
+            }
+          } catch (error) {
+            debug.error('api', 'Error updating longest streak on server:', error);
           }
-        } catch (error) {
-          debug.error('api', 'Error updating longest streak on server:', error);
-        }
+        })();
       }
 
           // Add correct words to revealedWords immediately
