@@ -33,11 +33,10 @@ interface NotificationData {
 
 export const sendNotification = async (env: Env, data: NotificationData): Promise<void> => {
   const adminEmail = 'ben@wpsteward.com';
-  
-  // Check if this notification type is enabled
+
   const db = getDB(env);
   const setting = await db.prepare(`
-    SELECT enabled FROM notification_settings 
+    SELECT enabled FROM notification_settings
     WHERE notification_type = ?
   `).bind(data.type).first();
 
@@ -48,10 +47,10 @@ export const sendNotification = async (env: Env, data: NotificationData): Promis
 
   // Don't send actual emails in development unless explicitly enabled
   const isDevelopment = env.NODE_ENV === 'development' && env.NOTIFICATIONS_ENABLED !== 'true';
-  
+
   if (isDevelopment) {
     console.log('Notification (dev mode):', data);
-    
+
     // Log to database for development testing
     await db.prepare(`
       INSERT INTO notification_logs (type, user_id, user_email, details, sent_at, success, error_message)
@@ -65,15 +64,15 @@ export const sendNotification = async (env: Env, data: NotificationData): Promis
       true, // Mark as successful for dev logs
       'Development mode - email not sent'
     ).run();
-    
+
     return;
   }
 
   try {
     const subject = getNotificationSubject(data);
     const body = getNotificationBody(data);
-    
-    // Use Amazon SES for sending emails
+
+    // Use the same SES implementation as magic link emails
     const date = new Date();
     const dateStamp = date.toISOString().slice(0, 10).replace(/-/g, '');
     const amzDate = date.toISOString().replace(/[:-]|\.\d{3}/g, '');
@@ -81,52 +80,77 @@ export const sendNotification = async (env: Env, data: NotificationData): Promis
     const region = env.AWS_REGION;
     const algorithm = 'AWS4-HMAC-SHA256';
     const scope = `${dateStamp}/${region}/${service}/aws4_request`;
-    
-    // Create the email message
-    const message = `From: ${env.SES_FROM_EMAIL}\r\nTo: ${adminEmail}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${body}`;
-    const messageBytes = new TextEncoder().encode(message);
-    const messageBase64 = btoa(String.fromCharCode(...new Uint8Array(messageBytes)));
-    
-    // Create the request body
-    const requestBody = `Action=SendRawEmail&Version=2010-12-01&RawMessage.Data=${encodeURIComponent(messageBase64)}`;
-    
-    // Create the canonical request
+
+    // Prepare email content using SendEmail action (same as magic links)
+    const payload = new URLSearchParams({
+      Action: 'SendEmail',
+      Version: '2010-12-01',
+      'Source': env.SES_FROM_EMAIL,
+      'Destination.ToAddresses.member.1': adminEmail,
+      'Message.Subject.Data': subject,
+      'Message.Body.Text.Data': body
+    }).toString();
+
+    // Create canonical request (same structure as magic links)
+    const canonicalUri = '/';
+    const canonicalQuerystring = '';
+    const canonicalHeaders = [
+      'content-type:application/x-www-form-urlencoded',
+      'host:email.' + region + '.amazonaws.com',
+      'x-amz-date:' + amzDate,
+      'x-amz-target:AmazonSES.SendEmail'
+    ].join('\n') + '\n';
+    const signedHeaders = 'content-type;host;x-amz-date;x-amz-target';
+
+    // Calculate payload hash
+    const payloadHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
+    const payloadHashHex = arrayBufferToHex(payloadHash);
+
     const canonicalRequest = [
       'POST',
-      '/',
-      '',
-      `content-type:application/x-www-form-urlencoded\nhost:${service}.${region}.amazonaws.com\nx-amz-date:${amzDate}`,
-      'content-type;host;x-amz-date',
-      arrayBufferToHex(await calculateSignature(env.AWS_SECRET_ACCESS_KEY, requestBody))
+      canonicalUri,
+      canonicalQuerystring,
+      canonicalHeaders,
+      signedHeaders,
+      payloadHashHex
     ].join('\n');
-    
-    // Create the string to sign
+
+    // Calculate canonical request hash
+    const canonicalRequestHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalRequest));
+    const canonicalRequestHashHex = arrayBufferToHex(canonicalRequestHash);
+
+    // Create string to sign
     const stringToSign = [
       algorithm,
       amzDate,
       scope,
-      arrayBufferToHex(await calculateSignature(env.AWS_SECRET_ACCESS_KEY, canonicalRequest))
+      canonicalRequestHashHex
     ].join('\n');
-    
-    // Create the authorization header
-    const signature = arrayBufferToHex(await calculateSignature(env.AWS_SECRET_ACCESS_KEY, stringToSign));
-    const authorizationHeader = `${algorithm} Credential=${env.AWS_ACCESS_KEY_ID}/${scope}, SignedHeaders=content-type;host;x-amz-date, Signature=${signature}`;
-    
-    // Send the request to SES
-    const response = await fetch(`https://${service}.${region}.amazonaws.com/`, {
+
+    // Calculate signing key (same as magic links)
+    const kDate = await calculateSignature('AWS4' + env.AWS_SECRET_ACCESS_KEY, dateStamp);
+    const kRegion = await calculateSignature(kDate, region);
+    const kService = await calculateSignature(kRegion, service);
+    const kSigning = await calculateSignature(kService, 'aws4_request');
+    const signature = await calculateSignature(kSigning, stringToSign);
+    const signatureHex = arrayBufferToHex(signature);
+
+    // Send email using SES (same as magic links)
+    const response = await fetch(`https://email.${region}.amazonaws.com`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-Amz-Date': amzDate,
-        'Authorization': authorizationHeader,
-        'Host': `${service}.${region}.amazonaws.com`
+        'X-Amz-Target': 'AmazonSES.SendEmail',
+        'Authorization': `${algorithm} Credential=${env.AWS_ACCESS_KEY_ID}/${scope},SignedHeaders=${signedHeaders},Signature=${signatureHex}`
       },
-      body: requestBody
+      body: payload
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Failed to send notification via SES:', errorText);
+      console.error('Response status:', response.status);
       
       // Log the failed notification
       await db.prepare(`
@@ -139,7 +163,7 @@ export const sendNotification = async (env: Env, data: NotificationData): Promis
         JSON.stringify(data.details),
         data.timestamp,
         false,
-        errorText
+        `Status: ${response.status}, Error: ${errorText}`
       ).run();
     } else {
       console.log('Notification sent successfully via SES');
