@@ -13,6 +13,7 @@ import {
   CardBody,
   useToast,
   Link,
+  Checkbox,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -34,6 +35,7 @@ export function Register() {
   const [turnstileToken, setTurnstileToken] = useState('');
   const [isTurnstileReady, setIsTurnstileReady] = useState(false);
   const [verseSet, setVerseSet] = useState('');
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const { signIn } = useAuthContext();
   const navigate = useNavigate();
   const toast = useToast();
@@ -184,7 +186,7 @@ export function Register() {
         throw new Error('Please complete the security check');
       }
 
-      await signIn(email, true, turnstileToken, undefined);
+      await signIn(email, true, turnstileToken, undefined, undefined, marketingOptIn, undefined);
       toast({
         title: "Check your email",
         description: "We've sent you a magic link to complete your registration.",
@@ -235,6 +237,19 @@ export function Register() {
                       />
                     </FormControl>
                     <Box ref={turnstileContainerRef} />
+                    <FormControl>
+                      <Checkbox 
+                        isChecked={marketingOptIn}
+                        onChange={(e) => setMarketingOptIn(e.target.checked)}
+                        colorScheme="blue"
+                        size="md"
+                      >
+                        I'd like to receive updates about new features, app improvements, and support.
+                      </Checkbox>
+                      <Text fontSize="xs" color="gray.600" mt={1}>
+                        We'll only send you relevant updates and you can unsubscribe anytime!
+                      </Text>
+                    </FormControl>
                     <Button
                       type="submit"
                       colorScheme="blue"
