@@ -6,6 +6,7 @@ import { handleProgress } from './progress';
 import { handleGamification } from './gamification';
 import { handleGroups } from './groups';
 import { handleAdmin } from './admin';
+import { handleMarketing } from './marketing';
 
 // Create a new router
 const router = Router();
@@ -92,6 +93,7 @@ router.put('/groups/:id/members/:userId/privacy', handleGroups.updatePrivacy);
 router.get('/groups/:id/leaderboard', handleGroups.getLeaderboard);
 router.get('/groups/:id/stats', handleGroups.getGroupStats);
 router.get('/groups/:id/members/:userId/ranking', handleGroups.getMemberRanking);
+router.delete('/admin/groups/:id/members/:memberId/remove', handleGroups.removeMember);
 
 // Add new endpoint for listing all groups the user is a member of
 router.get('/groups/mine', handleGroups.listUserGroups);
@@ -108,17 +110,17 @@ router.post('/groups/:id/invitations/existing', handleGroups.getExistingInvitati
 // Add new group lookup by code endpoint
 router.get('/groups/info/:code', handleGroups.getGroupByCode);
 
+// Marketing routes
+router.get('/marketing/preferences', handleMarketing.getPreferences);
+router.put('/marketing/preferences', handleMarketing.updatePreferences);
+router.get('/marketing/events/:userId', handleMarketing.getEvents);
+router.post('/marketing/sync-sendy', handleMarketing.syncSendy);
+
 // Admin routes
-router.get('/admin/users', handleAdmin.getAllUsers);
-router.get('/admin/groups', handleAdmin.getAllGroups);
-router.get('/admin/permissions', handleAdmin.getAllPermissions);
-router.get('/admin/permissions/user/:userId', handleAdmin.getUserPermissions);
-router.get('/admin/audit-log', handleAdmin.getAuditLog);
-router.post('/admin/permissions/grant', handleAdmin.grantPermission);
-router.post('/admin/permissions/revoke', handleAdmin.revokePermission);
 router.get('/admin/check-super-admin', handleAdmin.checkSuperAdmin);
-router.delete('/admin/groups/:id/delete', handleAdmin.deleteGroup);
-router.delete('/admin/groups/:id/members/:memberId/remove', handleAdmin.removeMember);
+router.get('/admin/notification-logs', handleAdmin.getNotificationLogs);
+router.get('/admin/notification-settings', handleAdmin.getNotificationSettings);
+router.put('/admin/notification-settings', handleAdmin.updateNotificationSettings);
 router.get('/admin/users/:id/verses', handleAdmin.getUserVerses);
 
 // Export the fetch handler

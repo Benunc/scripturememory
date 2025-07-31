@@ -48,9 +48,9 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   }
 }
 
-export const getMagicLink = async (email: string, isRegistration: boolean, turnstileToken: string, verseSet?: string, groupCode?: string): Promise<ApiResponse<{ token: string }>> => {
+export const getMagicLink = async (email: string, isRegistration: boolean, turnstileToken: string, verseSet?: string, groupCode?: string, marketingOptIn?: boolean, redirect?: string): Promise<ApiResponse<{ token: string }>> => {
   try {
-    debug.log('api', 'Sending magic link request', { email, isRegistration });
+    debug.log('api', 'Sending magic link request', { email, isRegistration, marketingOptIn, redirect });
     const response = await fetch(`${getApiUrl()}/auth/magic-link`, {
       method: 'POST',
       headers: {
@@ -62,6 +62,8 @@ export const getMagicLink = async (email: string, isRegistration: boolean, turns
         turnstileToken,
         verseSet,
         groupCode,
+        marketingOptIn,
+        redirect,
       }),
     });
 
@@ -82,7 +84,7 @@ export const getMagicLink = async (email: string, isRegistration: boolean, turns
   }
 };
 
-export const verifyMagicLink = async (token: string): Promise<ApiResponse<{ token: string; email: string }>> => {
+export const verifyMagicLink = async (token: string): Promise<ApiResponse<{ token: string; email: string; redirect?: string }>> => {
   try {
     debug.log('api', 'Making verification request');
     const response = await fetch(`${getApiUrl()}/auth/verify?token=${token}`);

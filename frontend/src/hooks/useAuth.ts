@@ -35,12 +35,12 @@ export const useAuth = (navigate: NavigateFunction) => {
   }, [checkSession]);
 
   // Sign in with magic link
-  const signIn = async (email: string, isRegistration: boolean, turnstileToken: string, verseSet?: string, groupCode?: string) => {
+  const signIn = async (email: string, isRegistration: boolean, turnstileToken: string, verseSet?: string, groupCode?: string, marketingOptIn?: boolean, redirect?: string) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const response = await getMagicLink(email, isRegistration, turnstileToken, verseSet, groupCode);
+      const response = await getMagicLink(email, isRegistration, turnstileToken, verseSet, groupCode, marketingOptIn, redirect);
       if (response.error) {
         throw new Error(response.error);
       }
@@ -76,9 +76,10 @@ export const useAuth = (navigate: NavigateFunction) => {
       
       if (response.data) {
         debug.log('auth', 'Verification successful, setting session');
-        const { token: sessionToken, email } = response.data;
+        const { token: sessionToken, email, redirect } = response.data;
         debug.log('auth', 'Session token:', sessionToken);
         debug.log('auth', 'Email:', email);
+        debug.log('auth', 'Redirect URL:', redirect);
         
         // Store session
         localStorage.setItem('session_token', sessionToken);
@@ -88,6 +89,13 @@ export const useAuth = (navigate: NavigateFunction) => {
         await checkSession();
         
         debug.log('auth', 'Session set successfully');
+        
+        // Navigate to redirect URL if provided
+        if (redirect) {
+          debug.log('auth', 'Redirecting to:', redirect);
+          navigate(redirect);
+        }
+        
         return true;
       }
       

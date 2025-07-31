@@ -63,10 +63,13 @@ export function MainApp() {
         // Check for message parameter
         const params = new URLSearchParams(window.location.search);
         const message = params.get('message');
-        if (message) {
+        const redirect = params.get('redirect');
+        
+        if (message || redirect) {
           setIsSignInOpen(true);
-          // Clear the message from URL
-          window.history.replaceState({}, '', '/');
+          // Clear the parameters from URL but keep redirect for the signin process
+          const newUrl = redirect ? `/?redirect=${redirect}` : '/';
+          window.history.replaceState({}, '', newUrl);
         }
       } catch (error) {
         debug.error('state', 'Initialization error:', error);

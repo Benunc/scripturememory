@@ -1816,4 +1816,85 @@ export const handleGroups = {
       });
     }
   },
+
+  // Remove a member from a group (admin/leader/creator/super admin only)
+  removeMember: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const url = new URL(request.url);
+      const parts = url.pathname.split('/');
+      const groupId = parts[3]; // /admin/groups/:id/members/:memberId/remove
+      const memberId = parts[5];
+      if (!groupId || !memberId) {
+        return new Response(JSON.stringify({ error: 'Group ID and member ID required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const db = getDB(env);
+      // Check if user is super admin
+      const isSuperAdmin = await db.prepare(`
+        SELECT 1 FROM super_admins WHERE user_id = ? AND is_active = TRUE
+      `).bind(userId).first();
+      // If not super admin, check if user is a leader or creator of this group
+      if (!isSuperAdmin) {
+        const canRemove = await db.prepare(`
+          SELECT role FROM group_members WHERE group_id = ? AND user_id = ? AND role IN ('leader', 'creator') AND is_active = 1
+        `).bind(groupId, userId).first();
+        if (!canRemove) {
+          return new Response(JSON.stringify({ error: 'You do not have permission to remove members from this group' }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        // Prevent leaders/creators from removing themselves
+        if (userId === parseInt(memberId)) {
+          return new Response(JSON.stringify({ error: 'You cannot remove yourself from the group' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      // Check if target member exists in group
+      const targetMember = await db.prepare(`
+        SELECT gm.user_id, gm.role, u.email
+        FROM group_members gm
+        JOIN users u ON gm.user_id = u.id
+        WHERE gm.group_id = ? AND gm.user_id = ? AND gm.is_active = 1
+      `).bind(groupId, memberId).first();
+      if (!targetMember) {
+        return new Response(JSON.stringify({ error: 'Member not found in group' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      // Remove member (soft delete)
+      await db.prepare(`
+        UPDATE group_members SET is_active = 0 WHERE group_id = ? AND user_id = ?
+      `).bind(groupId, memberId).run();
+      return new Response(JSON.stringify({ success: true, message: `Member ${targetMember.email} removed from group` }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      console.error('Error removing member from group:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
 }

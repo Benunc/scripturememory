@@ -67,6 +67,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             <MenuItem onClick={() => navigate('/groups')} justifyContent="flex-end">
               Groups
             </MenuItem>
+            <MenuItem onClick={() => navigate('/settings')} justifyContent="flex-end">
+              Settings
+            </MenuItem>
             <MenuItem onClick={signOut} justifyContent="flex-end">
               Sign Out
             </MenuItem>
@@ -101,6 +104,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             </MenuItem>
             <MenuItem onClick={() => navigate('/groups')} justifyContent="flex-end">
               Groups
+            </MenuItem>
+            <MenuItem onClick={() => navigate('/settings')} justifyContent="flex-end">
+              Settings
             </MenuItem>
             
             <MenuItem onClick={signOut} justifyContent="flex-end">

@@ -28,6 +28,8 @@ import { PointsDisplay } from './components/PointsDisplay';
 import { AddVerseSet } from './pages/AddVerseSet';
 import Groups from './pages/Groups';
 import GroupDetails from './pages/GroupDetails';
+import Settings from './pages/Settings';
+import ProtectedRoute from './components/ProtectedRoute';
 
 
 // Add type for Google client
@@ -90,11 +92,12 @@ export function App() {
                 <Route path="/about" element={<About />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/auth/verify" element={<VerifyToken />} />
-                <Route path="/points" element={<PointsStats />} />
-                <Route path="/invite" element={<Invite />} />
-                <Route path="/add-verse-set" element={<AddVerseSet />} />
-                <Route path="/groups" element={<Groups />} />
-                <Route path="/groups/:groupId" element={<GroupDetails />} />
+                <Route path="/points" element={<ProtectedRoute><PointsStats /></ProtectedRoute>} />
+                <Route path="/invite" element={<ProtectedRoute><Invite /></ProtectedRoute>} />
+                <Route path="/add-verse-set" element={<ProtectedRoute><AddVerseSet /></ProtectedRoute>} />
+                <Route path="/groups" element={<ProtectedRoute><Groups /></ProtectedRoute>} />
+                <Route path="/groups/:groupId" element={<ProtectedRoute><GroupDetails /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               </Routes>
             </PointsProvider>
           </AuthProvider>

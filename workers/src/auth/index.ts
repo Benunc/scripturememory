@@ -4,6 +4,7 @@ import { generateToken, verifyToken } from './token';
 import { getUserId } from '../utils/db';
 import { getVerseSet } from './sampleVerses';
 import { getRandomSillyName } from '../utils/sillyNames';
+import { notifyNewUser } from '../utils/notifications';
 
 // Rate limiting
 const RATE_LIMIT = 5; // requests per minute
@@ -233,12 +234,14 @@ export const handleAuth = {
   // Send magic link for sign in
   sendMagicLink: async (request: Request, env: Env): Promise<Response> => {
     try {
-      const { email, isRegistration, turnstileToken, verseSet, groupCode } = await request.json() as { 
+      const { email, isRegistration, turnstileToken, verseSet, groupCode, marketingOptIn = false, redirect } = await request.json() as { 
         email: string; 
         isRegistration: boolean;
         turnstileToken: string;
         verseSet?: string;
         groupCode?: string;
+        marketingOptIn?: boolean;
+        redirect?: string;
       };
 
       if (!email) {
@@ -288,10 +291,10 @@ export const handleAuth = {
       const token = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
 
-      // Store in D1
+      // Store in D1 with redirect URL
       await db.prepare(
-        'INSERT INTO magic_links (token, email, expires_at, verse_set, group_code) VALUES (?, ?, ?, ?, ?)'
-      ).bind(token, email, expiresAt.toISOString(), verseSet || null, groupCode || null).run();
+        'INSERT INTO magic_links (token, email, expires_at, verse_set, group_code, marketing_opt_in, redirect_url) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(token, email, expiresAt.toISOString(), verseSet || null, groupCode || null, marketingOptIn, redirect || null).run();
 
       // Send email
       await sendMagicLinkEmail(email, `${request.headers.get('origin')}/auth/verify?token=${token}`, env);
@@ -350,6 +353,9 @@ export const handleAuth = {
         'INSERT INTO users (email, created_at) VALUES (?, ?)'
       ).bind(magicLink.email, Date.now()).run();
       userId = Number(result.meta.last_row_id);
+      
+      // Send notification for new user
+      await notifyNewUser(env, userId, magicLink.email, magicLink.verse_set ? String(magicLink.verse_set) : undefined);
       
       // Initialize user stats with streak of 1
       await db.prepare(`
@@ -420,6 +426,38 @@ export const handleAuth = {
         } catch (error) {
           console.error('Error adding user to group:', error);
           // Don't fail the entire signup if group joining fails
+        }
+      }
+
+      // Apply marketing preference if user opted in
+      if (magicLink.marketing_opt_in) {
+        try {
+          await db.prepare(`
+            UPDATE users 
+            SET marketing_opt_in = ?, marketing_opt_in_date = ?
+            WHERE id = ?
+          `).bind(true, Date.now(), userId).run();
+
+          // Record marketing event
+          await db.prepare(`
+            INSERT INTO marketing_events (user_id, event_type, metadata, created_at)
+            VALUES (?, 'opt_in', ?, ?)
+          `).bind(userId, JSON.stringify({ source: 'signup' }), Date.now()).run();
+
+          // Sync with Sendy if marketing is enabled
+          if (env.MARKETING_ENABLED === 'true') {
+            try {
+              const { syncWithSendy } = await import('../marketing/sendy');
+              await syncWithSendy(userId, true, env);
+              console.log(`Sendy sync completed for new user ${userId} during signup`);
+            } catch (syncError) {
+              console.error('Sendy sync error during signup:', syncError);
+              // Don't fail the entire signup if Sendy sync fails
+            }
+          }
+        } catch (error) {
+          console.error('Error applying marketing preference:', error);
+          // Don't fail the entire signup if marketing fails
         }
       }
     } else {
@@ -556,7 +594,8 @@ export const handleAuth = {
     return new Response(JSON.stringify({ 
       success: true,
       token: sessionToken,
-      email: magicLink.email
+      email: magicLink.email,
+      redirect: magicLink.redirect_url
     }), {
       headers: {
         'Content-Type': 'application/json',

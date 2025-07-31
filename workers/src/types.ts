@@ -17,6 +17,13 @@ export interface Env {
   SENDGRID_FROM_EMAIL: string;
   SENDGRID_FROM_NAME: string;
   SESSION_SECRET: string;
+  SENDY_URL: string;
+  SENDY_API_KEY: string;
+  SENDY_LIST_ID: string;
+  MARKETING_ENABLED: string;
+  MARKETING_DEFAULT_OPT_IN: string;
+  NODE_ENV: string;
+  NOTIFICATIONS_ENABLED: string;
 }
 
 export interface D1Result {

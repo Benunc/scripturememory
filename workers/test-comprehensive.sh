@@ -131,8 +131,17 @@ echo "${YELLOW}Is the database clean? (y/n)${NC}"
 read -r DB_CLEAN
 
 if [ "$DB_CLEAN" != "y" ]; then
-    echo "${YELLOW}Cleaning database...${NC}"
-    npx wrangler d1 execute DB --env development --command="PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS user_permissions; DROP TABLE IF EXISTS admin_audit_log; DROP TABLE IF EXISTS super_admins; DROP TABLE IF EXISTS group_invitations; DROP TABLE IF EXISTS group_members; DROP TABLE IF EXISTS groups; DROP TABLE IF EXISTS point_events; DROP TABLE IF EXISTS word_progress; DROP TABLE IF EXISTS verse_attempts; DROP TABLE IF EXISTS verse_mastery; DROP TABLE IF EXISTS mastered_verses; DROP TABLE IF EXISTS verses; DROP TABLE IF EXISTS user_stats; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS magic_links; DROP TABLE IF EXISTS users; DROP TABLE IF EXISTS anonymized_users; PRAGMA foreign_keys = ON;" | cat
+    echo "${YELLOW}Aggressively cleaning database...${NC}"
+    # First, disable foreign keys
+    npx wrangler d1 execute DB --env development --command="PRAGMA foreign_keys = OFF;" | cat
+    check_status
+    
+    # Drop all tables that might exist (including new marketing and notification tables)
+    npx wrangler d1 execute DB --env development --command="DROP TABLE IF EXISTS notification_logs; DROP TABLE IF EXISTS notification_settings; DROP TABLE IF EXISTS marketing_events; DROP TABLE IF EXISTS user_permissions; DROP TABLE IF EXISTS admin_audit_log; DROP TABLE IF EXISTS super_admins; DROP TABLE IF EXISTS group_invitations; DROP TABLE IF EXISTS group_members; DROP TABLE IF EXISTS groups; DROP TABLE IF EXISTS point_events; DROP TABLE IF EXISTS word_progress; DROP TABLE IF EXISTS verse_attempts; DROP TABLE IF EXISTS verse_mastery; DROP TABLE IF EXISTS mastered_verses; DROP TABLE IF EXISTS verses; DROP TABLE IF EXISTS user_stats; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS magic_links; DROP TABLE IF EXISTS users; DROP TABLE IF EXISTS anonymized_users;" | cat
+    check_status
+    
+    # Re-enable foreign keys
+    npx wrangler d1 execute DB --env development --command="PRAGMA foreign_keys = ON;" | cat
     check_status
 fi
 
@@ -153,7 +162,7 @@ done
 echo "${YELLOW}Creating test user...${NC}"
 MAGIC_LINK_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"test-anonymize@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+  -d '{"email":"test-anonymize@example.com","isRegistration":true,"turnstileToken":"test-token","marketingOptIn":false}')
 check_status
 
 # Extract magic link token
@@ -298,7 +307,7 @@ check_status
 echo "${YELLOW}Creating new magic link...${NC}"
 MAGIC_LINK_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
     -H "Content-Type: application/json" \
-    -d '{"email":"test-anonymize2@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+    -d '{"email":"test-anonymize2@example.com","isRegistration":true,"turnstileToken":"test-token","marketingOptIn":true}')
 check_status
 
 # extract magic token for second user
@@ -575,7 +584,7 @@ echo "${GREEN}✓ Verse counts verified${NC}"
 echo "${YELLOW}Creating third user with custom verse set...${NC}"
 MAGIC_LINK_RESPONSE3=$(curl -s -X POST http://localhost:8787/auth/magic-link \
     -H "Content-Type: application/json" \
-    -d '{"email":"test-anonymize3@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses"}')
+    -d '{"email":"test-anonymize3@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses","marketingOptIn":false}')
 check_status
 
 # extract magic token for third user
@@ -692,17 +701,17 @@ echo "${YELLOW}Testing group management functionality...${NC}"
 echo "${YELLOW}Creating group test users...${NC}"
 GROUP_USER1_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"group-leader@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+  -d '{"email":"group-leader@example.com","isRegistration":true,"turnstileToken":"test-token","marketingOptIn":false}')
 check_status
 
 GROUP_USER2_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"group-member@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+  -d '{"email":"group-member@example.com","isRegistration":true,"turnstileToken":"test-token","marketingOptIn":true}')
 check_status
 
 GROUP_USER3_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"group-outsider@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+  -d '{"email":"group-outsider@example.com","isRegistration":true,"turnstileToken":"test-token","marketingOptIn":false}')
 check_status
 
 # Extract and verify tokens for group users
@@ -895,7 +904,7 @@ echo "=========================================="
 echo "${YELLOW}Creating super admin user...${NC}"
 SUPER_ADMIN_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"super-admin@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+  -d '{"email":"super-admin@example.com","isRegistration":true,"turnstileToken":"test-token","marketingOptIn":true}')
 check_status
 
 # Extract magic token for super admin
@@ -1033,7 +1042,7 @@ PERMISSION_DENIED_RESPONSE=$(curl -s -X DELETE http://localhost:8787/admin/group
 
 echo "${BLUE}Permission denied response: $PERMISSION_DENIED_RESPONSE${NC}"
 
-if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "You must be a leader or creator"; then
+if echo "$PERMISSION_DENIED_RESPONSE" | grep -q "You do not have permission to remove members from this group"; then
     echo "${GREEN}✓ Regular members cannot remove other members${NC}"
 else
     echo "${RED}✗ Regular members can remove other members (should not)${NC}"
@@ -1520,7 +1529,7 @@ echo "${BLUE}Group outsider ID: $GROUP_OUTSIDER_ID${NC}"
 echo "${YELLOW}Creating a true regular member for permission testing...${NC}"
 REGULAR_MEMBER_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"true-regular-member@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+  -d '{"email":"true-regular-member@example.com","isRegistration":true,"turnstileToken":"test-token","marketingOptIn":false}')
 check_status
 
 REGULAR_MEMBER_TOKEN=$(extract_magic_token "$REGULAR_MEMBER_RESPONSE")
@@ -1650,20 +1659,38 @@ echo "${YELLOW}========================================${NC}"
 echo "${YELLOW}TESTING MAGIC LINK PARAMETERS${NC}"
 echo "${YELLOW}========================================${NC}"
 
-# Test 1: No parameters
-echo "${YELLOW}Test 1: Creating magic link with no parameters...${NC}"
+# Test 1: No parameters (except marketing which is now required)
+echo "${YELLOW}Test 1: Creating magic link with minimal parameters...${NC}"
 NO_PARAMS_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"no-params@example.com","isRegistration":true,"turnstileToken":"test-token"}')
+  -d '{"email":"no-params@example.com","isRegistration":true,"turnstileToken":"test-token","marketingOptIn":false}')
 check_status
 NO_PARAMS_TOKEN=$(extract_magic_token "$NO_PARAMS_RESPONSE")
 echo "${BLUE}No params token: $NO_PARAMS_TOKEN${NC}"
+
+# Test 1.5: Marketing opt-in
+echo "${YELLOW}Test 1.5: Creating magic link with marketing opt-in...${NC}"
+MARKETING_OPT_IN_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"marketing-opt-in@example.com","isRegistration":true,"turnstileToken":"test-token","marketingOptIn":true}')
+check_status
+MARKETING_OPT_IN_TOKEN=$(extract_magic_token "$MARKETING_OPT_IN_RESPONSE")
+echo "${BLUE}Marketing opt-in token: $MARKETING_OPT_IN_TOKEN${NC}"
+
+# Test 1.6: Marketing opt-out (explicit)
+echo "${YELLOW}Test 1.6: Creating magic link with marketing opt-out (explicit)...${NC}"
+MARKETING_OPT_OUT_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email":"marketing-opt-out@example.com","isRegistration":true,"turnstileToken":"test-token","marketingOptIn":false}')
+check_status
+MARKETING_OPT_OUT_TOKEN=$(extract_magic_token "$MARKETING_OPT_OUT_RESPONSE")
+echo "${BLUE}Marketing opt-out token: $MARKETING_OPT_OUT_TOKEN${NC}"
 
 # Test 2: Verse set only
 echo "${YELLOW}Test 2: Creating magic link with verse set only...${NC}"
 VERSE_ONLY_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"verse-only@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses"}')
+  -d '{"email":"verse-only@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses","marketingOptIn":false"}')
 check_status
 VERSE_ONLY_TOKEN=$(extract_magic_token "$VERSE_ONLY_RESPONSE")
 echo "${BLUE}Verse only token: $VERSE_ONLY_TOKEN${NC}"
@@ -1672,7 +1699,7 @@ echo "${BLUE}Verse only token: $VERSE_ONLY_TOKEN${NC}"
 echo "${YELLOW}Test 3: Creating magic link with group code only...${NC}"
 GROUP_ONLY_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"group-only@example.com","isRegistration":true,"turnstileToken":"test-token","groupCode":"test-group-123"}')
+  -d '{"email":"group-only@example.com","isRegistration":true,"turnstileToken":"test-token","groupCode":"test-group-123","marketingOptIn":true"}')
 check_status
 GROUP_ONLY_TOKEN=$(extract_magic_token "$GROUP_ONLY_RESPONSE")
 echo "${BLUE}Group only token: $GROUP_ONLY_TOKEN${NC}"
@@ -1681,7 +1708,7 @@ echo "${BLUE}Group only token: $GROUP_ONLY_TOKEN${NC}"
 echo "${YELLOW}Test 4: Creating magic link with both verse set and group code...${NC}"
 BOTH_PARAMS_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"both-params@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses","groupCode":"test-group-123"}')
+  -d '{"email":"both-params@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses","groupCode":"test-group-123","marketingOptIn":false"}')
 check_status
 BOTH_PARAMS_TOKEN=$(extract_magic_token "$BOTH_PARAMS_RESPONSE")
 echo "${BLUE}Both params token: $BOTH_PARAMS_TOKEN${NC}"
@@ -1690,7 +1717,7 @@ echo "${BLUE}Both params token: $BOTH_PARAMS_TOKEN${NC}"
 echo "${YELLOW}Test 5: Creating magic link with invalid group code...${NC}"
 INVALID_GROUP_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/magic-link \
   -H "Content-Type: application/json" \
-  -d '{"email":"invalid-group@example.com","isRegistration":true,"turnstileToken":"test-token","groupCode":"invalid-group-999"}')
+  -d '{"email":"invalid-group@example.com","isRegistration":true,"turnstileToken":"test-token","groupCode":"invalid-group-999","marketingOptIn":false"}')
 check_status
 INVALID_GROUP_TOKEN=$(extract_magic_token "$INVALID_GROUP_RESPONSE")
 echo "${BLUE}Invalid group token: $INVALID_GROUP_TOKEN${NC}"
@@ -1704,6 +1731,20 @@ NO_PARAMS_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$NO_PARAM
 check_status
 NO_PARAMS_SESSION=$(extract_token "$NO_PARAMS_VERIFY")
 echo "${BLUE}No params session: $NO_PARAMS_SESSION${NC}"
+
+# Verify marketing opt-in
+echo "${YELLOW}Verifying marketing opt-in magic link...${NC}"
+MARKETING_OPT_IN_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$MARKETING_OPT_IN_TOKEN")
+check_status
+MARKETING_OPT_IN_SESSION=$(extract_token "$MARKETING_OPT_IN_VERIFY")
+echo "${BLUE}Marketing opt-in session: $MARKETING_OPT_IN_SESSION${NC}"
+
+# Verify marketing opt-out
+echo "${YELLOW}Verifying marketing opt-out magic link...${NC}"
+MARKETING_OPT_OUT_VERIFY=$(curl -s -i "http://localhost:8787/auth/verify?token=$MARKETING_OPT_OUT_TOKEN")
+check_status
+MARKETING_OPT_OUT_SESSION=$(extract_token "$MARKETING_OPT_OUT_VERIFY")
+echo "${BLUE}Marketing opt-out session: $MARKETING_OPT_OUT_SESSION${NC}"
 
 # Verify verse only
 echo "${YELLOW}Verifying verse only magic link...${NC}"
@@ -1734,6 +1775,9 @@ INVALID_GROUP_SESSION=$(extract_token "$INVALID_GROUP_VERIFY")
 echo "${BLUE}Invalid group session: $INVALID_GROUP_SESSION${NC}"
 
 echo "${GREEN}✓ All magic link parameter tests passed${NC}"
+
+
+
 # ========================================
 # SUPER ADMIN TESTS
 # ========================================
@@ -2079,6 +2123,8 @@ USERS=(
   "super-admin@example.com"
   "true-regular-member@example.com"
   "regular-member@example.com"
+  "marketing-opt-in@example.com"
+  "marketing-opt-out@example.com"
   # Add any other test users created in this script
 )
 

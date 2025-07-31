@@ -1,5 +1,5 @@
 import { Env } from '../types';
-import { getDB } from '../utils/db';
+import { getDB, getUserId } from '../utils/db';
 import { 
   requireAdmin, 
   requireSuperAdmin, 
@@ -20,7 +20,298 @@ interface RevokePermissionRequest {
   permissionType: string;
 }
 
+// Check if user is super admin
+const checkSuperAdmin = async (request: Request, env: Env): Promise<boolean> => {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return false;
+  }
+
+  const token = authHeader.split(' ')[1];
+  const userId = await getUserId(token, env);
+  
+  if (!userId) {
+    return false;
+  }
+
+  const db = getDB(env);
+  const isSuperAdmin = await db.prepare(`
+    SELECT 1 FROM super_admins 
+    WHERE user_id = ? AND is_active = TRUE
+  `).bind(userId).first();
+
+  return !!isSuperAdmin;
+};
+
 export const handleAdmin = {
+  // Get all users (super admin only)
+  getAllUsers: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      // Require admin access
+      const { userId } = await requireAdmin(request, env);
+      
+      const db = getDB(env);
+      
+      const users = await db.prepare(`
+        SELECT 
+          u.id,
+          u.email,
+          u.created_at,
+          us.total_points,
+          us.verses_mastered,
+          us.current_streak,
+          us.longest_streak,
+          (SELECT COUNT(*) FROM group_members WHERE user_id = u.id AND is_active = TRUE) as group_count
+        FROM users u
+        LEFT JOIN user_stats us ON u.id = us.user_id
+        ORDER BY u.created_at DESC
+      `).all();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        users: users.results
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (error.message === 'Insufficient permissions') {
+        return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      console.error('Error getting all users:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get all groups (admin only)
+  getAllGroups: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      // Require admin access
+      const { userId } = await requireAdmin(request, env);
+      
+      const db = getDB(env);
+      
+      const groups = await db.prepare(`
+        SELECT 
+          g.id,
+          g.name,
+          g.description,
+          g.created_at,
+          g.is_active,
+          u.email as creator_email,
+          (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND is_active = TRUE) as member_count
+        FROM groups g
+        JOIN users u ON g.created_by = u.id
+        ORDER BY g.created_at DESC
+      `).all();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        groups: groups.results
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (error.message === 'Insufficient permissions') {
+        return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      console.error('Error getting all groups:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get all permissions (admin only)
+  getAllPermissions: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      // Require admin access
+      const { userId } = await requireAdmin(request, env);
+      
+      const db = getDB(env);
+      
+      const permissions = await db.prepare(`
+        SELECT 
+          up.id,
+          up.user_id,
+          up.permission_type,
+          up.granted_at,
+          up.expires_at,
+          up.is_active,
+          u.email as user_email,
+          g.email as granted_by_email
+        FROM user_permissions up
+        JOIN users u ON up.user_id = u.id
+        JOIN users g ON up.granted_by = g.id
+        WHERE up.is_active = TRUE
+        AND (up.expires_at IS NULL OR up.expires_at > ?)
+        ORDER BY up.granted_at DESC
+      `).bind(Date.now()).all();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        permissions: permissions.results
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (error.message === 'Insufficient permissions') {
+        return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      console.error('Error getting all permissions:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get user permissions
+  getUserPermissions: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      // Require admin access
+      const { userId } = await requireAdmin(request, env);
+      
+      const url = new URL(request.url);
+      const targetUserId = parseInt(url.pathname.split('/')[3]);
+      
+      if (isNaN(targetUserId)) {
+        return new Response(JSON.stringify({ error: 'Invalid user ID' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+      
+      // Check if target user exists
+      const targetUser = await db.prepare(`
+        SELECT id, email FROM users WHERE id = ?
+      `).bind(targetUserId).first();
+      
+      if (!targetUser) {
+        return new Response(JSON.stringify({ error: 'User not found' }), { 
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get permissions
+      const permissions = await getUserPermissions(targetUserId, env);
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        user: targetUser,
+        permissions
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (error.message === 'Insufficient permissions') {
+        return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      console.error('Error getting user permissions:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get audit log
+  getAuditLog: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      // Require admin access
+      const { userId } = await requireAdmin(request, env);
+      
+      const db = getDB(env);
+      
+      const auditLog = await db.prepare(`
+        SELECT 
+          al.id,
+          al.action_type,
+          al.target_type,
+          al.target_id,
+          al.action_details,
+          al.performed_at,
+          u.email as admin_email
+        FROM admin_audit_log al
+        JOIN users u ON al.admin_user_id = u.id
+        ORDER BY al.performed_at DESC
+        LIMIT 100
+      `).all();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        auditLog: auditLog.results
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error: any) {
+      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (error.message === 'Insufficient permissions') {
+        return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      console.error('Error getting audit log:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
   // Grant permission to user
   grantPermission: async (request: Request, env: Env): Promise<Response> => {
     try {
@@ -173,274 +464,6 @@ export const handleAdmin = {
     }
   },
 
-  // Get user permissions
-  getUserPermissions: async (request: Request, env: Env): Promise<Response> => {
-    try {
-      // Require admin access
-      const { userId } = await requireAdmin(request, env);
-      
-      const url = new URL(request.url);
-      const targetUserId = parseInt(url.pathname.split('/')[3]);
-      
-      if (isNaN(targetUserId)) {
-        return new Response(JSON.stringify({ error: 'Invalid user ID' }), { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const db = getDB(env);
-      
-      // Check if target user exists
-      const targetUser = await db.prepare(`
-        SELECT id, email FROM users WHERE id = ?
-      `).bind(targetUserId).first();
-      
-      if (!targetUser) {
-        return new Response(JSON.stringify({ error: 'User not found' }), { 
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Get permissions
-      const permissions = await getUserPermissions(targetUserId, env);
-
-      return new Response(JSON.stringify({ 
-        success: true,
-        user: targetUser,
-        permissions
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error: any) {
-      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      if (error.message === 'Insufficient permissions') {
-        return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      console.error('Error getting user permissions:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  },
-
-  // Get all permissions
-  getAllPermissions: async (request: Request, env: Env): Promise<Response> => {
-    try {
-      // Require admin access
-      const { userId } = await requireAdmin(request, env);
-      
-      const db = getDB(env);
-      
-      const permissions = await db.prepare(`
-        SELECT 
-          up.id,
-          up.user_id,
-          up.permission_type,
-          up.granted_at,
-          up.expires_at,
-          up.is_active,
-          u.email as user_email,
-          g.email as granted_by_email
-        FROM user_permissions up
-        JOIN users u ON up.user_id = u.id
-        JOIN users g ON up.granted_by = g.id
-        WHERE up.is_active = TRUE
-        AND (up.expires_at IS NULL OR up.expires_at > ?)
-        ORDER BY up.granted_at DESC
-      `).bind(Date.now()).all();
-
-      return new Response(JSON.stringify({ 
-        success: true,
-        permissions: permissions.results
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error: any) {
-      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      if (error.message === 'Insufficient permissions') {
-        return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      console.error('Error getting all permissions:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  },
-
-  // Get all groups (admin only)
-  getAllGroups: async (request: Request, env: Env): Promise<Response> => {
-    try {
-      // Require admin access
-      const { userId } = await requireAdmin(request, env);
-      
-      const db = getDB(env);
-      
-      const groups = await db.prepare(`
-        SELECT 
-          g.id,
-          g.name,
-          g.description,
-          g.created_at,
-          g.is_active,
-          u.email as creator_email,
-          (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND is_active = TRUE) as member_count
-        FROM groups g
-        JOIN users u ON g.created_by = u.id
-        ORDER BY g.created_at DESC
-      `).all();
-
-      return new Response(JSON.stringify({ 
-        success: true,
-        groups: groups.results
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error: any) {
-      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      if (error.message === 'Insufficient permissions') {
-        return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      console.error('Error getting all groups:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  },
-
-  // Get all users (admin only)
-  getAllUsers: async (request: Request, env: Env): Promise<Response> => {
-    try {
-      // Require admin access
-      const { userId } = await requireAdmin(request, env);
-      
-      const db = getDB(env);
-      
-      const users = await db.prepare(`
-        SELECT 
-          u.id,
-          u.email,
-          u.created_at,
-          us.total_points,
-          us.verses_mastered,
-          us.current_streak,
-          us.longest_streak,
-          (SELECT COUNT(*) FROM group_members WHERE user_id = u.id AND is_active = TRUE) as group_count
-        FROM users u
-        LEFT JOIN user_stats us ON u.id = us.user_id
-        ORDER BY u.created_at DESC
-      `).all();
-
-      return new Response(JSON.stringify({ 
-        success: true,
-        users: users.results
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error: any) {
-      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      if (error.message === 'Insufficient permissions') {
-        return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      console.error('Error getting all users:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  },
-
-  // Get audit log
-  getAuditLog: async (request: Request, env: Env): Promise<Response> => {
-    try {
-      // Require admin access
-      const { userId } = await requireAdmin(request, env);
-      
-      const db = getDB(env);
-      
-      const auditLog = await db.prepare(`
-        SELECT 
-          al.id,
-          al.action_type,
-          al.target_type,
-          al.target_id,
-          al.action_details,
-          al.performed_at,
-          u.email as admin_email
-        FROM admin_audit_log al
-        JOIN users u ON al.admin_user_id = u.id
-        ORDER BY al.performed_at DESC
-        LIMIT 100
-      `).all();
-
-      return new Response(JSON.stringify({ 
-        success: true,
-        auditLog: auditLog.results
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error: any) {
-      if (error.message === 'Unauthorized' || error.message === 'Invalid or expired session') {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      if (error.message === 'Insufficient permissions') {
-        return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      console.error('Error getting audit log:', error);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  },
-
   // Check super admin status
   checkSuperAdmin: async (request: Request, env: Env): Promise<Response> => {
     try {
@@ -453,7 +476,6 @@ export const handleAdmin = {
       }
 
       const token = authHeader.split(' ')[1];
-      const { getUserId } = await import('../utils/db');
       const userId = await getUserId(token, env);
       
       if (!userId) {
@@ -565,7 +587,6 @@ export const handleAdmin = {
       }
 
       const token = authHeader.split(' ')[1];
-      const { getUserId } = await import('../utils/db');
       const userId = await getUserId(token, env);
       
       if (!userId) {
@@ -864,5 +885,106 @@ export const handleAdmin = {
         headers: { 'Content-Type': 'application/json' }
       });
     }
-  }
+  },
+
+  // Get notification logs (super admin only)
+  getNotificationLogs: async (request: Request, env: Env): Promise<Response> => {
+    if (!(await checkSuperAdmin(request, env))) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    try {
+      const db = getDB(env);
+      const logs = await db.prepare(`
+        SELECT * FROM notification_logs 
+        ORDER BY sent_at DESC 
+        LIMIT 100
+      `).all();
+
+      return new Response(JSON.stringify(logs.results), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting notification logs:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Get notification settings (super admin only)
+  getNotificationSettings: async (request: Request, env: Env): Promise<Response> => {
+    if (!(await checkSuperAdmin(request, env))) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    try {
+      const db = getDB(env);
+      const settings = await db.prepare(`
+        SELECT * FROM notification_settings 
+        ORDER BY notification_type
+      `).all();
+
+      return new Response(JSON.stringify(settings.results), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting notification settings:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Update notification settings (super admin only)
+  updateNotificationSettings: async (request: Request, env: Env): Promise<Response> => {
+    if (!(await checkSuperAdmin(request, env))) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { settings } = await request.json() as { 
+      settings: Array<{ notification_type: string; enabled: boolean }>;
+    };
+
+    if (!settings || !Array.isArray(settings)) {
+      return new Response(JSON.stringify({ error: 'Settings array required' }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    try {
+      const db = getDB(env);
+      const adminUserId = await getUserId(request.headers.get('Authorization')?.split(' ')[1] || '', env);
+      
+      for (const setting of settings) {
+        await db.prepare(`
+          UPDATE notification_settings 
+          SET enabled = ?, updated_at = ?, updated_by = ?
+          WHERE notification_type = ?
+        `).bind(setting.enabled, Date.now(), adminUserId, setting.notification_type).run();
+      }
+
+      return new Response(JSON.stringify({ success: true, message: 'Notification settings updated successfully' }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error updating notification settings:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
 }; 

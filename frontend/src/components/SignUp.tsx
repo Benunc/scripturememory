@@ -16,6 +16,7 @@ import {
   ModalCloseButton,
   useDisclosure,
   Spinner,
+  Checkbox,
 } from '@chakra-ui/react';
 import { useAuthContext } from '../contexts/AuthContext';
 import { debug } from '../utils/debug';
@@ -39,6 +40,7 @@ export function SignUp({ onClose }: SignUpProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [isTurnstileReady, setIsTurnstileReady] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const { isOpen, onOpen, onClose: onModalClose } = useDisclosure();
   const { signIn } = useAuthContext();
   const toast = useToast();
@@ -236,7 +238,11 @@ export function SignUp({ onClose }: SignUpProps) {
         throw new Error('Please complete the security check');
       }
 
-      await signIn(email, true, turnstileToken, undefined);
+      // Get redirect URL from URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirect = urlParams.get('redirect');
+      
+      await signIn(email, true, turnstileToken, undefined, undefined, marketingOptIn, redirect || undefined);
       onOpen();
     } catch (error) {
       toast({
@@ -276,6 +282,21 @@ export function SignUp({ onClose }: SignUpProps) {
               {!isTurnstileReady && <Spinner />}
             </Box>
           )}
+          
+          <FormControl>
+            <Checkbox 
+              isChecked={marketingOptIn}
+              onChange={(e) => setMarketingOptIn(e.target.checked)}
+              colorScheme="blue"
+              size="md"
+            >
+              I'd like to receive updates about new features, app improvements, and support.
+            </Checkbox>
+            <Text fontSize="xs" color="gray.600" mt={1}>
+              We'll only send you relevant updates and you can unsubscribe anytime!
+            </Text>
+          </FormControl>
+          
           <Button
             type="submit"
             colorScheme="blue"

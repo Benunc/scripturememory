@@ -246,8 +246,12 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       setError('');
       setIsLoading(true);
 
+      // Get redirect URL from URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirect = urlParams.get('redirect');
+      
       try {
-        const result = await getMagicLink(email, false, turnstileToken, undefined);
+        const result = await getMagicLink(email, false, turnstileToken, undefined, undefined, undefined, redirect || undefined);
         if (result.data) {
           toast({
             title: "Success",

@@ -5,6 +5,13 @@ compatibility_date = "2024-02-20"
 # Environment variables
 [vars]
 ENVIRONMENT = "development"
+SENDY_URL = "https://mail.wpsteward.com"
+SENDY_API_KEY = "PpQYQF4pBaFKHg24Kyc0"
+SENDY_LIST_ID = "X45GzUe763763892Spykdvtf2OhQ"
+MARKETING_ENABLED = "true"
+MARKETING_DEFAULT_OPT_IN = "false"
+NODE_ENV = "development"
+NOTIFICATIONS_ENABLED = "false"
 
 [env.production]
 name = "scripture-memory"
@@ -12,6 +19,13 @@ ENVIRONMENT = "production"
 
 [env.production.vars]
 ENVIRONMENT = "production"
+SENDY_URL = "https://mail.wpsteward.com"
+SENDY_API_KEY = "PpQYQF4pBaFKHg24Kyc0"
+SENDY_LIST_ID = "z0AKz6SK2OkruQ9cgt172Q"
+MARKETING_ENABLED = "true"
+MARKETING_DEFAULT_OPT_IN = "false"
+NODE_ENV = "production"
+NOTIFICATIONS_ENABLED = "true"
 
 [[env.production.d1_databases]]
 binding = "DB"
@@ -29,6 +43,13 @@ API_URL = "http://localhost:8787"
 
 [env.development.vars]
 ENVIRONMENT = "development"
+SENDY_URL = "https://mail.wpsteward.com"
+SENDY_API_KEY = "PpQYQF4pBaFKHg24Kyc0"
+SENDY_LIST_ID = "X45GzUe763763892Spykdvtf2OhQ"
+MARKETING_ENABLED = "true"
+MARKETING_DEFAULT_OPT_IN = "false"
+NODE_ENV = "development"
+NOTIFICATIONS_ENABLED = "false"
 
 [[env.development.d1_databases]]
 binding = "DB"
