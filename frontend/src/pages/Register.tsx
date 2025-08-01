@@ -14,10 +14,13 @@ import {
   useToast,
   Link,
   Checkbox,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
 import { debug } from '../utils/debug';
+import { AppHeader } from '../components/AppHeader';
+import { Footer } from '../components/Footer';
 
 // Add Turnstile types
 declare global {
@@ -207,98 +210,109 @@ export function Register() {
     }
   };
 
-  return (
-    <Container maxW="container.md" py={8}>
-      <VStack spacing={8} align="stretch">
-        <Box textAlign="center">
-          <Heading size="xl" mb={4}>Join Scripture Memory</Heading>
-          <Text fontSize="lg" color="gray.600">
-            Start your journey of memorizing God's Word
-          </Text>
-        </Box>
+  // Color mode values for better contrast
+  const bgColor = useColorModeValue('gray.50', 'gray.900');
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const textColor = useColorModeValue('gray.600', 'gray.300');
+  const headingColor = useColorModeValue('gray.800', 'white');
 
-        <Card>
-          <CardBody>
-            <VStack spacing={6} align="stretch">
-              <Box>
-                <Heading size="md" mb={2}>Create Your Account</Heading>
-                <Text mb={4}>
-                  Enter your email below to create your account. We'll send you a magic link to complete the registration.
-                </Text>
-                <Box as="form" onSubmit={handleSubmit}>
-                  <VStack spacing={4}>
-                    <FormControl isRequired>
-                      <FormLabel>Email</FormLabel>
-                      <Input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Enter your email"
-                      />
-                    </FormControl>
-                    <Box ref={turnstileContainerRef} />
-                    <FormControl>
-                      <Checkbox 
-                        isChecked={marketingOptIn}
-                        onChange={(e) => setMarketingOptIn(e.target.checked)}
+  return (
+    <Box minH="100vh" bg={bgColor} display="flex" flexDirection="column">
+      <AppHeader showAuth={false} />
+      <Container maxW="container.md" py={8} flex="1">
+        <VStack spacing={8} align="stretch">
+          <Box textAlign="center">
+            <Heading size="xl" mb={4} color={headingColor}>Join Scripture Memory</Heading>
+            <Text fontSize="lg" color={textColor}>
+              Start your journey of memorizing God's Word
+            </Text>
+          </Box>
+
+          <Card bg={cardBg}>
+            <CardBody>
+              <VStack spacing={6} align="stretch">
+                <Box>
+                  <Heading size="md" mb={2} color={headingColor}>Create Your Account</Heading>
+                  <Text mb={4} color={textColor}>
+                    Enter your email below to create your account. We'll send you a magic link to complete the registration.
+                  </Text>
+                  <Box as="form" onSubmit={handleSubmit}>
+                    <VStack spacing={4}>
+                      <FormControl isRequired>
+                        <FormLabel color={headingColor}>Email</FormLabel>
+                        <Input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="Enter your email"
+                        />
+                      </FormControl>
+                      <Box ref={turnstileContainerRef} />
+                      <FormControl>
+                        <Checkbox 
+                          isChecked={marketingOptIn}
+                          onChange={(e) => setMarketingOptIn(e.target.checked)}
+                          colorScheme="blue"
+                          size="md"
+                          color={headingColor}
+                        >
+                          I'd like to receive updates about new features, app improvements, and support.
+                        </Checkbox>
+                        <Text fontSize="xs" color={textColor} mt={1}>
+                          We'll only send you relevant updates and you can unsubscribe any time! Since there is no official support system, unsubscribing from these messages means I can't really get in contact with you to tell you cool stuff that I add.
+                        </Text>
+                      </FormControl>
+                      <Button
+                        type="submit"
                         colorScheme="blue"
-                        size="md"
+                        width="full"
+                        isLoading={isLoading}
+                        isDisabled={!turnstileToken}
                       >
-                        I'd like to receive updates about new features, app improvements, and support.
-                      </Checkbox>
-                      <Text fontSize="xs" color="gray.600" mt={1}>
-                        We'll only send you relevant updates and you can unsubscribe anytime!
-                      </Text>
-                    </FormControl>
-                    <Button
-                      type="submit"
-                      colorScheme="blue"
-                      width="full"
-                      isLoading={isLoading}
-                      isDisabled={!turnstileToken}
-                    >
-                      Create Account
-                    </Button>
+                        Create Account
+                      </Button>
+                    </VStack>
+                  </Box>
+                </Box>
+
+                <Box>
+                  <Heading size="md" mb={2} color={headingColor}>Why Join?</Heading>
+                  <VStack align="start" spacing={2}>
+                    <Text color={textColor}>✓ Track your memorization progress</Text>
+                    <Text color={textColor}>✓ Get personalized review schedules</Text>
+                    <Text color={textColor}>✓ Access your verses anywhere</Text>
+                    <Text color={textColor}>✓ Join a community of believers</Text>
                   </VStack>
                 </Box>
-              </Box>
 
-              <Box>
-                <Heading size="md" mb={2}>Why Join?</Heading>
-                <VStack align="start" spacing={2}>
-                  <Text>✓ Track your memorization progress</Text>
-                  <Text>✓ Get personalized review schedules</Text>
-                  <Text>✓ Access your verses anywhere</Text>
-                  <Text>✓ Join a community of believers</Text>
-                </VStack>
-              </Box>
+                <Box>
+                  <Heading size="md" mb={2} color={headingColor}>Support Our Mission</Heading>
+                  <Text mb={4} color={textColor}>
+                    Scripture Memory is free to use, but your support helps us continue building tools for memorizing God's Word.
+                  </Text>
+                  <Button
+                    colorScheme="green"
+                    width="full"
+                    onClick={() => navigate('/donate')}
+                  >
+                    Support Scripture Memory
+                  </Button>
+                </Box>
+              </VStack>
+            </CardBody>
+          </Card>
 
-              <Box>
-                <Heading size="md" mb={2}>Support Our Mission</Heading>
-                <Text mb={4}>
-                  Scripture Memory is free to use, but your support helps us continue building tools for memorizing God's Word.
-                </Text>
-                <Button
-                  colorScheme="green"
-                  width="full"
-                  onClick={() => navigate('/donate')}
-                >
-                  Support Scripture Memory
-                </Button>
-              </Box>
-            </VStack>
-          </CardBody>
-        </Card>
-
-        <Box textAlign="center">
-          <Text>
-            Already have an account?{' '}
-            <Link color="blue.500" onClick={() => navigate('/')}>
-              Sign in
-            </Link>
-          </Text>
-        </Box>
-      </VStack>
-    </Container>
+          <Box textAlign="center">
+            <Text color={textColor}>
+              Already have an account?{' '}
+              <Link color="blue.500" onClick={() => navigate('/')}>
+                Sign in
+              </Link>
+            </Text>
+          </Box>
+        </VStack>
+      </Container>
+      <Footer />
+    </Box>
   );
 } 

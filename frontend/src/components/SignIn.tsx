@@ -16,7 +16,9 @@ import {
   ModalCloseButton,
   useDisclosure,
   Link,
-  Spinner
+  Spinner,
+  Checkbox,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -43,9 +45,14 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [isTurnstileReady, setIsTurnstileReady] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const { signIn } = useAuthContext();
   const toast = useToast();
   const navigate = useNavigate();
+
+  // Color mode values for better contrast
+  const textColor = useColorModeValue('gray.600', 'gray.300');
+  const headingColor = useColorModeValue('gray.800', 'white');
   const turnstileContainerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const [error, setError] = useState('');
@@ -251,7 +258,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
       const redirect = urlParams.get('redirect');
       
       try {
-        const result = await getMagicLink(email, false, turnstileToken, undefined, undefined, undefined, redirect || undefined);
+        const result = await getMagicLink(email, false, turnstileToken, undefined, undefined, marketingOptIn, redirect || undefined);
         if (result.data) {
           toast({
             title: "Success",
@@ -316,7 +323,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
           <form onSubmit={handleSubmit}>
             <VStack spacing={4}>
               <FormControl isRequired>
-                <FormLabel>Email</FormLabel>
+                <FormLabel color={headingColor}>Email</FormLabel>
                 <Input
                   type="email"
                   value={email}
@@ -336,6 +343,20 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
                   {!isTurnstileReady && <Spinner />}
                 </Box>
               )}
+              <FormControl>
+                <Checkbox 
+                  isChecked={marketingOptIn}
+                  onChange={(e) => setMarketingOptIn(e.target.checked)}
+                  colorScheme="blue"
+                  size="md"
+                  color={headingColor}
+                >
+                  I'd like to receive updates about new features, app improvements, and support.
+                </Checkbox>
+                <Text fontSize="xs" color={textColor} mt={1}>
+                  We'll only send you relevant updates and you can unsubscribe any time! Since there is no official support system, unsubscribing from these messages means I can't really get in contact with you to tell you cool stuff that I add.
+                </Text>
+              </FormControl>
               <Button
                 type="submit"
                 colorScheme="blue"
@@ -344,7 +365,7 @@ export function SignIn({ isOpen, onClose }: SignInProps) {
               >
                 Send Magic Link
               </Button>
-              <Text fontSize="sm" color="gray.600">
+              <Text fontSize="sm" color={textColor}>
                 Don't have an account?{' '}
                 <Link color="blue.500" onClick={() => {
                   onClose();

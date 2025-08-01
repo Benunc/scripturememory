@@ -34,7 +34,35 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   );
 
   const renderAuthSection = () => {
-    if (!showAuth || !isAuthenticated) return null;
+    if (!showAuth || !isAuthenticated) {
+      // Show only color toggle for non-authenticated users
+      if (showColorToggle) {
+        if (isMobile) {
+          return (
+            <Menu>
+              <MenuButton
+                as={IconButton}
+                icon={<HamburgerIcon />}
+                variant="ghost"
+                aria-label="Menu"
+              />
+              <MenuList zIndex={9999}>
+                {renderColorToggle()}
+              </MenuList>
+            </Menu>
+          );
+        }
+        return (
+          <IconButton
+            icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+            onClick={toggleColorMode}
+            variant="ghost"
+            aria-label={`Switch to ${colorMode === 'light' ? 'dark' : 'light'} mode`}
+          />
+        );
+      }
+      return null;
+    }
 
     if (isMobile) {
       return (
