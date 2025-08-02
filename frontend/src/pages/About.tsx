@@ -45,6 +45,14 @@ export const About = () => {
           <Text fontSize="lg" textAlign="left" mt={4}>
             It's my prayer that you use it, and that God uses the verses hidden in your brain to hide them in your heart, by the power of His Holy Spirit.
           </Text>
+
+          <Text fontSize="lg" textAlign="left" mt={4}>
+            PS: if you're a youth leader, you can also use this app to help your youth group memorize scripture together. [Learn more about that here](https://scripture.wpsteward.com/youth-groups).
+          </Text>
+          <Button size="lg" alignSelf="center" colorScheme="blue" px={8} as="a" href="/youth-groups">
+            Learn More About Youth Groups
+          </Button>
+         
         </VStack>
       </Container>
       <Footer />

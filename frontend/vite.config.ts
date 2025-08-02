@@ -66,6 +66,6 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
     },
     publicDir: 'public', // Explicitly set public directory
-    assetsInclude: ['**/*.svg'], // Explicitly include SVG files
+    assetsInclude: ['**/*.svg', '**/*.md'], // Explicitly include SVG and markdown files
   }
 })

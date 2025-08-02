@@ -30,6 +30,13 @@ import Groups from './pages/Groups';
 import GroupDetails from './pages/GroupDetails';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
+import { News } from './pages/News';
+import { BlogList } from './pages/BlogList';
+import { BlogPostPage } from './pages/BlogPost';
+import { Changelog } from './pages/Changelog';
+import { ChangelogEntryPage } from './pages/ChangelogEntry';
+import { YouthGroups } from './pages/YouthGroups';
+import { ChurchGroups } from './pages/ChurchGroups';
 
 
 // Add type for Google client
@@ -98,6 +105,15 @@ export function App() {
                 <Route path="/groups" element={<ProtectedRoute><Groups /></ProtectedRoute>} />
                 <Route path="/groups/:groupId" element={<ProtectedRoute><GroupDetails /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                
+                {/* News and Content Routes */}
+                <Route path="/news" element={<News />} />
+                <Route path="/news/blog" element={<BlogList />} />
+                <Route path="/news/blog/:slug" element={<BlogPostPage />} />
+                <Route path="/news/changelog" element={<Changelog />} />
+                <Route path="/news/changelog/:version" element={<ChangelogEntryPage />} />
+                <Route path="/youth-groups" element={<YouthGroups />} />
+                <Route path="/church-groups" element={<ChurchGroups />} />
               </Routes>
             </PointsProvider>
           </AuthProvider>
