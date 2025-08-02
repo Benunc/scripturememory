@@ -206,7 +206,8 @@ export const handleAdmin = {
       const { userId } = await requireAdmin(request, env);
       
       const url = new URL(request.url);
-      const targetUserId = parseInt(url.pathname.split('/')[3]);
+      const pathParts = url.pathname.split('/');
+      const targetUserId = parseInt(pathParts[pathParts.length - 1]);
       
       if (isNaN(targetUserId)) {
         return new Response(JSON.stringify({ error: 'Invalid user ID' }), { 

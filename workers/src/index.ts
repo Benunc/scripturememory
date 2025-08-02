@@ -118,6 +118,14 @@ router.post('/marketing/sync-sendy', handleMarketing.syncSendy);
 
 // Admin routes
 router.get('/admin/check-super-admin', handleAdmin.checkSuperAdmin);
+router.get('/admin/users', handleAdmin.getAllUsers);
+router.get('/admin/groups', handleAdmin.getAllGroups);
+router.get('/admin/permissions', handleAdmin.getAllPermissions);
+router.get('/admin/permissions/user/:userId', handleAdmin.getUserPermissions);
+router.get('/admin/audit-log', handleAdmin.getAuditLog);
+router.post('/admin/permissions/grant', handleAdmin.grantPermission);
+router.post('/admin/permissions/revoke', handleAdmin.revokePermission);
+router.delete('/admin/groups/:id/delete', handleAdmin.deleteGroup);
 router.get('/admin/notification-logs', handleAdmin.getNotificationLogs);
 router.get('/admin/notification-settings', handleAdmin.getNotificationSettings);
 router.put('/admin/notification-settings', handleAdmin.updateNotificationSettings);

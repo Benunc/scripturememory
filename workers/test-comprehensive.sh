@@ -2106,6 +2106,279 @@ echo "${BLUE}Unauthorized leaderboard access correctly failed: $UNAUTHORIZED_LEA
 echo "${GREEN}✓ All time-based leaderboard tests passed${NC}"
 
 # ========================================
+# ADMIN ROUTE TESTS
+# ========================================
+echo "${YELLOW}========================================${NC}"
+echo "${YELLOW}TESTING ADMIN ROUTES${NC}"
+echo "${YELLOW}========================================${NC}"
+
+# Test 1: Super admin accessing /admin/users
+echo "${YELLOW}Test 1: Super admin accessing /admin/users...${NC}"
+
+# Debug: Test super admin session first
+echo "${YELLOW}Debug: Testing super admin session...${NC}"
+SUPER_ADMIN_TEST=$(curl -s -X GET "http://localhost:8787/admin/check-super-admin" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+echo "${BLUE}Super admin test response: $SUPER_ADMIN_TEST${NC}"
+
+ADMIN_USERS_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/users" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $ADMIN_USERS_RESPONSE == *"error"* ]]; then
+    echo "${RED}Super admin /admin/users failed: $ADMIN_USERS_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Admin users response: $ADMIN_USERS_RESPONSE${NC}"
+
+# Verify the response contains users data
+if echo "$ADMIN_USERS_RESPONSE" | grep -q '"users"'; then
+    echo "${GREEN}✓ Super admin can access /admin/users${NC}"
+else
+    echo "${RED}✗ Super admin /admin/users response missing users data${NC}"
+    exit 1
+fi
+
+# Test 2: Super admin accessing /admin/groups
+echo "${YELLOW}Test 2: Super admin accessing /admin/groups...${NC}"
+ADMIN_GROUPS_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/groups" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $ADMIN_GROUPS_RESPONSE == *"error"* ]]; then
+    echo "${RED}Super admin /admin/groups failed: $ADMIN_GROUPS_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Admin groups response: $ADMIN_GROUPS_RESPONSE${NC}"
+
+# Verify the response contains groups data
+if echo "$ADMIN_GROUPS_RESPONSE" | grep -q '"groups"'; then
+    echo "${GREEN}✓ Super admin can access /admin/groups${NC}"
+else
+    echo "${RED}✗ Super admin /admin/groups response missing groups data${NC}"
+    exit 1
+fi
+
+# Test 3: Super admin accessing /admin/permissions
+echo "${YELLOW}Test 3: Super admin accessing /admin/permissions...${NC}"
+ADMIN_PERMISSIONS_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/permissions" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $ADMIN_PERMISSIONS_RESPONSE == *"error"* ]]; then
+    echo "${RED}Super admin /admin/permissions failed: $ADMIN_PERMISSIONS_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Admin permissions response: $ADMIN_PERMISSIONS_RESPONSE${NC}"
+
+# Verify the response contains permissions data
+if echo "$ADMIN_PERMISSIONS_RESPONSE" | grep -q '"permissions"'; then
+    echo "${GREEN}✓ Super admin can access /admin/permissions${NC}"
+else
+    echo "${RED}✗ Super admin /admin/permissions response missing permissions data${NC}"
+    exit 1
+fi
+
+# Test 4: Super admin accessing /admin/audit-log
+echo "${YELLOW}Test 4: Super admin accessing /admin/audit-log...${NC}"
+ADMIN_AUDIT_LOG_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/audit-log" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $ADMIN_AUDIT_LOG_RESPONSE == *"error"* ]]; then
+    echo "${RED}Super admin /admin/audit-log failed: $ADMIN_AUDIT_LOG_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Admin audit log response: $ADMIN_AUDIT_LOG_RESPONSE${NC}"
+
+# Verify the response contains audit log data
+if echo "$ADMIN_AUDIT_LOG_RESPONSE" | grep -q '"auditLog"'; then
+    echo "${GREEN}✓ Super admin can access /admin/audit-log${NC}"
+else
+    echo "${RED}✗ Super admin /admin/audit-log response missing audit log data${NC}"
+    exit 1
+fi
+
+# Test 5: Regular user trying to access /admin/users (should fail)
+echo "${YELLOW}Test 5: Regular user trying to access /admin/users (should fail)...${NC}"
+REGULAR_USER_ADMIN_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/users" \
+  -H "Authorization: Bearer $SESSION_TOKEN")
+check_status
+
+if [[ $REGULAR_USER_ADMIN_RESPONSE != *"error"* ]]; then
+    echo "${RED}Regular user /admin/users should have failed but succeeded: $REGULAR_USER_ADMIN_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Regular user /admin/users correctly failed: $REGULAR_USER_ADMIN_RESPONSE${NC}"
+
+# Test 6: Regular user trying to access /admin/groups (should fail)
+echo "${YELLOW}Test 6: Regular user trying to access /admin/groups (should fail)...${NC}"
+REGULAR_USER_ADMIN_GROUPS_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/groups" \
+  -H "Authorization: Bearer $SESSION_TOKEN")
+check_status
+
+if [[ $REGULAR_USER_ADMIN_GROUPS_RESPONSE != *"error"* ]]; then
+    echo "${RED}Regular user /admin/groups should have failed but succeeded: $REGULAR_USER_ADMIN_GROUPS_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Regular user /admin/groups correctly failed: $REGULAR_USER_ADMIN_GROUPS_RESPONSE${NC}"
+
+# Test 7: Unauthenticated access to /admin/users (should fail)
+echo "${YELLOW}Test 7: Unauthenticated access to /admin/users (should fail)...${NC}"
+UNAUTH_ADMIN_USERS_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/users")
+check_status
+
+if [[ $UNAUTH_ADMIN_USERS_RESPONSE != *"error"* ]]; then
+    echo "${RED}Unauthenticated /admin/users should have failed but succeeded: $UNAUTH_ADMIN_USERS_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Unauthenticated /admin/users correctly failed: $UNAUTH_ADMIN_USERS_RESPONSE${NC}"
+
+# Test 8: Unauthenticated access to /admin/groups (should fail)
+echo "${YELLOW}Test 8: Unauthenticated access to /admin/groups (should fail)...${NC}"
+UNAUTH_ADMIN_GROUPS_RESPONSE=$(curl -s -X GET "http://localhost:8787/admin/groups")
+check_status
+
+if [[ $UNAUTH_ADMIN_GROUPS_RESPONSE != *"error"* ]]; then
+    echo "${RED}Unauthenticated /admin/groups should have failed but succeeded: $UNAUTH_ADMIN_GROUPS_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Unauthenticated /admin/groups correctly failed: $UNAUTH_ADMIN_GROUPS_RESPONSE${NC}"
+
+# Test 9: Super admin accessing /admin/permissions/user/:userId
+echo "${YELLOW}Test 9: Super admin accessing /admin/permissions/user/:userId...${NC}"
+
+# First, get the actual user ID for test-anonymize2@example.com to ensure we're using a valid user
+echo "${YELLOW}Getting user ID for test-anonymize2@example.com...${NC}"
+USER_ID_CHECK=$(npx wrangler d1 execute DB --env development --command="SELECT id FROM users WHERE email = 'test-anonymize2@example.com';" | cat)
+check_status
+
+# Extract the user ID from the response
+USER_ID_JSON=$(echo "$USER_ID_CHECK" | sed -n '/\[/,/\]/p')
+TARGET_USER_ID=$(echo "$USER_ID_JSON" | grep -A1 '"id":' | grep "id" | awk '{print $2}' | tr -d ',')
+
+if [ -z "$TARGET_USER_ID" ]; then
+    echo "${RED}Error: Could not find user ID for test-anonymize2@example.com${NC}"
+    echo "${BLUE}User ID check response: $USER_ID_CHECK${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Using user ID $TARGET_USER_ID for test-anonymize2@example.com${NC}"
+
+# Debug: Show the full URL being called
+FULL_URL="http://localhost:8787/admin/permissions/user/$TARGET_USER_ID"
+echo "${BLUE}Calling URL: $FULL_URL${NC}"
+
+# Debug: Show the super admin session token (first few characters)
+SUPER_ADMIN_SESSION_PREFIX=$(echo "$SUPER_ADMIN_SESSION" | cut -c1-20)
+echo "${BLUE}Super admin session token (first 20 chars): $SUPER_ADMIN_SESSION_PREFIX...${NC}"
+
+# Debug: Test if the super admin session is still valid
+echo "${YELLOW}Testing super admin session validity...${NC}"
+SESSION_TEST=$(curl -s -X GET "http://localhost:8787/admin/check-super-admin" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+echo "${BLUE}Session test response: $SESSION_TEST${NC}"
+
+ADMIN_USER_PERMISSIONS_RESPONSE=$(curl -s -X GET "$FULL_URL" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+echo "${BLUE}Raw response: $ADMIN_USER_PERMISSIONS_RESPONSE${NC}"
+
+if [[ $ADMIN_USER_PERMISSIONS_RESPONSE == *"error"* ]]; then
+    echo "${BLUE}Admin user permissions response: $ADMIN_USER_PERMISSIONS_RESPONSE${NC}"
+    echo "${RED}Super admin /admin/permissions/user/:userId failed: $ADMIN_USER_PERMISSIONS_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Admin user permissions response: $ADMIN_USER_PERMISSIONS_RESPONSE${NC}"
+
+# Verify the response contains user permissions data
+if echo "$ADMIN_USER_PERMISSIONS_RESPONSE" | grep -q '"permissions"'; then
+    echo "${GREEN}✓ Super admin can access /admin/permissions/user/:userId${NC}"
+else
+    echo "${RED}✗ Super admin /admin/permissions/user/:userId response missing permissions data${NC}"
+    exit 1
+fi
+
+# Test 10: Super admin granting permission
+echo "${YELLOW}Test 10: Super admin granting permission...${NC}"
+GRANT_PERMISSION_RESPONSE=$(curl -s -X POST "http://localhost:8787/admin/permissions/grant" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION" \
+  -d "{\"targetUserId\":$TARGET_USER_ID,\"permissionType\":\"create_groups\"}")
+check_status
+
+if [[ $GRANT_PERMISSION_RESPONSE == *"error"* ]]; then
+    echo "${RED}Super admin grant permission failed: $GRANT_PERMISSION_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Grant permission response: $GRANT_PERMISSION_RESPONSE${NC}"
+
+# Verify the response indicates success
+if echo "$GRANT_PERMISSION_RESPONSE" | grep -q '"success"'; then
+    echo "${GREEN}✓ Super admin can grant permissions${NC}"
+else
+    echo "${RED}✗ Super admin grant permission response missing success indicator${NC}"
+    exit 1
+fi
+
+# Test 11: Super admin revoking permission
+echo "${YELLOW}Test 11: Super admin revoking permission...${NC}"
+REVOKE_PERMISSION_RESPONSE=$(curl -s -X POST "http://localhost:8787/admin/permissions/revoke" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION" \
+  -d "{\"targetUserId\":$TARGET_USER_ID,\"permissionType\":\"create_groups\"}")
+check_status
+
+if [[ $REVOKE_PERMISSION_RESPONSE == *"error"* ]]; then
+    echo "${RED}Super admin revoke permission failed: $REVOKE_PERMISSION_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Revoke permission response: $REVOKE_PERMISSION_RESPONSE${NC}"
+
+# Verify the response indicates success
+if echo "$REVOKE_PERMISSION_RESPONSE" | grep -q '"success"'; then
+    echo "${GREEN}✓ Super admin can revoke permissions${NC}"
+else
+    echo "${RED}✗ Super admin revoke permission response missing success indicator${NC}"
+    exit 1
+fi
+
+# Test 12: Super admin deleting a group
+echo "${YELLOW}Test 12: Super admin deleting a group...${NC}"
+DELETE_GROUP_RESPONSE=$(curl -s -X DELETE "http://localhost:8787/admin/groups/$GROUP_ID/delete" \
+  -H "Authorization: Bearer $SUPER_ADMIN_SESSION")
+check_status
+
+if [[ $DELETE_GROUP_RESPONSE == *"error"* ]]; then
+    echo "${RED}Super admin delete group failed: $DELETE_GROUP_RESPONSE${NC}"
+    exit 1
+fi
+
+echo "${BLUE}Delete group response: $DELETE_GROUP_RESPONSE${NC}"
+
+# Verify the response indicates success
+if echo "$DELETE_GROUP_RESPONSE" | grep -q '"success"'; then
+    echo "${GREEN}✓ Super admin can delete groups${NC}"
+else
+    echo "${RED}✗ Super admin delete group response missing success indicator${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ All admin route tests passed${NC}"
+
+# ========================================
 # USER LOGIN SECTION
 # ========================================
 USERS=(

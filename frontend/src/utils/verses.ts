@@ -1,5 +1,6 @@
 import { Verse } from '../types/Verse';
 import { getApiUrl } from './api';
+import { debug } from './debug';
 
 export const getVerses = async (userEmail: string): Promise<Verse[]> => {
   try {
@@ -19,7 +20,7 @@ export const getVerses = async (userEmail: string): Promise<Verse[]> => {
     }
     return await response.json();
   } catch (error) {
-    console.error('Error fetching verses:', error);
+    debug.error('verses', 'Error fetching verses', error);
     return [];
   }
 };
@@ -41,7 +42,7 @@ export const addVerse = async (userEmail: string, verseData: Omit<Verse, 'id'>):
     });
     return response.ok;
   } catch (error) {
-    console.error('Error adding verse:', error);
+    debug.error('verses', 'Error adding verse', error);
     return false;
   }
 };
@@ -63,7 +64,7 @@ export const updateVerse = async (userEmail: string, verseId: string, updates: P
     });
     return response.ok;
   } catch (error) {
-    console.error('Error updating verse:', error);
+    debug.error('verses', 'Error updating verse', error);
     return false;
   }
 };
@@ -83,7 +84,7 @@ export const deleteVerse = async (userEmail: string, verseId: string): Promise<b
     });
     return response.ok;
   } catch (error) {
-    console.error('Error deleting verse:', error);
+    debug.error('verses', 'Error deleting verse', error);
     return false;
   }
 };
