@@ -647,13 +647,16 @@ const GroupDetails: React.FC = () => {
     try {
       setMakingLeader(memberEmail);
       
+      // Extract just the email part if it contains display name in parentheses
+      const cleanEmail = memberEmail.includes(' (') ? memberEmail.split(' (')[0] : memberEmail;
+      
       const response = await fetch(`${getApiUrl()}/groups/${groupId}/leaders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ email: memberEmail })
+        body: JSON.stringify({ email: cleanEmail })
       });
 
       if (response.ok) {
@@ -705,13 +708,16 @@ const GroupDetails: React.FC = () => {
     try {
       setDemotingLeader(memberEmail);
       
+      // Extract just the email part if it contains display name in parentheses
+      const cleanEmail = memberEmail.includes(' (') ? memberEmail.split(' (')[0] : memberEmail;
+      
       const response = await fetch(`${getApiUrl()}/groups/${groupId}/leaders/demote`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ email: memberEmail })
+        body: JSON.stringify({ email: cleanEmail })
       });
 
       if (response.ok) {

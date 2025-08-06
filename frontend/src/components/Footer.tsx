@@ -18,7 +18,7 @@ export const Footer = () => {
             <Link as={RouterLink} to="/privacy" color="blue.500" _hover={{ textDecoration: 'underline' }}>
               Privacy Policy
             </Link>
-            <Link href="https://github.com/benmeredith/scripturememory" isExternal color="blue.500" _hover={{ textDecoration: 'underline' }}>
+            <Link href="https://github.com/benunc/scripturememory" isExternal color="blue.500" _hover={{ textDecoration: 'underline' }}>
               GitHub
             </Link>
           </HStack>
