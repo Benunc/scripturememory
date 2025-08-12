@@ -30,7 +30,7 @@ import {
   useColorMode,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useAuthContext } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
 import { debug } from '../utils/debug';
 import { Footer } from '../components/Footer';
@@ -68,7 +68,7 @@ export const PointsStats: React.FC = () => {
   const [stats, setStats] = useState<PointsStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { isAuthenticated, userEmail, signOut } = useAuth();
+  const { isAuthenticated, userEmail, signOut } = useAuthContext();
   const { refreshPoints } = usePoints();
   const navigate = useNavigate();
   const isMobile = useBreakpointValue({ base: true, md: false }) || false;
@@ -78,6 +78,8 @@ export const PointsStats: React.FC = () => {
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   const cardBg = useColorModeValue('gray.50', 'gray.700');
+  const breakdownBg1 = useColorModeValue('gray.50', 'gray.700');
+  const breakdownBg2 = useColorModeValue('gray.100', 'gray.600');
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [aspectRatio, setAspectRatio] = useState(1);
@@ -228,23 +230,23 @@ export const PointsStats: React.FC = () => {
                   <Box mt={4}>
                     <StatLabel mb={2}>Points Breakdown (approximate)</StatLabel>
                     <VStack spacing={0} align="stretch">
-                      <Flex bg={useColorModeValue('gray.50', 'gray.700')} p={2} justify="space-between" gap={7}>
+                      <Flex bg={breakdownBg1} p={2} justify="space-between" gap={7}>
                         <Text>Verse Mastery</Text>
                         <Text fontWeight="bold">{stats.points_breakdown.verse_mastery}</Text>
                       </Flex>
-                      <Flex bg={useColorModeValue('gray.100', 'gray.600')} p={2} justify="space-between" gap={4}>
+                      <Flex bg={breakdownBg2} p={2} justify="space-between" gap={4}>
                         <Text>Word Guesses</Text>
                         <Text fontWeight="bold">{stats.points_breakdown.word_guesses}</Text>
                       </Flex>
-                      <Flex bg={useColorModeValue('gray.50', 'gray.700')} p={2} justify="space-between" gap={4}>
+                      <Flex bg={breakdownBg1} p={2} justify="space-between" gap={4}>
                         <Text>Guess Streaks</Text>
                         <Text fontWeight="bold">{Math.round(stats.points_breakdown.guess_streaks)}</Text>
                       </Flex>
-                      <Flex bg={useColorModeValue('gray.100', 'gray.600')} p={2} justify="space-between" gap={4}>
+                      <Flex bg={breakdownBg2} p={2} justify="space-between" gap={4}>
                         <Text>Verse Additions</Text>
                         <Text fontWeight="bold">{stats.points_breakdown.verse_additions}</Text>
                       </Flex>
-                      <Flex bg={useColorModeValue('gray.50', 'gray.700')} p={2} justify="space-between" gap={4}>
+                      <Flex bg={breakdownBg1} p={2} justify="space-between" gap={4}>
                         <Text>Daily Streaks</Text>
                         <Text fontWeight="bold">{stats.points_breakdown.daily_streaks}</Text>
                       </Flex>

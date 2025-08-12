@@ -1,5 +1,6 @@
 // Content management utilities for blog posts, changelog, and landing pages
 import matter from 'gray-matter';
+import { debug } from './debug';
 
 // Extend ImportMeta interface for Vite's glob functionality
 declare global {
@@ -53,23 +54,23 @@ async function loadBlogPosts(): Promise<BlogPost[]> {
       eager: true 
     });
     
-    console.log('Found blog files:', Object.keys(blogFiles));
+    debug.log('api', 'Found blog files:', Object.keys(blogFiles));
     
     for (const path in blogFiles) {
-      console.log('Loading blog file:', path);
+      debug.log('api', 'Loading blog file:', path);
       const file = blogFiles[path];
-      console.log('File type:', typeof file);
-      console.log('File:', file);
+      debug.log('api', 'File type:', typeof file);
+      debug.log('api', 'File:', file);
       
       // Get the content directly (should be raw string with as: 'raw')
       const content = file as string;
       
       if (typeof content !== 'string') {
-        console.error('Expected string content, got:', typeof content);
+        debug.error('api', 'Expected string content, got:', typeof content);
         continue;
       }
       
-      console.log('Raw content:', content.substring(0, 200));
+      debug.log('api', 'Raw content:', content.substring(0, 200));
       
       const slug = path.replace('../content/blog/', '').replace('.md', '');
       
@@ -163,10 +164,10 @@ async function loadBlogPosts(): Promise<BlogPost[]> {
           }
         }
       }
-      console.log('Parsed data:', data);
-      console.log('Content length:', markdownContent.length);
-      console.log('Frontmatter match:', !!frontmatterMatch);
-      console.log('Raw frontmatter:', frontmatterMatch ? frontmatterMatch[1] : 'No match');
+      debug.log('api', 'Parsed data:', data);
+      debug.log('api', 'Content length:', markdownContent.length);
+      debug.log('api', 'Frontmatter match:', !!frontmatterMatch);
+      debug.log('api', 'Raw frontmatter:', frontmatterMatch ? frontmatterMatch[1] : 'No match');
       
       posts.push({
         slug,
@@ -180,9 +181,9 @@ async function loadBlogPosts(): Promise<BlogPost[]> {
       });
     }
     
-    console.log('Loaded posts:', posts);
+    debug.log('api', 'Loaded posts:', posts);
   } catch (error) {
-    console.error('Error loading blog posts:', error);
+    debug.error('api', 'Error loading blog posts:', error);
     throw error; // Re-throw to handle in calling function
   }
   
@@ -366,23 +367,23 @@ async function loadChangelogEntries(): Promise<ChangelogEntry[]> {
       eager: true 
     });
     
-    console.log('Found changelog files:', Object.keys(changelogFiles));
+    debug.log('api', 'Found changelog files:', Object.keys(changelogFiles));
     
     for (const path in changelogFiles) {
-      console.log('Loading changelog file:', path);
+      debug.log('api', 'Loading changelog file:', path);
       const file = changelogFiles[path];
-      console.log('File type:', typeof file);
-      console.log('File:', file);
+      debug.log('api', 'File type:', typeof file);
+      debug.log('api', 'File:', file);
       
       // Get the content directly (should be raw string with as: 'raw')
       const content = file as string;
       
       if (typeof content !== 'string') {
-        console.error('Expected string content, got:', typeof content);
+        debug.error('api', 'Expected string content, got:', typeof content);
         continue;
       }
       
-      console.log('Raw changelog content:', content.substring(0, 200));
+      debug.log('api', 'Raw changelog content:', content.substring(0, 200));
       
       const version = path.replace('../content/changelog/', '').replace('.md', '');
       
@@ -476,10 +477,10 @@ async function loadChangelogEntries(): Promise<ChangelogEntry[]> {
           }
         }
       }
-      console.log('Parsed changelog data:', data);
-      console.log('Content length:', markdownContent.length);
-      console.log('Changelog frontmatter match:', !!frontmatterMatch);
-      console.log('Raw changelog frontmatter:', frontmatterMatch ? frontmatterMatch[1] : 'No match');
+      debug.log('api', 'Parsed changelog data:', data);
+      debug.log('api', 'Content length:', markdownContent.length);
+      debug.log('api', 'Changelog frontmatter match:', !!frontmatterMatch);
+      debug.log('api', 'Raw changelog frontmatter:', frontmatterMatch ? frontmatterMatch[1] : 'No match');
       
       entries.push({
         version,
@@ -491,9 +492,9 @@ async function loadChangelogEntries(): Promise<ChangelogEntry[]> {
       });
     }
     
-    console.log('Loaded changelog entries:', entries);
+    debug.log('api', 'Loaded changelog entries:', entries);
   } catch (error) {
-    console.error('Error loading changelog entries:', error);
+    debug.error('api', 'Error loading changelog entries:', error);
     throw error;
   }
   
@@ -514,7 +515,7 @@ export async function getAllChangelogEntries(): Promise<ChangelogEntry[]> {
     changelogCache = await loadChangelogEntries();
     return changelogCache;
   } catch (error) {
-    console.error('Failed to load changelog entries from markdown files:', error);
+    debug.error('api', 'Failed to load changelog entries from markdown files:', error);
     return []; // Return empty array if loading fails
   }
 }

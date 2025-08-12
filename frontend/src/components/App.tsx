@@ -66,7 +66,10 @@ export function MainApp() {
         const redirect = params.get('redirect');
         
         if (message || redirect) {
-          setIsSignInOpen(true);
+          // Only open sign-in modal if user is not authenticated
+          if (!isAuthenticated) {
+            setIsSignInOpen(true);
+          }
           // Clear the parameters from URL but keep redirect for the signin process
           const newUrl = redirect ? `/?redirect=${redirect}` : '/';
           window.history.replaceState({}, '', newUrl);
@@ -86,7 +89,7 @@ export function MainApp() {
     };
 
     initializeApp();
-  }, [toast]);
+  }, [toast, isAuthenticated]);
 
   const handleVerseAdded = (reference: string) => {
     // Scroll to the newly added verse
