@@ -522,6 +522,128 @@ echo "${GREEN}✓ Longest word guess streak appears in user stats${NC}"
 
 echo "${GREEN}✓ All longest word guess streak tests passed${NC}"
 
+# Test for new user streak bug fix (multiple calls with same streak length)
+echo "${YELLOW}Testing new user streak bug fix...${NC}"
+
+# Create a new test user for this specific test
+echo "${YELLOW}Creating test user for streak bug fix...${NC}"
+MAGIC_LINK_RESPONSE_BUGFIX=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test-streak-bugfix@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses","marketingOptIn":false}')
+check_status
+
+# Extract magic token for bug fix test user
+MAGIC_TOKEN_BUGFIX=$(extract_magic_token "$MAGIC_LINK_RESPONSE_BUGFIX")
+echo "${BLUE}Magic token for bug fix test user: $MAGIC_TOKEN_BUGFIX${NC}"
+check_status
+
+# Log in the bug fix test user
+echo "${YELLOW}Logging in bug fix test user...${NC}"
+VERIFY_RESPONSE_BUGFIX=$(curl -s -i "http://localhost:8787/auth/verify?token=$MAGIC_TOKEN_BUGFIX")
+check_status
+SESSION_TOKEN_BUGFIX=$(extract_token "$VERIFY_RESPONSE_BUGFIX")
+echo "${BLUE}Session token for bug fix test user: $SESSION_TOKEN_BUGFIX${NC}"
+
+# Verify initial longest streak is 0
+echo "${YELLOW}Verifying initial longest streak is 0...${NC}"
+INITIAL_STREAK_CHECK_BUGFIX=$(npx wrangler d1 execute DB --env development --command="SELECT longest_word_guess_streak FROM user_stats WHERE user_id = (SELECT id FROM users WHERE email = 'test-streak-bugfix@example.com');" | cat)
+check_status
+echo "${BLUE}Initial streak data:${NC}"
+echo "$INITIAL_STREAK_CHECK_BUGFIX"
+
+# Extract the initial streak value
+INITIAL_STREAK_JSON_BUGFIX=$(echo "$INITIAL_STREAK_CHECK_BUGFIX" | sed -n '/\[/,/\]/p')
+INITIAL_STREAK_VALUE_BUGFIX=$(echo "$INITIAL_STREAK_JSON_BUGFIX" | grep -A1 '"longest_word_guess_streak":' | grep "longest_word_guess_streak" | awk '{print $2}' | tr -d ',')
+
+if [ "$INITIAL_STREAK_VALUE_BUGFIX" != "0" ]; then
+    echo "${RED}Error: Expected initial longest word guess streak of 0, found $INITIAL_STREAK_VALUE_BUGFIX${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Initial longest streak is 0${NC}"
+
+# Send multiple API calls with the same streak length (3) - this should only update once
+echo "${YELLOW}Testing multiple API calls with same streak length...${NC}"
+for i in {1..3}; do
+  TIMESTAMP=$((BASE_TIMESTAMP + (i * 3600000))) # 1 hour apart
+  STREAK_RESPONSE_BUGFIX=$(curl -s -X POST http://localhost:8787/gamification/points \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $SESSION_TOKEN_BUGFIX" \
+    -d "{\"event_type\":\"word_correct\",\"points\":1.0,\"metadata\":{\"streak_length\":3},\"created_at\":$TIMESTAMP}")
+  check_status
+  echo "${BLUE}Added word guess streak event $i: length 3 at $TIMESTAMP${NC}"
+done
+
+# Check that longest streak was only updated once to 3 (not incremented multiple times)
+echo "${YELLOW}Checking longest streak after multiple calls...${NC}"
+STREAK_CHECK_BUGFIX=$(npx wrangler d1 execute DB --env development --command="SELECT longest_word_guess_streak FROM user_stats WHERE user_id = (SELECT id FROM users WHERE email = 'test-streak-bugfix@example.com');" | cat)
+check_status
+echo "${BLUE}Longest streak after multiple calls:${NC}"
+echo "$STREAK_CHECK_BUGFIX"
+STREAK_JSON_BUGFIX=$(echo "$STREAK_CHECK_BUGFIX" | sed -n '/\[/,/\]/p')
+STREAK_VALUE_BUGFIX=$(echo "$STREAK_JSON_BUGFIX" | grep -A1 '"longest_word_guess_streak":' | grep "longest_word_guess_streak" | awk '{print $2}' | tr -d ',')
+
+if [ "$STREAK_VALUE_BUGFIX" != "3" ]; then
+    echo "${RED}Error: Expected longest word guess streak of 3, found $STREAK_VALUE_BUGFIX${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Longest word guess streak correctly updated to 3 (not incremented multiple times)${NC}"
+
+# Test with is_new_longest flag (should update even if streak length is same)
+echo "${YELLOW}Testing with is_new_longest flag...${NC}"
+STREAK_RESPONSE_FLAG=$(curl -s -X POST http://localhost:8787/gamification/points \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN_BUGFIX" \
+  -d "{\"event_type\":\"word_correct\",\"points\":1.0,\"metadata\":{\"streak_length\":3,\"is_new_longest\":true},\"created_at\":$((BASE_TIMESTAMP + 14400000))}")
+check_status
+echo "${BLUE}Added word guess streak event with is_new_longest flag${NC}"
+
+# Check that longest streak remains 3 (should not change since it's the same length)
+echo "${YELLOW}Checking longest streak after is_new_longest flag...${NC}"
+STREAK_CHECK_FLAG=$(npx wrangler d1 execute DB --env development --command="SELECT longest_word_guess_streak FROM user_stats WHERE user_id = (SELECT id FROM users WHERE email = 'test-streak-bugfix@example.com');" | cat)
+check_status
+STREAK_JSON_FLAG=$(echo "$STREAK_CHECK_FLAG" | sed -n '/\[/,/\]/p')
+STREAK_VALUE_FLAG=$(echo "$STREAK_JSON_FLAG" | grep -A1 '"longest_word_guess_streak":' | grep "longest_word_guess_streak" | awk '{print $2}' | tr -d ',')
+
+if [ "$STREAK_VALUE_FLAG" != "3" ]; then
+    echo "${RED}Error: Expected longest word guess streak to remain 3, found $STREAK_VALUE_FLAG${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Longest word guess streak correctly remains 3 after is_new_longest flag${NC}"
+
+# Test with higher streak length (should update)
+echo "${YELLOW}Testing with higher streak length...${NC}"
+STREAK_RESPONSE_HIGHER=$(curl -s -X POST http://localhost:8787/gamification/points \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN_BUGFIX" \
+  -d "{\"event_type\":\"word_correct\",\"points\":1.0,\"metadata\":{\"streak_length\":5},\"created_at\":$((BASE_TIMESTAMP + 18000000))}")
+check_status
+echo "${BLUE}Added word guess streak event with length 5${NC}"
+
+# Check that longest streak was updated to 5
+echo "${YELLOW}Checking longest streak after higher streak...${NC}"
+STREAK_CHECK_HIGHER=$(npx wrangler d1 execute DB --env development --command="SELECT longest_word_guess_streak FROM user_stats WHERE user_id = (SELECT id FROM users WHERE email = 'test-streak-bugfix@example.com');" | cat)
+check_status
+STREAK_JSON_HIGHER=$(echo "$STREAK_CHECK_HIGHER" | sed -n '/\[/,/\]/p')
+STREAK_VALUE_HIGHER=$(echo "$STREAK_JSON_HIGHER" | grep -A1 '"longest_word_guess_streak":' | grep "longest_word_guess_streak" | awk '{print $2}' | tr -d ',')
+
+if [ "$STREAK_VALUE_HIGHER" != "5" ]; then
+    echo "${RED}Error: Expected longest word guess streak to be 5, found $STREAK_VALUE_HIGHER${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Longest word guess streak correctly updated to 5${NC}"
+
+# Log out the bug fix test user
+echo "${YELLOW}Logging out bug fix test user...${NC}"
+LOGOUT_RESPONSE_BUGFIX=$(curl -s -X POST http://localhost:8787/auth/sign-out \
+    -H "Authorization: Bearer $SESSION_TOKEN_BUGFIX")
+check_status
+
+echo "${GREEN}✓ All streak bug fix tests passed${NC}"
+
 # Test adding verse set to existing user (user 2)
 echo "${YELLOW}Testing add verse set to existing user...${NC}"
 ADD_VERSESET_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/add-verses \

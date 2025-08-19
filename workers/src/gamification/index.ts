@@ -348,10 +348,15 @@ export const handleGamification = {
           `).bind(userId).first() as { longest_word_guess_streak: number } | null;
           
           const currentLongest = currentStats?.longest_word_guess_streak || 0;
-          const newLongest = Math.max(currentLongest, streakLength);
           
-          // Update longest streak if this is a new record
-          if (newLongest > currentLongest) {
+          // Only update longest streak if:
+          // 1. This is explicitly marked as a new longest streak, OR
+          // 2. The streak length is actually greater than the current longest
+          const isNewLongest = metadata.is_new_longest === true;
+          const shouldUpdate = isNewLongest || streakLength > currentLongest;
+          
+          if (shouldUpdate) {
+            const newLongest = Math.max(currentLongest, streakLength);
             await db.prepare(`
               UPDATE user_stats 
               SET longest_word_guess_streak = ?

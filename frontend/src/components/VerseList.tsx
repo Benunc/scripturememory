@@ -66,6 +66,8 @@ import { ChevronDownIcon, ChevronUpIcon, DeleteIcon, EditIcon, InfoIcon, RepeatI
 import { ProgressStatus } from '../utils/progress';
 import { useAuth } from '../hooks/useAuth';
 import { usePoints } from '../contexts/PointsContext';
+import { saveAchievementForSharing, saveVerseCompletionAchievement, hasUnsharedAchievement, getPendingAchievement, markAchievementAsShared } from '../utils/achievements';
+import { SocialShareModal } from './SocialShareModal';
 import { debug, handleError } from '../utils/debug';
 import { useVerses } from '../hooks/useVerses';
 import { Footer } from './Footer';
@@ -700,6 +702,18 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     type: null,
     previousFocus: null
   });
+
+  // Social share modal state
+  const [socialShareModal, setSocialShareModal] = useState<{
+    isOpen: boolean;
+    achievement: any;
+  }>({
+    isOpen: false,
+    achievement: null
+  });
+
+  // Red flash effect state
+  const [showRedFlash, setShowRedFlash] = useState(false);
 
   // Add status button state management
   const [statusButtonStates, setStatusButtonStates] = useState<Record<string, {
@@ -1731,6 +1745,43 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     // Reset streak for incorrect guesses
     if (!isCorrect) {
       setConsecutiveCorrectGuesses(0);
+      
+      // Also reset the streak in localStorage to ensure API consistency
+      localStorage.setItem('current_word_guess_streak', '0');
+      
+      // Check if this was during a record streak and trigger red flash
+      const currentLongestStreak = parseInt(localStorage.getItem('longest_word_guess_streak') || '0', 10);
+      const currentStreak = consecutiveCorrectGuesses;
+      
+      if (currentStreak >= currentLongestStreak * 0.8) { // Flash if within 80% of record
+        setShowRedFlash(true);
+        setTimeout(() => setShowRedFlash(false), 500); // Flash for 500ms
+      }
+      
+      // Check for pending social share achievement after streak resets due to incorrect guess
+      debug.log('api', 'Checking for social share achievement after incorrect guess...');
+      const hasAchievement = hasUnsharedAchievement();
+      debug.log('api', 'hasUnsharedAchievement result (incorrect guess):', hasAchievement);
+      
+      if (hasAchievement) {
+        const achievement = getPendingAchievement();
+        debug.log('api', 'Found achievement (incorrect guess):', achievement);
+        if (achievement) {
+          debug.log('api', 'Setting social share modal to open with achievement (incorrect guess):', achievement);
+          // Add 2.5 second delay and check if streak is still at 0
+          setTimeout(() => {
+            const currentStreak = parseInt(localStorage.getItem('current_word_guess_streak') || '0', 10);
+            if (currentStreak === 0) {
+              setSocialShareModal({
+                isOpen: true,
+                achievement
+              });
+            }
+          }, 2500);
+        }
+      } else {
+        debug.log('api', 'No unshared achievement found (incorrect guess)');
+      }
     }
 
     // Clear feedback after delay (longer for completion message)
@@ -1782,6 +1833,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       if (newLongestStreak > currentLongestStreak) {
         updateLongestWordGuessStreak(newLongestStreak);
         
+        // Check if this qualifies for social sharing achievement
+        console.log('New longest streak achieved:', newLongestStreak);
+        saveAchievementForSharing(newLongestStreak);
+        console.log('Achievement saved for sharing');
+        
         // Send the new longest streak to the server asynchronously (non-blocking)
         void (async () => {
           try {
@@ -1828,10 +1884,44 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       // Verse is completed, reset streak and force immediate sync
       // Use a small delay to ensure the completion feedback is shown first
       setTimeout(() => {
+        // Save verse completion achievement before resetting streak
+        const currentStreakBeforeReset = consecutiveCorrectGuesses + words.filter((word, i) => {
+          const verseWord = verseWords[nextWordIndex + i];
+          return normalizeWord(verseWord) === normalizeWord(word);
+        }).length;
+        
+        // Save verse completion achievement (this can trigger social sharing for short verses)
+        saveVerseCompletionAchievement(currentStreakBeforeReset, verseWords.length);
+        
         setConsecutiveCorrectGuesses(0);
         updateCurrentStreak(0);
         void resetVerseStreak(reference);
         void forceSync();
+        
+        // Check for pending social share achievement after streak resets
+        debug.log('api', 'Checking for social share achievement after streak reset...');
+        const hasAchievement = hasUnsharedAchievement();
+        debug.log('api', 'hasUnsharedAchievement result:', hasAchievement);
+        
+        if (hasAchievement) {
+          const achievement = getPendingAchievement();
+          debug.log('api', 'Found achievement:', achievement);
+          if (achievement) {
+            debug.log('api', 'Setting social share modal to open with achievement:', achievement);
+            // Add 2.5 second delay and check if streak is still at 0
+            setTimeout(() => {
+              const currentStreak = parseInt(localStorage.getItem('current_word_guess_streak') || '0', 10);
+              if (currentStreak === 0) {
+                setSocialShareModal({
+                  isOpen: true,
+                  achievement
+                });
+              }
+            }, 2500);
+          }
+        } else {
+          debug.log('api', 'No unshared achievement found');
+        }
       }, 200); // Small delay to ensure feedback is processed first
     }
     }
@@ -1921,6 +2011,19 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     if (modalState.previousFocus) {
       modalState.previousFocus.focus();
     }
+  };
+
+  // Social share modal handlers
+  const handleSocialShareModalClose = () => {
+    // Mark the achievement as shared (even if user just dismisses) so it won't show again
+    // until a new record is achieved
+    markAchievementAsShared();
+    debug.log('api', 'Achievement marked as shared (dismissed)');
+    
+    setSocialShareModal({
+      isOpen: false,
+      achievement: null
+    });
   };
 
   // Update delete handlers
@@ -2896,6 +2999,21 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
   return (
     <Box w="100%" position="relative">
+      {/* Red flash overlay for record streak failures */}
+      {showRedFlash && (
+        <Box
+          position="fixed"
+          top="0"
+          left="0"
+          right="0"
+          bottom="0"
+          bg="red.500"
+          opacity="0.3"
+          zIndex="9999"
+          pointerEvents="none"
+          transition="opacity 0.5s ease-in-out"
+        />
+      )}
       {/* Skip link for keyboard users */}
       <Link
         href="#verses-list"
@@ -2950,6 +3068,15 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
       {renderDeleteDialog()}
       {renderShortcutsModal()}
+      
+      {/* Social Share Modal */}
+      {socialShareModal.isOpen && socialShareModal.achievement && (
+        <SocialShareModal
+          isOpen={socialShareModal.isOpen}
+          onClose={handleSocialShareModalClose}
+          achievement={socialShareModal.achievement}
+        />
+      )}
     </Box>
   );
 }); 
