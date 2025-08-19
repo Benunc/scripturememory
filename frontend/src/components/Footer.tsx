@@ -15,6 +15,9 @@ export const Footer = () => {
             <Link as={RouterLink} to="/about" color="blue.500" _hover={{ textDecoration: 'underline' }}>
               About Us
             </Link>
+            <Link as={RouterLink} to="/news" color="blue.500" _hover={{ textDecoration: 'underline' }}>
+              News
+            </Link>
             <Link as={RouterLink} to="/privacy" color="blue.500" _hover={{ textDecoration: 'underline' }}>
               Privacy Policy
             </Link>

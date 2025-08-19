@@ -89,6 +89,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 Support Us
               </MenuItem>
             )}
+            <MenuItem onClick={() => navigate('/news')} justifyContent="flex-end">
+              News
+            </MenuItem>
             <MenuItem onClick={() => navigate('/points')} justifyContent="flex-end">
               Points
             </MenuItem>
@@ -127,6 +130,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 Support Us
               </MenuItem>
             )}
+            <MenuItem onClick={() => navigate('/news')} justifyContent="flex-end">
+              News
+            </MenuItem>
             <MenuItem onClick={() => navigate('/points')} justifyContent="flex-end">
               Points
             </MenuItem>
