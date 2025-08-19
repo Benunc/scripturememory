@@ -180,11 +180,11 @@ export function SocialShareModal({ isOpen, onClose, achievement }: SocialShareMo
                 maxH="100px"
                 overflowY="auto"
               >
-                🎉 Just achieved a {achievement.streak}-word streak memorizing scripture with Scripture Memory! 
+                🎉 I just got {achievement.streak} words correct in a row memorizing scripture with Scripture Memory! 
 
                 Hiding God's Word in my heart, one verse at a time. 📖✨
 
-                Try it yourself: scripture.wpsteward.com
+                Try it yourself: https://scripture.wpsteward.com
               </Box>
             </Box>
 

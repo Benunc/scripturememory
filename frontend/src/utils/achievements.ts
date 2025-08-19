@@ -64,6 +64,25 @@ export function saveAchievementForSharing(streak: number): void {
 }
 
 /**
+ * Save longest streak achievement for manual sharing from points page
+ * Always saves the longest streak regardless of qualification thresholds
+ */
+export function saveLongestStreakForSharing(longestStreak: number): void {
+  const achievementData: AchievementData = {
+    streak: longestStreak,
+    achieved_at: Date.now(),
+    shared: false,
+    share_count: 0
+  };
+
+  const socialShareData: SocialSharePending = {
+    social_share_pending: achievementData
+  };
+
+  localStorage.setItem('social_share_pending', JSON.stringify(socialShareData));
+}
+
+/**
  * Save verse completion achievement data to localStorage
  * This can trigger social sharing for short verses regardless of streak length
  * Always uses the best streak ever for the share text, not just the completion streak

@@ -39,6 +39,8 @@ import { Link as RouterLink } from 'react-router-dom';
 import { HamburgerIcon, MoonIcon, SunIcon } from '@chakra-ui/icons';
 import { getApiUrl } from '../utils/api';
 import { AppHeader } from '../components/AppHeader';
+import { SocialShareModal } from '../components/SocialShareModal';
+import { saveAchievementForSharing, saveLongestStreakForSharing, hasUnsharedAchievement, getPendingAchievement, markAchievementAsShared } from '../utils/achievements';
 
 interface PointsStats {
   total_points: number;
@@ -68,6 +70,13 @@ export const PointsStats: React.FC = () => {
   const [stats, setStats] = useState<PointsStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [socialShareModal, setSocialShareModal] = useState<{
+    isOpen: boolean;
+    achievement: any;
+  }>({
+    isOpen: false,
+    achievement: null
+  });
   const { isAuthenticated, userEmail, signOut } = useAuthContext();
   const { refreshPoints } = usePoints();
   const navigate = useNavigate();
@@ -83,6 +92,32 @@ export const PointsStats: React.FC = () => {
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [aspectRatio, setAspectRatio] = useState(1);
+
+  const handleShareStreak = () => {
+    if (!stats) return;
+    
+    const longestStreak = stats.longest_word_guess_streak;
+    
+    // Save the longest streak achievement for sharing (always saves regardless of threshold)
+    saveLongestStreakForSharing(longestStreak);
+    
+    // Get the achievement and open the modal
+    const achievement = getPendingAchievement();
+    if (achievement) {
+      setSocialShareModal({
+        isOpen: true,
+        achievement
+      });
+    }
+  };
+
+  const handleSocialShareModalClose = () => {
+    markAchievementAsShared();
+    setSocialShareModal({
+      isOpen: false,
+      achievement: null
+    });
+  };
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -279,6 +314,17 @@ export const PointsStats: React.FC = () => {
                   <StatLabel>Best Word Guess Streak</StatLabel>
                   <StatNumber fontSize="lg">{stats.longest_word_guess_streak} {stats.longest_word_guess_streak === 1 ? 'word' : 'words'}</StatNumber>
                   <StatHelpText>Your best word guessing streak</StatHelpText>
+                  {stats.longest_word_guess_streak >= 10 && (
+                    <Button
+                      size="sm"
+                      colorScheme="blue"
+                      variant="outline"
+                      mt={2}
+                      onClick={handleShareStreak}
+                    >
+                      Share Achievement
+                    </Button>
+                  )}
                 </Box>
               </Box>
             </Stat>
@@ -318,6 +364,13 @@ export const PointsStats: React.FC = () => {
         </VStack>
       </Container>
       <Footer />
+      {socialShareModal.isOpen && socialShareModal.achievement && (
+        <SocialShareModal
+          isOpen={socialShareModal.isOpen}
+          onClose={handleSocialShareModalClose}
+          achievement={socialShareModal.achievement}
+        />
+      )}
     </Box>
   );
 }; 
