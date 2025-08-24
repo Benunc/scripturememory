@@ -381,20 +381,12 @@ export const PointsStats: React.FC = () => {
                       <Text fontWeight="bold" fontSize="sm" mb={2}>
                         {verseStreak.verse_reference}
                       </Text>
-                      <VStack spacing={1} align="stretch">
-                        <Flex justify="space-between">
-                          <Text fontSize="sm">Best:</Text>
-                          <Text fontSize="sm" fontWeight="bold">
-                            {verseStreak.longest_guess_streak} words
-                          </Text>
-                        </Flex>
-                        <Flex justify="space-between">
-                          <Text fontSize="sm">Current:</Text>
-                          <Text fontSize="sm" fontWeight="bold">
-                            {verseStreak.current_guess_streak} words
-                          </Text>
-                        </Flex>
-                      </VStack>
+                      <Flex justify="space-between" align="center">
+                        <Text fontSize="sm">Best streak:</Text>
+                        <Text fontSize="sm" fontWeight="bold">
+                          {verseStreak.longest_guess_streak} words
+                        </Text>
+                      </Flex>
                     </Box>
                   ))}
               </SimpleGrid>
