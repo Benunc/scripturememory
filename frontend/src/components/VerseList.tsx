@@ -515,7 +515,19 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   const [announcedWord, setAnnouncedWord] = useState<string>('');
   const toast = useToast();
   const { isAuthenticated, userEmail, signOut } = useAuth({});
-  const { refreshPoints, updatePoints, updateCurrentStreak, updateLongestWordGuessStreak } = usePoints();
+  const { 
+    refreshPoints, 
+    updatePoints, 
+    updateCurrentStreak, 
+    updateLongestWordGuessStreak,
+    updateVerseStreak,
+    resetVerseStreak: resetVerseStreakFromContext,
+    resetVerseStreakImmediate,
+    setCurrentVerse,
+    currentVerseStreak,
+    currentVerseReference,
+    verseStreaks
+  } = usePoints();
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Move all color mode hooks to component level
@@ -548,6 +560,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   const shortcutsModalColor = useColorModeValue('gray.800', 'white');
   const verseCardBg = useColorModeValue('white', 'gray.800');
   const verseCardHoverBg = useColorModeValue('gray.50', 'gray.700');
+  const bestStreakBadgeBg = useColorModeValue('blue.100', 'blue.900');
+  const bestStreakBadgeColor = useColorModeValue('blue.800', 'blue.100');
+  const currentStreakBadgeBg = useColorModeValue('green.100', 'green.900');
+  const currentStreakBadgeColor = useColorModeValue('green.800', 'green.100');
+  const streakLabelColor = useColorModeValue('gray.700', 'gray.300');
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [verseToDelete, setVerseToDelete] = useState<string | null>(null);
@@ -900,10 +917,18 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   // Add handler for overlay click
   const handleOverlayClick = () => {
     if (activeVerseId) {
+      // Reset current verse streak when clicking outside the verse card
+      if (currentVerseReference === activeVerseId) {
+        setCurrentVerse(null);
+      }
       setActiveVerseId(null);
       setShowOverlay(false);
     }
     if (masteryState.activeVerse) {
+      // Reset current verse streak when exiting mastery mode
+      if (currentVerseReference === masteryState.activeVerse) {
+        setCurrentVerse(null);
+      }
       setMasteryState(prev => ({ ...prev, activeVerse: null }));
       setShowOverlay(false);
     }
@@ -1444,6 +1469,17 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
         }
       }));
       await onStatusChange(reference, newStatus);
+      
+      // Set current verse for streak tracking when starting a verse
+      if (newStatus === ProgressStatus.InProgress) {
+        setCurrentVerse(reference);
+      } else {
+        // Reset current verse streak when not actively guessing
+        if (currentVerseReference === reference) {
+          setCurrentVerse(null);
+        }
+      }
+      
       if (showToast) {
         toast({
           title: "Success",
@@ -1514,6 +1550,14 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
   // Update handleStart to use number[] for revealedWords
   const handleStart = (reference: string) => {
+    // Reset current verse streak if switching to a different verse
+    if (currentVerseReference && currentVerseReference !== reference) {
+      setCurrentVerse(null);
+    }
+    
+    // Set current verse immediately for streak tracking
+    setCurrentVerse(reference);
+    
     setActiveVerseId(reference);
     setRevealedWords([]);
     setShowFullVerse(prev => ({
@@ -1619,6 +1663,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     setGuessFeedback(null);
     setConsecutiveCorrectGuesses(0);
     setShowOverlay(false);
+    
+    // Reset current verse streak when stopping practice
+    if (currentVerseReference === reference) {
+      setCurrentVerse(null);
+    }
     
     // Clear recorded words from localStorage for this verse
     setRecordedWords(prev => {
@@ -1749,6 +1798,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       // Also reset the streak in localStorage to ensure API consistency
       localStorage.setItem('current_word_guess_streak', '0');
       
+      // Reset verse streak immediately in frontend for responsive UI
+      resetVerseStreakImmediate(reference);
+      
       // Check if this was during a record streak and trigger red flash
       const currentLongestStreak = parseInt(localStorage.getItem('longest_word_guess_streak') || '0', 10);
       const currentStreak = consecutiveCorrectGuesses;
@@ -1854,7 +1906,8 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                   points: 0, // No additional points, just updating the streak
                   metadata: {
                     streak_length: newLongestStreak,
-                    is_new_longest: true
+                    is_new_longest: true,
+                    verse_reference: reference
                   },
                   created_at: Date.now()
                 })
@@ -1865,6 +1918,9 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
           }
         })();
       }
+
+      // Update verse streak immediately in frontend for responsive UI
+      updateVerseStreak(reference, totalStreakLength);
 
           // Add correct words to revealedWords immediately
     setRevealedWords(prev => [...prev, ...correctWordIndices]);
@@ -2635,6 +2691,39 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
                 </Flex>
                 {showStatusButtons && renderStatusButtons(verse)}
               </Flex>
+              
+              {/* Verse Streak Display */}
+              {(() => {
+                const verseStreak = verseStreaks.find(vs => vs.verse_reference === verse.reference);
+                if (verseStreak && verseStreak.longest_guess_streak > 0) {
+                  return (
+                    <Box mt={2}>
+                      <Text fontSize="sm" color={streakLabelColor} mb={1} textAlign="left">
+                        Your guess streaks on {verse.reference}:
+                      </Text>
+                      <Flex gap={2} align="center" justify="flex-start">
+                        <Badge 
+                          bg={bestStreakBadgeBg}
+                          color={bestStreakBadgeColor}
+                          variant="subtle"
+                        >
+                          Best: {verseStreak.longest_guess_streak} words
+                        </Badge>
+                        {currentVerseReference === verse.reference && currentVerseStreak > 0 && (
+                          <Badge 
+                            bg={currentStreakBadgeBg}
+                            color={currentStreakBadgeColor}
+                            variant="subtle"
+                          >
+                            Current: {currentVerseStreak} words
+                          </Badge>
+                        )}
+                      </Flex>
+                    </Box>
+                  );
+                }
+                return null;
+              })()}
             </Box>
           </Collapse>
 

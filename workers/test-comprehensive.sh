@@ -644,6 +644,191 @@ check_status
 
 echo "${GREEN}✓ All streak bug fix tests passed${NC}"
 
+# VERSE STREAK TESTS
+echo "${YELLOW}Testing verse streak functionality...${NC}"
+
+# Create a new test user for verse streak tests
+echo "${YELLOW}Creating test user for verse streak tests...${NC}"
+MAGIC_LINK_RESPONSE_VERSE_STREAK=$(curl -s -X POST http://localhost:8787/auth/magic-link \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test-verse-streak@example.com","isRegistration":true,"turnstileToken":"test-token","verseSet":"childrens_verses","marketingOptIn":false}')
+check_status
+
+# Extract magic token for verse streak test user
+MAGIC_TOKEN_VERSE_STREAK=$(extract_magic_token "$MAGIC_LINK_RESPONSE_VERSE_STREAK")
+echo "${BLUE}Magic token for verse streak test user: $MAGIC_TOKEN_VERSE_STREAK${NC}"
+check_status
+
+# Log in the verse streak test user
+echo "${YELLOW}Logging in verse streak test user...${NC}"
+VERIFY_RESPONSE_VERSE_STREAK=$(curl -s -i "http://localhost:8787/auth/verify?token=$MAGIC_TOKEN_VERSE_STREAK")
+check_status
+SESSION_TOKEN_VERSE_STREAK=$(extract_token "$VERIFY_RESPONSE_VERSE_STREAK")
+echo "${BLUE}Session token for verse streak test user: $SESSION_TOKEN_VERSE_STREAK${NC}"
+
+# Test initial verse streak state
+echo "${YELLOW}Testing initial verse streak state...${NC}"
+INITIAL_VERSE_STREAKS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/verse-streaks" \
+  -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK")
+check_status
+echo "${BLUE}Initial verse streaks response:${NC}"
+echo "$INITIAL_VERSE_STREAKS_RESPONSE"
+
+# Verify initial verse streaks are empty
+if ! echo "$INITIAL_VERSE_STREAKS_RESPONSE" | grep -q '"verse_streaks":\[\]'; then
+    echo "${RED}Error: Expected empty verse streaks array initially${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Initial verse streaks are empty${NC}"
+
+# Test creating verse streak for Genesis 1:1
+echo "${YELLOW}Testing verse streak creation for Genesis 1:1...${NC}"
+VERSE_STREAK_RESPONSE1=$(curl -s -X POST http://localhost:8787/gamification/points \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK" \
+  -d "{\"event_type\":\"word_correct\",\"points\":1.0,\"metadata\":{\"streak_length\":5,\"verse_reference\":\"Genesis 1:1\"},\"created_at\":$((BASE_TIMESTAMP + 20000000))}")
+check_status
+echo "${BLUE}Added verse streak event for Genesis 1:1: length 5${NC}"
+
+# Check verse streaks after first event
+echo "${YELLOW}Checking verse streaks after first event...${NC}"
+VERSE_STREAKS_CHECK1=$(curl -s -X GET "http://localhost:8787/gamification/verse-streaks" \
+  -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK")
+check_status
+echo "${BLUE}Verse streaks after first event:${NC}"
+echo "$VERSE_STREAKS_CHECK1"
+
+# Verify Genesis 1:1 streak was created
+if ! echo "$VERSE_STREAKS_CHECK1" | grep -q '"verse_reference":"Genesis 1:1"'; then
+    echo "${RED}Error: Genesis 1:1 verse streak not found${NC}"
+    exit 1
+fi
+
+if ! echo "$VERSE_STREAKS_CHECK1" | grep -q '"longest_guess_streak":5'; then
+    echo "${RED}Error: Genesis 1:1 longest streak should be 5${NC}"
+    exit 1
+fi
+
+if ! echo "$VERSE_STREAKS_CHECK1" | grep -q '"current_guess_streak":5'; then
+    echo "${RED}Error: Genesis 1:1 current streak should be 5${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Genesis 1:1 verse streak created successfully${NC}"
+
+# Test updating verse streak for Genesis 1:1
+echo "${YELLOW}Testing verse streak update for Genesis 1:1...${NC}"
+VERSE_STREAK_RESPONSE2=$(curl -s -X POST http://localhost:8787/gamification/points \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK" \
+  -d "{\"event_type\":\"word_correct\",\"points\":1.0,\"metadata\":{\"streak_length\":10,\"verse_reference\":\"Genesis 1:1\"},\"created_at\":$((BASE_TIMESTAMP + 21000000))}")
+check_status
+echo "${BLUE}Updated verse streak event for Genesis 1:1: length 10${NC}"
+
+# Check verse streaks after update
+echo "${YELLOW}Checking verse streaks after update...${NC}"
+VERSE_STREAKS_CHECK2=$(curl -s -X GET "http://localhost:8787/gamification/verse-streaks" \
+  -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK")
+check_status
+
+# Verify Genesis 1:1 streak was updated
+if ! echo "$VERSE_STREAKS_CHECK2" | grep -q '"longest_guess_streak":10'; then
+    echo "${RED}Error: Genesis 1:1 longest streak should be 10${NC}"
+    exit 1
+fi
+
+if ! echo "$VERSE_STREAKS_CHECK2" | grep -q '"current_guess_streak":10'; then
+    echo "${RED}Error: Genesis 1:1 current streak should be 10${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Genesis 1:1 verse streak updated successfully${NC}"
+
+# Test creating verse streak for different verse (John 3:16)
+echo "${YELLOW}Testing verse streak creation for John 3:16...${NC}"
+VERSE_STREAK_RESPONSE3=$(curl -s -X POST http://localhost:8787/gamification/points \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK" \
+  -d "{\"event_type\":\"word_correct\",\"points\":1.0,\"metadata\":{\"streak_length\":3,\"verse_reference\":\"John 3:16\"},\"created_at\":$((BASE_TIMESTAMP + 22000000))}")
+check_status
+echo "${BLUE}Added verse streak event for John 3:16: length 3${NC}"
+
+# Check verse streaks after adding second verse
+echo "${YELLOW}Checking verse streaks after adding second verse...${NC}"
+VERSE_STREAKS_CHECK3=$(curl -s -X GET "http://localhost:8787/gamification/verse-streaks" \
+  -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK")
+check_status
+
+# Verify both verses have streaks
+if ! echo "$VERSE_STREAKS_CHECK3" | grep -q '"verse_reference":"Genesis 1:1"'; then
+    echo "${RED}Error: Genesis 1:1 verse streak not found after adding John 3:16${NC}"
+    exit 1
+fi
+
+if ! echo "$VERSE_STREAKS_CHECK3" | grep -q '"verse_reference":"John 3:16"'; then
+    echo "${RED}Error: John 3:16 verse streak not found${NC}"
+    exit 1
+fi
+
+if ! echo "$VERSE_STREAKS_CHECK3" | grep -q '"longest_guess_streak":3'; then
+    echo "${RED}Error: John 3:16 longest streak should be 3${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ John 3:16 verse streak created successfully${NC}"
+
+# Test resetting verse streak
+echo "${YELLOW}Testing verse streak reset...${NC}"
+RESET_VERSE_STREAK_RESPONSE=$(curl -s -X POST http://localhost:8787/gamification/verse-streaks/reset \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK" \
+  -d '{"verse_reference":"Genesis 1:1"}')
+check_status
+echo "${BLUE}Reset verse streak response:${NC}"
+echo "$RESET_VERSE_STREAK_RESPONSE"
+
+# Check verse streaks after reset
+echo "${YELLOW}Checking verse streaks after reset...${NC}"
+VERSE_STREAKS_CHECK4=$(curl -s -X GET "http://localhost:8787/gamification/verse-streaks" \
+  -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK")
+check_status
+
+# Verify Genesis 1:1 current streak was reset but longest streak remains
+if ! echo "$VERSE_STREAKS_CHECK4" | grep -q '"current_guess_streak":0'; then
+    echo "${RED}Error: Genesis 1:1 current streak should be 0 after reset${NC}"
+    exit 1
+fi
+
+if ! echo "$VERSE_STREAKS_CHECK4" | grep -q '"longest_guess_streak":10'; then
+    echo "${RED}Error: Genesis 1:1 longest streak should remain 10 after reset${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Genesis 1:1 verse streak reset successfully${NC}"
+
+# Test verse streaks in user stats
+echo "${YELLOW}Testing verse streaks in user stats...${NC}"
+STATS_WITH_VERSE_STREAKS_RESPONSE=$(curl -s -X GET "http://localhost:8787/gamification/stats" \
+  -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK")
+check_status
+
+# Verify verse_streaks appears in stats
+if ! echo "$STATS_WITH_VERSE_STREAKS_RESPONSE" | grep -q '"verse_streaks"'; then
+    echo "${RED}Error: verse_streaks not found in stats response${NC}"
+    exit 1
+fi
+
+echo "${GREEN}✓ Verse streaks appear in user stats${NC}"
+
+# Log out the verse streak test user
+echo "${YELLOW}Logging out verse streak test user...${NC}"
+LOGOUT_RESPONSE_VERSE_STREAK=$(curl -s -X POST http://localhost:8787/auth/sign-out \
+    -H "Authorization: Bearer $SESSION_TOKEN_VERSE_STREAK")
+check_status
+
+echo "${GREEN}✓ All verse streak tests passed${NC}"
+
 # Test adding verse set to existing user (user 2)
 echo "${YELLOW}Testing add verse set to existing user...${NC}"
 ADD_VERSESET_RESPONSE=$(curl -s -X POST http://localhost:8787/auth/add-verses \

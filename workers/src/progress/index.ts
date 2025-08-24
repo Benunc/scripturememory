@@ -1,7 +1,7 @@
 import { Router } from 'itty-router';
 import { Env, WordProgress, VerseAttempt } from '../types';
 import { getDB, getUserId } from '../utils/db';
-import { updateMastery, updateStreak } from '../gamification';
+import { updateMastery, updateStreak, updateVerseStreak, resetVerseStreak } from '../gamification';
 
 // Point system constants
 const POINTS = {
@@ -53,6 +53,9 @@ export const handleProgress = {
               current_verse_reference = ?
           WHERE user_id = ?
         `).bind(verse_reference, userId).run();
+
+        // Also reset verse streak in the dedicated table
+        await resetVerseStreak(userId, env, verse_reference);
 
         return new Response(JSON.stringify({ 
           success: true,
@@ -182,6 +185,9 @@ export const handleProgress = {
             ).run();
           }
 
+          // Update verse streak in the dedicated table
+          await updateVerseStreak(db, userId, verse_reference, streakLength, newLongest > currentLongest);
+
           // Record point event
           await db.prepare(`
             INSERT INTO point_events (
@@ -197,7 +203,7 @@ export const handleProgress = {
             JSON.stringify({ 
               verse_reference, 
               word_index, 
-              word, 
+              word,
               streak_length: streakLength,
               multiplier: multiplier,
               is_new_longest: streakLength > currentLongest
@@ -212,6 +218,9 @@ export const handleProgress = {
                 current_verse_reference = ?
             WHERE user_id = ?
           `).bind(verse_reference, userId).run();
+
+          // Also reset verse streak in the dedicated table
+          await resetVerseStreak(userId, env, verse_reference);
         }
 
         return new Response(JSON.stringify({ 

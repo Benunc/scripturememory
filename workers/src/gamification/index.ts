@@ -37,6 +37,88 @@ interface VerseAttempt {
   total_words: number;
 }
 
+// Helper function to update verse streak
+export async function updateVerseStreak(db: any, userId: number, verseReference: string, streakLength: number, isNewLongest: boolean): Promise<void> {
+  try {
+    // Check if verse streak record exists
+    const existingStreak = await db.prepare(`
+      SELECT longest_guess_streak, current_guess_streak 
+      FROM verse_streaks 
+      WHERE user_id = ? AND verse_reference = ?
+    `).bind(userId, verseReference).first();
+
+    if (existingStreak) {
+      // Update existing verse streak
+      const currentLongest = existingStreak.longest_guess_streak || 0;
+      const shouldUpdate = isNewLongest || streakLength > currentLongest;
+      
+      if (shouldUpdate) {
+        const newLongest = Math.max(currentLongest, streakLength);
+        await db.prepare(`
+          UPDATE verse_streaks 
+          SET longest_guess_streak = ?,
+              current_guess_streak = ?,
+              last_guess_date = ?,
+              updated_at = ?
+          WHERE user_id = ? AND verse_reference = ?
+        `).bind(newLongest, streakLength, Date.now(), Date.now(), userId, verseReference).run();
+      } else {
+        // Just update current streak and timestamp
+        await db.prepare(`
+          UPDATE verse_streaks 
+          SET current_guess_streak = ?,
+              last_guess_date = ?,
+              updated_at = ?
+          WHERE user_id = ? AND verse_reference = ?
+        `).bind(streakLength, Date.now(), Date.now(), userId, verseReference).run();
+      }
+    } else {
+      // Create new verse streak record
+      await db.prepare(`
+        INSERT INTO verse_streaks (
+          user_id,
+          verse_reference,
+          longest_guess_streak,
+          current_guess_streak,
+          last_guess_date,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(userId, verseReference, streakLength, streakLength, Date.now(), Date.now(), Date.now()).run();
+    }
+  } catch (error) {
+    console.error('Error updating verse streak:', error);
+    // Don't throw - verse streak failure shouldn't break the main flow
+  }
+}
+
+// Helper function to reset verse streak
+export async function resetVerseStreak(userId: number, env: Env, verseReference: string): Promise<void> {
+  try {
+    const db = getDB(env);
+    
+    // Check if verse streak record exists
+    const existingStreak = await db.prepare(`
+      SELECT current_guess_streak 
+      FROM verse_streaks 
+      WHERE user_id = ? AND verse_reference = ?
+    `).bind(userId, verseReference).first();
+
+    if (existingStreak) {
+      // Reset current streak to 0
+      await db.prepare(`
+        UPDATE verse_streaks 
+        SET current_guess_streak = 0,
+            updated_at = ?
+        WHERE user_id = ? AND verse_reference = ?
+      `).bind(Date.now(), userId, verseReference).run();
+    }
+  } catch (error) {
+    console.error('Error resetting verse streak:', error);
+    // Don't throw - verse streak failure shouldn't break the main flow
+  }
+}
+
 // Helper function to check and update streak
 export async function updateStreak(userId: number, env: Env, eventTimestamp?: number): Promise<void> {
   const db = getDB(env);
@@ -286,6 +368,99 @@ export async function updateMastery(userId: number, verseReference: string, env:
 }
 
 export const handleGamification = {
+  // Get verse streaks for a user
+  getVerseStreaks: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+      
+      // Get all verse streaks for the user
+      const verseStreaks = await db.prepare(`
+        SELECT 
+          verse_reference,
+          longest_guess_streak,
+          current_guess_streak,
+          last_guess_date
+        FROM verse_streaks 
+        WHERE user_id = ?
+        ORDER BY longest_guess_streak DESC, last_guess_date DESC
+      `).bind(userId).all();
+
+      return new Response(JSON.stringify({
+        verse_streaks: verseStreaks.results || []
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error getting verse streaks:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Reset verse streak
+  resetVerseStreak: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const { verse_reference } = await request.json() as { verse_reference: string };
+      
+      if (!verse_reference) {
+        return new Response(JSON.stringify({ error: 'Missing verse_reference' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      await resetVerseStreak(userId, env, verse_reference);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error resetting verse streak:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
   // Record point event
   recordPointEvent: async (request: Request, env: Env): Promise<Response> => {
     try {
@@ -338,11 +513,12 @@ export const handleGamification = {
           created_at || Date.now()
         ).run();
 
-        // Handle word_correct events - update longest word guess streak
+        // Handle word_correct events - update longest word guess streak and verse streaks
         if (event_type === 'word_correct' && metadata?.streak_length && typeof metadata.streak_length === 'number') {
           const streakLength = metadata.streak_length;
+          const verseReference = typeof metadata.verse_reference === 'string' ? metadata.verse_reference : null;
           
-          // Get current longest streak
+          // Update global longest word guess streak
           const currentStats = await db.prepare(`
             SELECT longest_word_guess_streak FROM user_stats WHERE user_id = ?
           `).bind(userId).first() as { longest_word_guess_streak: number } | null;
@@ -362,6 +538,11 @@ export const handleGamification = {
               SET longest_word_guess_streak = ?
               WHERE user_id = ?
             `).bind(newLongest, userId).run();
+          }
+
+          // Update verse streak if verse reference is provided
+          if (verseReference) {
+            await updateVerseStreak(db, userId, verseReference, streakLength, metadata.is_new_longest === true);
           }
         }
 
@@ -470,6 +651,7 @@ export const handleGamification = {
             total_attempts: 0,
             perfect_attempts: 0,
             other_attempts: 0,
+            verse_streaks: [],
             last_activity_date: Date.now(),
             points_breakdown: {
               verse_mastery: 0,
@@ -532,10 +714,23 @@ export const handleGamification = {
           ORDER BY dates.date
         `).bind(userId).all();
 
+        // Get verse streaks data
+        const verseStreaks = await db.prepare(`
+          SELECT 
+            verse_reference,
+            longest_guess_streak,
+            current_guess_streak,
+            last_guess_date
+          FROM verse_streaks 
+          WHERE user_id = ?
+          ORDER BY longest_guess_streak DESC, last_guess_date DESC
+        `).bind(userId).all();
+
         return new Response(JSON.stringify({
           ...stats,
           perfect_attempts: attemptsBreakdown?.perfect_attempts || 0,
           other_attempts: attemptsBreakdown?.other_attempts || 0,
+          verse_streaks: verseStreaks?.results || [],
           points_breakdown: pointsBreakdown || {
             verse_mastery: 0,
             word_guesses: 0,

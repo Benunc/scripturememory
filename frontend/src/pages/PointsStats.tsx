@@ -78,7 +78,7 @@ export const PointsStats: React.FC = () => {
     achievement: null
   });
   const { isAuthenticated, userEmail, signOut } = useAuthContext();
-  const { refreshPoints } = usePoints();
+  const { refreshPoints, verseStreaks } = usePoints();
   const navigate = useNavigate();
   const isMobile = useBreakpointValue({ base: true, md: false }) || false;
   const { colorMode, toggleColorMode } = useColorMode();
@@ -360,6 +360,52 @@ export const PointsStats: React.FC = () => {
               </Box>
             </Stat>
           </SimpleGrid>
+
+          {/* Verse Streaks Section */}
+          {verseStreaks.length > 0 && (
+            <Box>
+              <Heading size="md" mb={4}>Verse Streaks</Heading>
+              <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+                {verseStreaks
+                  .sort((a, b) => b.longest_guess_streak - a.longest_guess_streak)
+                  .slice(0, 6) // Show top 6 verses
+                  .map((verseStreak) => (
+                    <Box
+                      key={verseStreak.verse_reference}
+                      p={4}
+                      bg={cardBg}
+                      rounded="lg"
+                      border="1px"
+                      borderColor={borderColor}
+                    >
+                      <Text fontWeight="bold" fontSize="sm" mb={2}>
+                        {verseStreak.verse_reference}
+                      </Text>
+                      <VStack spacing={1} align="stretch">
+                        <Flex justify="space-between">
+                          <Text fontSize="sm">Best:</Text>
+                          <Text fontSize="sm" fontWeight="bold">
+                            {verseStreak.longest_guess_streak} words
+                          </Text>
+                        </Flex>
+                        <Flex justify="space-between">
+                          <Text fontSize="sm">Current:</Text>
+                          <Text fontSize="sm" fontWeight="bold">
+                            {verseStreak.current_guess_streak} words
+                          </Text>
+                        </Flex>
+                      </VStack>
+                    </Box>
+                  ))}
+              </SimpleGrid>
+              {verseStreaks.length > 6 && (
+                <Text fontSize="sm" color="gray.500" mt={2} textAlign="center">
+                  Showing top 6 verses. You have {verseStreaks.length} verses with streaks.
+                </Text>
+              )}
+            </Box>
+          )}
+
           <PointsTutorial />
         </VStack>
       </Container>
