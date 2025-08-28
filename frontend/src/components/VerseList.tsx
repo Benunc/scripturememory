@@ -521,6 +521,7 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     updateCurrentStreak, 
     updateLongestWordGuessStreak,
     updateVerseStreak,
+    saveVerseStreak,
     resetVerseStreak: resetVerseStreakFromContext,
     resetVerseStreakImmediate,
     setCurrentVerse,
@@ -700,14 +701,54 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
     }
   }, [isAuthenticated, wordProgressQueue, isSyncing, refreshPoints]);
 
-  // Add cleanup for timeout
+  // Handle pending verse streak save on component mount
   useEffect(() => {
+    const pendingSave = localStorage.getItem('pending_verse_streak_save');
+    if (pendingSave) {
+      try {
+        const { verse_reference, streak_length, timestamp } = JSON.parse(pendingSave);
+        const now = Date.now();
+        // Only process if it's from the last 5 minutes (to avoid stale data)
+        if (now - timestamp < 5 * 60 * 1000) {
+          void saveVerseStreak(verse_reference, streak_length);
+        }
+        localStorage.removeItem('pending_verse_streak_save');
+      } catch (error) {
+        console.error('Error processing pending verse streak save:', error);
+        localStorage.removeItem('pending_verse_streak_save');
+      }
+    }
+  }, [saveVerseStreak]);
+
+  // Add cleanup for timeout and save current verse streak
+  useEffect(() => {
+    // Add beforeunload event listener to save verse streak on page refresh/close
+    const handleBeforeUnload = () => {
+      if (currentVerseReference && currentVerseStreak > 0) {
+        // Use synchronous storage to ensure it's saved before page unloads
+        localStorage.setItem('pending_verse_streak_save', JSON.stringify({
+          verse_reference: currentVerseReference,
+          streak_length: currentVerseStreak,
+          timestamp: Date.now()
+        }));
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
       }
+      
+      // Save current verse streak when component unmounts
+      if (currentVerseReference && currentVerseStreak > 0) {
+        void saveVerseStreak(currentVerseReference, currentVerseStreak);
+      }
+      
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, []);
+  }, [currentVerseReference, currentVerseStreak, saveVerseStreak]);
 
   // Add modal state management
   const [modalState, setModalState] = useState<{
@@ -917,6 +958,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
   // Add handler for overlay click
   const handleOverlayClick = () => {
     if (activeVerseId) {
+      // Save current verse streak before exiting if we have one
+      if (currentVerseReference === activeVerseId && currentVerseStreak > 0) {
+        void saveVerseStreak(currentVerseReference, currentVerseStreak);
+      }
+      
       // Reset current verse streak when clicking outside the verse card
       if (currentVerseReference === activeVerseId) {
         setCurrentVerse(null);
@@ -925,6 +971,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
       setShowOverlay(false);
     }
     if (masteryState.activeVerse) {
+      // Save current verse streak before exiting if we have one
+      if (currentVerseReference === masteryState.activeVerse && currentVerseStreak > 0) {
+        void saveVerseStreak(currentVerseReference, currentVerseStreak);
+      }
+      
       // Reset current verse streak when exiting mastery mode
       if (currentVerseReference === masteryState.activeVerse) {
         setCurrentVerse(null);
@@ -1550,6 +1601,11 @@ export const VerseList = forwardRef<VerseListRef, VerseListProps>((props, ref): 
 
   // Update handleStart to use number[] for revealedWords
   const handleStart = (reference: string) => {
+    // Save current verse streak before switching if we have one
+    if (currentVerseReference && currentVerseReference !== reference && currentVerseStreak > 0) {
+      void saveVerseStreak(currentVerseReference, currentVerseStreak);
+    }
+    
     // Reset current verse streak if switching to a different verse
     if (currentVerseReference && currentVerseReference !== reference) {
       setCurrentVerse(null);

@@ -92,6 +92,51 @@ export async function updateVerseStreak(db: any, userId: number, verseReference:
   }
 }
 
+// Helper function to save verse streak (for when switching verses)
+export async function saveVerseStreak(userId: number, env: Env, verseReference: string, streakLength: number): Promise<void> {
+  try {
+    const db = getDB(env);
+    
+    // Check if verse streak record exists
+    const existingStreak = await db.prepare(`
+      SELECT longest_guess_streak, current_guess_streak 
+      FROM verse_streaks 
+      WHERE user_id = ? AND verse_reference = ?
+    `).bind(userId, verseReference).first();
+
+    if (existingStreak) {
+      // Update existing verse streak
+      const currentLongest = (existingStreak.longest_guess_streak as number) || 0;
+      const newLongest = Math.max(currentLongest, streakLength);
+      
+      await db.prepare(`
+        UPDATE verse_streaks 
+        SET longest_guess_streak = ?,
+            current_guess_streak = ?,
+            last_guess_date = ?,
+            updated_at = ?
+        WHERE user_id = ? AND verse_reference = ?
+      `).bind(newLongest, streakLength, Date.now(), Date.now(), userId, verseReference).run();
+    } else {
+      // Create new verse streak record
+      await db.prepare(`
+        INSERT INTO verse_streaks (
+          user_id,
+          verse_reference,
+          longest_guess_streak,
+          current_guess_streak,
+          last_guess_date,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(userId, verseReference, streakLength, streakLength, Date.now(), Date.now(), Date.now()).run();
+    }
+  } catch (error) {
+    console.error('Error saving verse streak:', error);
+    // Don't throw - verse streak failure shouldn't break the main flow
+  }
+}
+
 // Helper function to reset verse streak
 export async function resetVerseStreak(userId: number, env: Env, verseReference: string): Promise<void> {
   try {
@@ -410,6 +455,50 @@ export const handleGamification = {
       });
     } catch (error) {
       console.error('Error getting verse streaks:', error);
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+
+  // Save verse streak (for when switching verses)
+  saveVerseStreak: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const { verse_reference, streak_length } = await request.json() as { verse_reference: string; streak_length: number };
+      
+      if (!verse_reference || typeof streak_length !== 'number') {
+        return new Response(JSON.stringify({ error: 'Missing verse_reference or streak_length' }), { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      await saveVerseStreak(userId, env, verse_reference, streak_length);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error saving verse streak:', error);
       return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
         status: 500,
         headers: { 'Content-Type': 'application/json' }

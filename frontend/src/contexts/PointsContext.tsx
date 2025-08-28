@@ -21,6 +21,7 @@ interface PointsContextType {
   updateLongestWordGuessStreak: (streak: number) => void;
   updateCurrentStreak: (streak: number) => void;
   updateVerseStreak: (verseReference: string, streakLength: number) => void;
+  saveVerseStreak: (verseReference: string, streakLength: number) => Promise<void>;
   resetVerseStreak: (verseReference: string) => Promise<void>;
   resetVerseStreakImmediate: (verseReference: string) => void;
   setCurrentVerse: (verseReference: string | null) => void;
@@ -178,6 +179,31 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Update current verse streak if this is the active verse
     if (currentVerseReference === verseReference) {
       setCurrentVerseStreak(streakLength);
+    }
+  };
+
+  const saveVerseStreak = async (verseReference: string, streakLength: number) => {
+    try {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) return;
+
+      const response = await fetch(`${getApiUrl()}/gamification/verse-streaks/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({ 
+          verse_reference: verseReference,
+          streak_length: streakLength
+        })
+      });
+
+      if (response.ok) {
+        debug.log('api', `Successfully saved verse streak for ${verseReference}: ${streakLength} words`);
+      }
+    } catch (error) {
+      debug.error('api', 'Error saving verse streak:', error);
     }
   };
 
@@ -346,6 +372,7 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       updateLongestWordGuessStreak, 
       updateCurrentStreak,
       updateVerseStreak,
+      saveVerseStreak,
       resetVerseStreak,
       resetVerseStreakImmediate,
       setCurrentVerse,

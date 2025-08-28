@@ -74,6 +74,7 @@ router.get('/progress/mastery/:reference', handleProgress.getMasteryProgress);
 router.post('/gamification/points', handleGamification.recordPointEvent);
 router.get('/gamification/stats', handleGamification.getUserStats);
 router.get('/gamification/verse-streaks', handleGamification.getVerseStreaks);
+router.post('/gamification/verse-streaks/save', handleGamification.saveVerseStreak);
 router.post('/gamification/verse-streaks/reset', handleGamification.resetVerseStreak);
 router.get('/gamification/time-based-stats', handleGamification.getTimeBasedStats);
 router.get('/gamification/leaderboard/:groupId', handleGamification.getTimeBasedLeaderboard);
