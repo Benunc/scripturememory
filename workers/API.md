@@ -30,13 +30,24 @@ The API supports CORS and includes the following headers:
 
 ### Response Format
 
-All responses are in JSON format with the following structure:
+All responses are in JSON format. Successful responses return the data directly, while error responses use the following structure:
+
+**Success Response:**
 ```json
 {
-  "data": {}, // Response data (if successful)
-  "error": "Error message" // Error message (if failed)
+  "success": true,
+  "data": {} // Response data
 }
 ```
+
+**Error Response:**
+```json
+{
+  "error": "Error message describing what went wrong"
+}
+```
+
+**Note:** Some endpoints return data directly without a wrapper object for simplicity.
 
 ### Common HTTP Status Codes
 
@@ -52,9 +63,9 @@ All responses are in JSON format with the following structure:
 ### Point System
 
 The API implements a point system with the following rewards:
-- `VERSE_ADDED`: 10 points for adding a new verse (limited to 3 per day)
+- `VERSE_ADDED`: 100 points for adding a new verse (limited to 3 per day)
 - `WORD_CORRECT`: 1 point per correct word
-- `STREAK_MULTIPLIER`: 50% bonus per word in streak
+- `STREAK_MULTIPLIER`: 1x bonus per word in streak
 - `MASTERY_ACHIEVED`: 500 points for mastering a verse
 - `DAILY_STREAK`: 50 points for maintaining daily streak
 
@@ -73,13 +84,22 @@ When mastery is achieved:
 
 Note: While the API accepts attempts with any accuracy, the frontend enforces a minimum of 80% accuracy before sending attempts to the API. This ensures that only meaningful attempts are recorded towards mastery.
 
+### Mastery System
+
+Verses can be mastered by meeting these criteria:
+1. Minimum 5 attempts with at least 95% accuracy
+2. 3 consecutive perfect attempts (100% accuracy)
+3. Perfect attempts must be at least 24 hours apart (enforced by progress tracking)
+
+When mastery is achieved:
+- Verse status is updated to "mastered"
+- User receives 500 points
+- Mastery is recorded in the database
+- User stats are updated
+
+Note: While the API accepts attempts with any accuracy, the frontend enforces a minimum of 80% accuracy before sending attempts to the API. This ensures that only meaningful attempts are recorded towards mastery.
+
 ## Authentication
-
-The API uses a magic link authentication system. Users sign in by requesting a magic link sent to their email address.
-
-### Endpoints
-
-#### Request Magic Link
 ```http
 POST /auth/magic-link
 Content-Type: application/json
@@ -492,27 +512,71 @@ Content-Type: application/json
   "verse_reference": "John 3:16",
   "word_index": 0,
   "word": "For",
-  "is_correct": true
+  "is_correct": true,
+  "created_at": 1234567890
 }
 ```
 
 **Response (200 OK)**
 ```json
 {
-  "success": true
+  "success": true,
+  "streak_length": 5,
+  "points_earned": 5
 }
 ```
 
 **Features**
 - Records individual word progress
-- Awards 1 point per correct word
+- Awards 1 point per correct word with streak multiplier
 - Updates user stats and streak
 - Records point events for correct words
+- Updates verse streaks for individual verses
+- Supports optional timestamp for historical data
+
+**Special Reset Signal**
+To reset a verse streak, send:
+```json
+{
+  "verse_reference": "John 3:16",
+  "word_index": -1,
+  "word": "RESET",
+  "is_correct": false
+}
+```
 
 **Error Responses**
 - `400 Bad Request`: Missing required fields
 - `401 Unauthorized`: Invalid or missing token
 - `404 Not Found`: Verse not found or unauthorized
+
+#### Reset Verse Streak
+```http
+POST /progress/reset-streak
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "verse_reference": "John 3:16"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true,
+  "message": "Verse streak reset"
+}
+```
+
+**Features**
+- Resets the current verse streak for the specified verse
+- Alternative to using the RESET signal in word progress
+- Useful for explicit streak resets
+
+**Error Responses**
+- `400 Bad Request`: Missing verse_reference
+- `401 Unauthorized`: Invalid or missing token
 
 #### Record Verse Attempt
 ```http
@@ -523,7 +587,8 @@ Content-Type: application/json
 {
   "verse_reference": "John 3:16",
   "words_correct": 15,
-  "total_words": 20
+  "total_words": 20,
+  "created_at": 1234567890
 }
 ```
 
@@ -534,17 +599,32 @@ Content-Type: application/json
 }
 ```
 
+**Response (429 Too Many Requests)**
+```json
+{
+  "error": "24-hour cooldown active. You can make your next attempt in 12 hours."
+}
+```
+
 **Features**
 - Records complete verse attempts
 - Awards points for correct words
 - Updates user stats and streak
 - Checks for mastery achievement
 - Records point events for attempts
+- Enforces 24-hour cooldown for perfect attempts
+- Supports optional timestamp for historical data
+
+**24-Hour Cooldown**
+- Perfect attempts (100% accuracy) are limited to one per 24 hours per verse
+- Cooldown is enforced to prevent rapid mastery achievement
+- Returns 429 status with remaining time when cooldown is active
 
 **Error Responses**
 - `400 Bad Request`: Missing required fields
 - `401 Unauthorized`: Invalid or missing token
 - `404 Not Found`: Verse not found or unauthorized
+- `429 Too Many Requests`: 24-hour cooldown active
 
 #### Check Mastery Progress
 ```http
@@ -590,13 +670,22 @@ When mastery is achieved:
 
 Note: While the API accepts attempts with any accuracy, the frontend enforces a minimum of 80% accuracy before sending attempts to the API. This ensures that only meaningful attempts are recorded towards mastery.
 
-### Best Practices
+### Mastery System
 
-1. **Word Progress**
-   - Record progress for each word individually
-   - Include word index for accurate tracking
-   - Use consistent word boundaries
-   - Handle punctuation appropriately
+Verses can be mastered by meeting these criteria:
+1. Minimum 5 attempts with at least 95% accuracy
+2. 3 consecutive perfect attempts (100% accuracy)
+3. Perfect attempts must be at least 24 hours apart (enforced by progress tracking)
+
+When mastery is achieved:
+- Verse status is updated to "mastered"
+- User receives 500 points
+- Mastery is recorded in the database
+- User stats are updated
+
+Note: While the API accepts attempts with any accuracy, the frontend enforces a minimum of 80% accuracy before sending attempts to the API. This ensures that only meaningful attempts are recorded towards mastery.
+
+### Best Practices
 
 2. **Verse Attempts**
    - Record attempts after completing the verse
@@ -654,9 +743,34 @@ Authorization: Bearer <token>
   "total_points": 1500,
   "current_streak": 5,
   "longest_streak": 10,
+  "longest_word_guess_streak": 25,
   "verses_mastered": 3,
   "total_attempts": 25,
-  "last_activity_date": 1234567890
+  "perfect_attempts": 15,
+  "other_attempts": 10,
+  "last_activity_date": 1234567890,
+  "verse_streaks": [
+    {
+      "verse_reference": "John 3:16",
+      "longest_guess_streak": 25,
+      "current_guess_streak": 0,
+      "last_guess_date": 1234567890
+    }
+  ],
+  "points_breakdown": {
+    "verse_mastery": 1500,
+    "word_guesses": 200,
+    "guess_streaks": 100,
+    "verse_additions": 300,
+    "daily_streaks": 50
+  },
+  "point_history": [
+    {
+      "date": "2024-01-01",
+      "points": 25,
+      "running_total": 25
+    }
+  ]
 }
 ```
 
@@ -665,8 +779,66 @@ Authorization: Bearer <token>
 - Updates streak based on activity
 - Optional timestamp parameter for historical stats
 - Creates initial stats if none exist
+- Includes verse streaks data
+- Provides points breakdown by category
+- Includes 30-day point history
 
 **Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+
+#### Get Verse Streaks
+```http
+GET /gamification/verse-streaks
+Authorization: Bearer <token>
+```
+
+**Response (200 OK)**
+```json
+{
+  "verse_streaks": [
+    {
+      "verse_reference": "John 3:16",
+      "longest_guess_streak": 25,
+      "current_guess_streak": 0,
+      "last_guess_date": 1234567890
+    }
+  ]
+}
+```
+
+**Features**
+- Returns all verse streaks for the authenticated user
+- Ordered by longest streak (descending), then by last guess date (descending)
+- Includes both longest and current streak for each verse
+
+**Error Responses**
+- `401 Unauthorized`: Invalid or missing token
+
+#### Reset Verse Streak
+```http
+POST /gamification/verse-streaks/reset
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "verse_reference": "John 3:16"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "success": true
+}
+```
+
+**Features**
+- Resets the current guess streak for a specific verse to 0
+- Does not affect the longest streak record
+- Useful for when user wants to start fresh on a verse
+
+**Error Responses**
+- `400 Bad Request`: Missing verse_reference
 - `401 Unauthorized`: Invalid or missing token
 
 #### Record Point Event
@@ -1919,13 +2091,37 @@ This section provides a quick reference to all available endpoints organized by 
 ### Progress Tracking Endpoints
 - `POST /progress/word` - Record word-by-word progress
 - `POST /progress/verse` - Record complete verse attempt
+- `POST /progress/reset-streak` - Reset verse streak
 - `GET /progress/mastery/:reference` - Check mastery progress
 
 ### Gamification Endpoints
 - `GET /gamification/stats` - Get user statistics
 - `POST /gamification/points` - Record point event
+- `GET /gamification/verse-streaks` - Get verse streaks for user
+- `POST /gamification/verse-streaks/reset` - Reset verse streak
 - `GET /gamification/time-based-stats` - Get time-based user statistics
 - `GET /gamification/leaderboard/:groupId` - Get time-based group leaderboard
+
+### Marketing Endpoints
+- `GET /marketing/preferences` - Get marketing preferences
+- `PUT /marketing/preferences` - Update marketing preferences
+- `GET /marketing/events/:userId` - Get marketing events
+- `POST /marketing/sync-sendy` - Sync with Sendy
+
+### Admin Endpoints
+- `GET /admin/check-super-admin` - Check super admin status
+- `GET /admin/users` - Get all users (admin only)
+- `GET /admin/groups` - Get all groups (admin only)
+- `GET /admin/permissions` - Get all permissions (admin only)
+- `GET /admin/permissions/user/:userId` - Get user permissions (admin only)
+- `GET /admin/audit-log` - Get admin audit log (admin only)
+- `POST /admin/permissions/grant` - Grant permission (admin only)
+- `POST /admin/permissions/revoke` - Revoke permission (admin only)
+- `DELETE /admin/groups/:id/delete` - Delete group (super admin only)
+- `GET /admin/notification-logs` - Get notification logs (admin only)
+- `GET /admin/notification-settings` - Get notification settings (admin only)
+- `PUT /admin/notification-settings` - Update notification settings (admin only)
+- `GET /admin/users/:id/verses` - Get user verses (super admin only)
 
 ### Group Management Endpoints
 - `POST /groups/create` - Create new group
@@ -1954,23 +2150,60 @@ This section provides a quick reference to all available endpoints organized by 
 The API uses the following main database tables:
 
 ### Core Tables
-- `users` - User accounts and authentication
+- `users` - User accounts and authentication (includes notification_preferences)
 - `sessions` - Active user sessions
 - `magic_links` - Magic link tokens for authentication (includes verse_set and group_code for automatic setup)
 - `verses` - User's scripture verses
 - `word_progress` - Word-by-word progress tracking
 - `verse_attempts` - Complete verse attempt records
-- `user_stats` - User statistics and gamification data
+- `user_stats` - User statistics and gamification data (includes longest_word_guess_streak)
 - `point_events` - Point event history
 
 ### Group Tables
 - `groups` - Group information
-- `group_members` - Group membership and roles
-- `group_invitations` - Group invitation system
+- `group_members` - Group membership and roles (includes display_name and is_public)
+- `group_invitations` - Group invitation system (includes invitation codes)
 
 ### Mastery Tables
 - `mastered_verses` - Verses that have been mastered
-- `verse_streaks` - Streak tracking for verses
+- `verse_streaks` - Per-verse streak tracking (longest_guess_streak, current_guess_streak)
+
+### Admin Tables
+- `super_admins` - Super admin users
+- `admin_permissions` - Admin permissions system
+- `admin_audit_log` - Admin action audit trail
+
+### Marketing Tables
+- `marketing_preferences` - User marketing preferences
+- `marketing_events` - Marketing event tracking
+
+## New Features
+
+### Verse Streaks System
+The API now supports per-verse streak tracking:
+- Each verse maintains its own guess streak independently
+- Users can see their best streak for each verse
+- Current streak is tracked during active practice
+- Streaks reset when users make mistakes or use hints
+- Streak data is displayed on verse cards and points page
+
+### Social Sharing
+- Achievement sharing for streak milestones (50+ words)
+- Social media integration for sharing accomplishments
+- One-time display prompts to avoid spam
+- Configurable sharing thresholds and delays
+
+### Marketing System
+- User preference management for marketing communications
+- Integration with Sendy email marketing platform
+- Event tracking for user engagement
+- Privacy-compliant marketing preferences
+
+### Super Admin System
+- Elevated permissions for system administration
+- Group management capabilities
+- User data access and management
+- Audit logging for admin actions
 
 ## Development and Deployment
 

@@ -25,25 +25,21 @@ const APP_URL = 'https://scripture.wpsteward.com';
 export function generateShareMessages(streak: number): Record<SocialPlatform, ShareMessage> {
   const messages = {
     twitter: {
-      text: `🎉 Just achieved a ${streak}-word streak memorizing scripture with Scripture Memory! 
-
-Hiding God's Word in my heart, one verse at a time. 📖✨
+      text: `🎉 Can you beat my longest streak of ${streak} words correct in a row? 
 
 Try it yourself: ${APP_URL}`,
       url: APP_URL
     },
     facebook: {
-      text: `I'm excited to share that I just reached a ${streak}-word streak while memorizing scripture using Scripture Memory!
+      text: `🎉 Can you beat my longest streak of ${streak} words correct in a row? 
 
-This app has been incredible for helping me hide God's Word in my heart. The gamification keeps me motivated and the progress tracking shows real results.
-
-If you're looking to strengthen your scripture memory, I highly recommend giving it a try: ${APP_URL}`,
+Try it yourself: ${APP_URL}`,
       url: APP_URL
     },
     linkedin: {
       text: `📈 Personal Achievement: ${streak}-Word Scripture Memory Streak
 
-Just completed a ${streak}-word streak while memorizing scripture using Scripture Memory. This tool has revolutionized my approach to scripture memorization through its innovative gamification system.
+My personal best is a ${streak}-word streak while memorizing scripture using Scripture Memory. This tool has revolutionized my approach to scripture memorization through its innovative gamification system.
 
 Key benefits I've experienced:
 • Consistent daily practice
@@ -57,7 +53,7 @@ For anyone interested in strengthening their spiritual discipline through techno
       url: APP_URL
     },
     whatsapp: {
-      text: `Hey! I just wanted to share that I reached a ${streak}-word streak while memorizing scripture using Scripture Memory.
+      text: `🎉 Can you beat my longest streak of ${streak} words correct in a row? 
 
 This app has been amazing for helping me stay consistent with scripture memorization. The gamification keeps it engaging and I can actually see my progress improving.
 
