@@ -37,6 +37,9 @@ import { Changelog } from './pages/Changelog';
 import { ChangelogEntryPage } from './pages/ChangelogEntry';
 import { YouthGroups } from './pages/YouthGroups';
 import { ChurchGroups } from './pages/ChurchGroups';
+import { GameCreator } from './pages/GameCreator';
+import { GameJoiner } from './pages/GameJoiner';
+import { GamePlay } from './pages/GamePlay';
 
 
 // Add type for Google client
@@ -114,6 +117,13 @@ export function App() {
                 <Route path="/news/changelog/:version" element={<ChangelogEntryPage />} />
                 <Route path="/youth-groups" element={<YouthGroups />} />
                 <Route path="/church-groups" element={<ChurchGroups />} />
+                
+                {/* Family Games Routes */}
+                <Route path="/family-games/create" element={<ProtectedRoute><GameCreator /></ProtectedRoute>} />
+                <Route path="/family-games/join" element={<GameJoiner />} />
+                <Route path="/family-games/:gameCode/join" element={<GameJoiner />} />
+                <Route path="/family-games/:gameCode/play" element={<GamePlay />} />
+                <Route path="/family-games/:gameCode/waiting" element={<GamePlay />} />
               </Routes>
             </PointsProvider>
           </AuthProvider>

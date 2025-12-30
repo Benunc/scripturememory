@@ -1,5 +1,6 @@
 import { Router } from 'itty-router';
 import { Env } from './types';
+import { getDB } from './utils/db';
 import { handleAuth } from './auth';
 import { handleVerses } from './verses';
 import { handleProgress } from './progress';
@@ -7,6 +8,7 @@ import { handleGamification } from './gamification';
 import { handleGroups } from './groups';
 import { handleAdmin } from './admin';
 import { handleMarketing } from './marketing';
+import { handleFamilyGames } from './family-games';
 
 // Create a new router
 const router = Router();
@@ -15,7 +17,7 @@ const router = Router();
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Participant-Id',
   'Access-Control-Max-Age': '86400',
 };
 
@@ -134,6 +136,19 @@ router.get('/admin/notification-settings', handleAdmin.getNotificationSettings);
 router.put('/admin/notification-settings', handleAdmin.updateNotificationSettings);
 router.get('/admin/users/:id/verses', handleAdmin.getUserVerses);
 
+// Family games routes
+router.post('/family-games/create', handleFamilyGames.createGame);
+router.post('/family-games/:gameCode/join', handleFamilyGames.joinGame);
+router.get('/family-games/:gameCode/state', handleFamilyGames.getGameState);
+router.post('/family-games/:gameCode/rounds/:roundNumber/open', handleFamilyGames.openRound);
+router.post('/family-games/:gameCode/rounds/:roundNumber/start', handleFamilyGames.startRound);
+router.post('/family-games/:gameCode/rounds/:roundNumber/select-word', handleFamilyGames.selectWord);
+router.post('/family-games/:gameCode/approve-participant', handleFamilyGames.approveParticipant);
+router.post('/family-games/:gameCode/start', handleFamilyGames.startGame);
+router.post('/family-games/:gameCode/leave', handleFamilyGames.leaveGame);
+router.post('/family-games/:gameCode/soft-disconnect', handleFamilyGames.softDisconnectParticipant);
+router.post('/family-games/:gameCode/end', handleFamilyGames.endGame);
+
 // Export the fetch handler
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -188,6 +203,23 @@ export default {
         status: 404,
         headers
       });
+    }
+  },
+  
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    // Cleanup expired games every hour
+    if (event.cron === '0 * * * *') {
+      const db = getDB(env);
+      try {
+        await db.prepare(`
+          UPDATE family_games 
+          SET is_active = FALSE 
+          WHERE expires_at < ? AND is_active = TRUE
+        `).bind(Date.now()).run();
+        console.log('Cleaned up expired family games');
+      } catch (error) {
+        console.error('Error cleaning up expired games:', error);
+      }
     }
   }
 };

@@ -158,3 +158,220 @@ export async function deleteVerse(token: string, reference: string): Promise<Api
   });
   return handleResponse<void>(response);
 }
+
+// Family Games API Functions
+export interface CreateGameRequest {
+  creatorDisplayName: string;
+  rounds: Array<{
+    roundNumber: number;
+    verseReference: string;
+    verseText: string;
+    wordIndicesToHide: Array<{ index: number; type: string }>;
+  }>;
+  autoApproveParticipants?: boolean;
+  timeLimitSeconds?: number;
+}
+
+export interface Game {
+  id: number;
+  gameCode: string;
+  status: 'waiting' | 'playing' | 'completed' | 'ended';
+  autoApproveParticipants: boolean;
+  timeLimitSeconds: number;
+  currentRound?: number;
+  rounds: Array<{
+    roundNumber: number;
+    verseReference: string;
+    verseText: string;
+    wordIndicesToHide: Array<{ index: number; type: string }>;
+    roundStatus?: 'not_available' | 'available';
+    roundAvailableAt?: number;
+    participantsReady?: number;
+    totalActiveParticipants?: number;
+    allRoundOptions?: string[];
+  }>;
+  participants?: Array<{
+    participantId: string;
+    displayName: string;
+    isApproved: boolean;
+    status: string;
+  }>;
+  leaderboard?: Array<{
+    participant_id: string;
+    display_name: string;
+    total_points: number;
+    rounds_completed: number;
+    words_completed: number;
+    longest_streak: number;
+    accuracy_percentage: number;
+    rank: number;
+  }>;
+  createdAt: number;
+  expiresAt: number;
+  creatorParticipantId?: string;
+  creatorDisplayName?: string;
+}
+
+export interface JoinGameRequest {
+  displayName: string;
+}
+
+export interface JoinGameResponse {
+  success: boolean;
+  participantId: string;
+  displayName: string;
+  isRejoin: boolean;
+}
+
+export interface SelectWordRequest {
+  selectedWord: string;
+  timeTakenMs: number;
+}
+
+export interface SelectWordResponse {
+  success: boolean;
+  isCorrect: boolean;
+  selectionStatus: 'correct' | 'wrong_position' | 'not_in_verse';
+  pointsEarned: number;
+  streakCount: number;
+  message: string;
+  roundProgress: {
+    currentWordIndex: number;
+    totalWords: number;
+    wordsCompleted: number;
+    points: number;
+    streak: number;
+  };
+  allRoundOptions?: string[];
+  isRoundComplete: boolean;
+}
+
+export async function createGame(token: string, gameData: CreateGameRequest): Promise<ApiResponse<{ game: Game }>> {
+  const response = await fetch(`${getApiUrl()}/family-games/create`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(gameData)
+  });
+  return handleResponse<{ game: Game }>(response);
+}
+
+export async function joinGame(gameCode: string, displayName: string): Promise<ApiResponse<JoinGameResponse>> {
+  const response = await fetch(`${getApiUrl()}/family-games/${gameCode}/join`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ displayName })
+  });
+  return handleResponse<JoinGameResponse>(response);
+}
+
+export async function getGameState(gameCode: string, token?: string, participantId?: string): Promise<ApiResponse<{ game: Game }>> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json'
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  if (participantId) {
+    headers['X-Participant-Id'] = participantId;
+  }
+  
+  const response = await fetch(`${getApiUrl()}/family-games/${gameCode}/state`, {
+    headers
+  });
+  return handleResponse<{ game: Game }>(response);
+}
+
+export async function openRound(gameCode: string, roundNumber: number, token?: string, participantId?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json'
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  if (participantId) {
+    headers['X-Participant-Id'] = participantId;
+  }
+  
+  const response = await fetch(`${getApiUrl()}/family-games/${gameCode}/rounds/${roundNumber}/open`, {
+    method: 'POST',
+    headers
+  });
+  return handleResponse<{ success: boolean; message: string }>(response);
+}
+
+export async function startRound(gameCode: string, roundNumber: number, participantId: string): Promise<ApiResponse<{ success: boolean; roundStartedAt: number; timeLimitSeconds: number; message: string; firstWordOptions?: string[] }>> {
+  const response = await fetch(`${getApiUrl()}/family-games/${gameCode}/rounds/${roundNumber}/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Participant-Id': participantId
+    }
+  });
+  return handleResponse<{ success: boolean; roundStartedAt: number; timeLimitSeconds: number; message: string }>(response);
+}
+
+export async function selectWord(gameCode: string, roundNumber: number, participantId: string, selectedWord: string, timeTakenMs: number): Promise<ApiResponse<SelectWordResponse>> {
+  const response = await fetch(`${getApiUrl()}/family-games/${gameCode}/rounds/${roundNumber}/select-word`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Participant-Id': participantId
+    },
+    body: JSON.stringify({ selectedWord, timeTakenMs })
+  });
+  return handleResponse<SelectWordResponse>(response);
+}
+
+export async function startGame(gameCode: string, token: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  const response = await fetch(`${getApiUrl()}/family-games/${gameCode}/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return handleResponse<{ success: boolean; message: string }>(response);
+}
+
+export async function approveParticipant(gameCode: string, token: string, participantId: string, approve: boolean): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  const response = await fetch(`${getApiUrl()}/family-games/${gameCode}/approve-participant`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ participantId, approve })
+  });
+  return handleResponse<{ success: boolean; message: string }>(response);
+}
+
+export async function leaveGame(gameCode: string, participantId: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  const response = await fetch(`${getApiUrl()}/family-games/${gameCode}/leave`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Participant-Id': participantId
+    }
+  });
+  return handleResponse<{ success: boolean; message: string }>(response);
+}
+
+export async function endGame(gameCode: string, token: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  const response = await fetch(`${getApiUrl()}/family-games/${gameCode}/end`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return handleResponse<{ success: boolean; message: string }>(response);
+}
