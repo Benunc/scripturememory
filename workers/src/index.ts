@@ -56,6 +56,7 @@ router.get('/auth/verify', handleAuth.verifyMagicLink);
 router.post('/auth/sign-out', handleAuth.signOut);
 router.delete('/auth/delete', handleAuth.deleteUser);
 router.post('/auth/add-verses', handleAuth.addVerseSet);
+router.post('/auth/join-group', handleAuth.joinGroup);
 
 
 // Verse routes

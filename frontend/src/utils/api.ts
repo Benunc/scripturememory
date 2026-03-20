@@ -111,7 +111,8 @@ export const verifyMagicLink = async (token: string): Promise<ApiResponse<{ toke
     return { 
       data: {
         token: data.token,
-        email: data.email
+        email: data.email,
+        redirect: data.redirect
       }
     };
   } catch (error) {

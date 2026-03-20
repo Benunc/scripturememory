@@ -942,5 +942,111 @@ for (const verse of newVerses) {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  },
+
+  // Join an existing group for authenticated users (invite flow after login)
+  joinGroup: async (request: Request, env: Env): Promise<Response> => {
+    try {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const userId = await getUserId(token, env);
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const { groupCode, turnstileToken } = await request.json() as {
+        groupCode?: string;
+        turnstileToken?: string;
+      };
+
+      if (!groupCode || !turnstileToken) {
+        return new Response(JSON.stringify({ 
+          error: 'Missing required fields: groupCode, turnstileToken' 
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Verify Turnstile token
+      const isTurnstileValid = await verifyTurnstileToken(turnstileToken, env, request);
+      if (!isTurnstileValid) {
+        return new Response(JSON.stringify({ 
+          error: 'Invalid security check. Please try again.' 
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const db = getDB(env);
+
+      // Resolve group by name or numeric id (same behavior as magic link verify)
+      const group = await db.prepare(`
+        SELECT id, name FROM groups
+        WHERE name = ? OR id = ?
+      `).bind(groupCode, groupCode).first();
+
+      if (!group) {
+        return new Response(JSON.stringify({ 
+          success: true,
+          message: 'Group not found; no changes were made',
+          joined: false
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const existingMember = await db.prepare(`
+        SELECT id FROM group_members
+        WHERE group_id = ? AND user_id = ?
+      `).bind(group.id, userId).first();
+
+      if (existingMember) {
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'You are already a member of this group',
+          joined: false
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const sillyName = await getRandomSillyName(db);
+      await db.prepare(`
+        INSERT INTO group_members (group_id, user_id, joined_at, display_name)
+        VALUES (?, ?, ?, ?)
+      `).bind(group.id, userId, Date.now(), sillyName).run();
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: 'Successfully joined group',
+        joined: true
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error in joinGroup:', error);
+      return new Response(JSON.stringify({ 
+        error: 'Failed to join group',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 };

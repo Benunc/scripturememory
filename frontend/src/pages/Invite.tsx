@@ -12,13 +12,14 @@ import {
   Card,
   CardBody,
   useToast,
-  Link,
   Badge,
+  Link,
   IconButton,
 } from '@chakra-ui/react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
 import { debug } from '../utils/debug';
+import { getApiUrl } from '../utils/api';
 import { Footer } from '../components/Footer';
 import { MoonIcon, SunIcon } from '@chakra-ui/icons';
 import { useColorMode } from '@chakra-ui/react';
@@ -61,10 +62,10 @@ export function Invite() {
   
   const [email, setEmail] = useState(prefillEmail || '');
   const [isLoading, setIsLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [isTurnstileReady, setIsTurnstileReady] = useState(false);
-  const { signIn } = useAuthContext();
-  const navigate = useNavigate();
+  const { signIn, isAuthenticated, isLoading: authLoading, token, userEmail } = useAuthContext();
   const toast = useToast();
   const turnstileContainerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
@@ -206,7 +207,19 @@ export function Invite() {
         isClosable: true,
       });
     }
-  }, [isTurnstileReady]);
+  }, [isTurnstileReady, isAuthenticated]);
+
+  if (authLoading) {
+    return (
+      <Box minH="100vh" display="flex" flexDirection="column">
+        <Box id="main-content" flex="1" p={8} tabIndex={-1}>
+          <Container maxW="container.md" py={8}>
+            <Text>Loading...</Text>
+          </Container>
+        </Box>
+      </Box>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,8 +230,24 @@ export function Invite() {
         throw new Error('Please complete the security check');
       }
 
-      // Pass the verseSet and groupCode to the signIn function
-      await signIn(email, true, turnstileToken, verseSet || undefined, groupCode || undefined);
+      // After verification, send the user back to this invite page so we can
+      // offer "apply invite" actions for authenticated users.
+      const redirectParams = new URLSearchParams();
+      if (verseSet) redirectParams.set('verseSet', verseSet);
+      if (groupCode) redirectParams.set('groupCode', groupCode);
+      const redirectDestination = redirectParams.toString()
+        ? `/invite?${redirectParams.toString()}`
+        : '/invite';
+
+      await signIn(
+        email,
+        true,
+        turnstileToken,
+        verseSet || undefined,
+        groupCode || undefined,
+        undefined,
+        redirectDestination
+      );
       toast({
         title: "Check your email",
         description: "We've sent you a magic link to complete your registration.",
@@ -236,6 +265,129 @@ export function Invite() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const resetTurnstileWidget = () => {
+    setTurnstileToken('');
+    if (widgetIdRef.current && window.turnstile) {
+      try {
+        window.turnstile.reset(widgetIdRef.current);
+      } catch (error) {
+        debug.error('auth', 'Error resetting Turnstile widget', error);
+      }
+    }
+  };
+
+  const handleAddVerseSet = async () => {
+    if (!verseSet) {
+      toast({ title: 'Error', description: 'Missing verse set code.', status: 'error', duration: 3000, isClosable: true });
+      return;
+    }
+    if (!userEmail) {
+      toast({ title: 'Error', description: 'Missing user email. Please refresh.', status: 'error', duration: 3000, isClosable: true });
+      return;
+    }
+    if (!turnstileToken) {
+      toast({ title: 'Error', description: 'Please complete the security check', status: 'error', duration: 3000, isClosable: true });
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await fetch(`${getApiUrl()}/auth/add-verses`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: userEmail,
+          verseSet: verseSet,
+          turnstileToken,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to add verse set');
+      }
+
+      toast({
+        title: 'Success!',
+        description: result.message || `Verse set added: ${verseSet}`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+
+      resetTurnstileWidget();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to add verse set',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleJoinGroup = async () => {
+    if (!groupCode) {
+      toast({ title: 'Error', description: 'Missing group code.', status: 'error', duration: 3000, isClosable: true });
+      return;
+    }
+    if (!token) {
+      toast({ title: 'Error', description: 'Missing auth session. Please refresh.', status: 'error', duration: 3000, isClosable: true });
+      return;
+    }
+    if (!turnstileToken) {
+      toast({ title: 'Error', description: 'Please complete the security check', status: 'error', duration: 3000, isClosable: true });
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await fetch(`${getApiUrl()}/auth/join-group`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          groupCode,
+          turnstileToken,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to join group');
+      }
+
+      toast({
+        title: 'Success!',
+        description: result.message || (result.joined ? 'Joined group' : 'No changes needed'),
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+
+      resetTurnstileWidget();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to join group',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -301,60 +453,124 @@ export function Invite() {
               )}
             </Box>
 
-            <Card>
-              <CardBody>
-                <VStack spacing={6} align="stretch">
-                  <Box>
-                    <Heading size="md" mb={2}>Create Your Account</Heading>
-                    <Text mb={4}>
-                      Enter your email below to create your account. We'll send you a magic link to complete the registration.
-                    </Text>
-                    <Box as="form" onSubmit={handleSubmit}>
-                      <VStack spacing={4}>
-                        <FormControl isRequired>
-                          <FormLabel>Email</FormLabel>
-                          <Input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="Enter your email"
-                          />
-                        </FormControl>
-                        <Box ref={turnstileContainerRef} />
-                        <Button
-                          type="submit"
-                          colorScheme="blue"
-                          width="full"
-                          isLoading={isLoading}
-                          isDisabled={!turnstileToken}
-                        >
-                          Create Account
-                        </Button>
+            {!isAuthenticated ? (
+              <Card>
+                <CardBody>
+                  <VStack spacing={6} align="stretch">
+                    <Box>
+                      <Heading size="md" mb={2}>Create Your Account</Heading>
+                      <Text mb={4}>
+                        Enter your email below to create your account. We'll send you a magic link to complete the registration.
+                      </Text>
+                      <Box as="form" onSubmit={handleSubmit}>
+                        <VStack spacing={4}>
+                          <FormControl isRequired>
+                            <FormLabel>Email</FormLabel>
+                            <Input
+                              type="email"
+                              value={email}
+                              onChange={(e) => setEmail(e.target.value)}
+                              placeholder="Enter your email"
+                            />
+                          </FormControl>
+                          <Box ref={turnstileContainerRef} />
+                          <Button
+                            type="submit"
+                            colorScheme="blue"
+                            width="full"
+                            isLoading={isLoading}
+                            isDisabled={!turnstileToken}
+                          >
+                            Create Account
+                          </Button>
+                        </VStack>
+                      </Box>
+                    </Box>
+
+                    <Box>
+                      <Heading size="md" mb={2}>What You'll Get</Heading>
+                      <VStack align="start" spacing={2}>
+                        <Text>✓ Custom verse set tailored for you</Text>
+                        <Text>✓ Track your memorization progress</Text>
+                        <Text>✓ Get personalized review schedules</Text>
+                        <Text>✓ Access your verses anywhere</Text>
                       </VStack>
                     </Box>
-                  </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+            ) : (
+              <Card>
+                <CardBody>
+                  <VStack spacing={6} align="stretch">
+                    <Box>
+                      <Heading size="md" mb={2}>Apply Invite</Heading>
+                      <Text mb={4} color="gray.600">
+                        Complete the security check and apply the invite to your account.
+                      </Text>
 
-                  <Box>
-                    <Heading size="md" mb={2}>What You'll Get</Heading>
-                    <VStack align="start" spacing={2}>
-                      <Text>✓ Custom verse set tailored for you</Text>
-                      <Text>✓ Track your memorization progress</Text>
-                      <Text>✓ Get personalized review schedules</Text>
-                      <Text>✓ Access your verses anywhere</Text>
-                    </VStack>
-                  </Box>
-                </VStack>
-              </CardBody>
-            </Card>
+                      <VStack spacing={4} align="stretch">
+                        <Box
+                          ref={turnstileContainerRef}
+                          w="full"
+                          minH="65px"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        />
 
-            <Box textAlign="center">
-              <Text>
-                Already have an account?{' '}
-                <Link color="blue.500" onClick={() => navigate('/')}>
-                  Sign in
-                </Link>
-              </Text>
-            </Box>
+                        {verseSet && (
+                          <Button
+                            colorScheme="blue"
+                            onClick={handleAddVerseSet}
+                            isLoading={actionLoading}
+                            isDisabled={!turnstileToken || actionLoading}
+                            width="full"
+                          >
+                            Add Verse Set
+                          </Button>
+                        )}
+
+                        {groupCode && (
+                          <Button
+                            colorScheme="green"
+                            onClick={handleJoinGroup}
+                            isLoading={actionLoading}
+                            isDisabled={!turnstileToken || actionLoading}
+                            width="full"
+                          >
+                            Join Group
+                          </Button>
+                        )}
+
+                        {!verseSet && !groupCode && (
+                          <Text fontSize="sm" color="gray.500">
+                            This invite link is missing `verseSet` and `groupCode`.
+                          </Text>
+                        )}
+                      </VStack>
+                    </Box>
+
+                    <Box>
+                      <Heading size="md" mb={2}>What You'll Get</Heading>
+                      <VStack align="start" spacing={2}>
+                        {verseSet && <Text>✓ Verse set added to your account</Text>}
+                        {groupCode && <Text>✓ Group membership updated</Text>}
+                        <Text>✓ Personalized review schedule</Text>
+                      </VStack>
+                    </Box>
+                  </VStack>
+                </CardBody>
+              </Card>
+            )}
+
+            {!isAuthenticated && (
+              <Box textAlign="center">
+                <Text>
+                  Already have an account? We'll send you a magic link to accept the invite.
+                </Text>
+              </Box>
+            )}
           </VStack>
         </Container>
       </Box>

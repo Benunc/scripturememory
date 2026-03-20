@@ -103,7 +103,7 @@ export function App() {
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/auth/verify" element={<VerifyToken />} />
                 <Route path="/points" element={<ProtectedRoute><PointsStats /></ProtectedRoute>} />
-                <Route path="/invite" element={<ProtectedRoute><Invite /></ProtectedRoute>} />
+                <Route path="/invite" element={<Invite />} />
                 <Route path="/add-verse-set" element={<ProtectedRoute><AddVerseSet /></ProtectedRoute>} />
                 <Route path="/groups" element={<ProtectedRoute><Groups /></ProtectedRoute>} />
                 <Route path="/groups/:groupId" element={<ProtectedRoute><GroupDetails /></ProtectedRoute>} />

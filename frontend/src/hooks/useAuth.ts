@@ -59,7 +59,7 @@ export const useAuth = (navigate: NavigateFunction) => {
   };
 
   // Verify magic link
-  const verifyToken = async (magicToken: string) => {
+  const verifyToken = async (magicToken: string): Promise<{ success: boolean; redirect?: string }> => {
     try {
       debug.log('auth', 'Starting token verification in useAuth');
       debug.log('auth', 'Current window location:', window.location.href);
@@ -94,9 +94,12 @@ export const useAuth = (navigate: NavigateFunction) => {
         if (redirect) {
           debug.log('auth', 'Redirecting to:', redirect);
           navigate(redirect);
+        } else {
+          // Default behavior: go home after successful verification
+          navigate('/');
         }
-        
-        return true;
+
+        return { success: true, redirect };
       }
       
       debug.error('auth', 'No data received from verification');
