@@ -84,7 +84,7 @@ export const getMagicLink = async (email: string, isRegistration: boolean, turns
   }
 };
 
-export const verifyMagicLink = async (token: string): Promise<ApiResponse<{ token: string; email: string; redirect?: string }>> => {
+export const verifyMagicLink = async (token: string): Promise<ApiResponse<{ token: string; email: string; redirect?: string; is_new_user?: boolean }>> => {
   try {
     debug.log('api', 'Making verification request');
     const response = await fetch(`${getApiUrl()}/auth/verify?token=${token}`);
@@ -112,7 +112,8 @@ export const verifyMagicLink = async (token: string): Promise<ApiResponse<{ toke
       data: {
         token: data.token,
         email: data.email,
-        redirect: data.redirect
+        redirect: data.redirect,
+        is_new_user: data.is_new_user
       }
     };
   } catch (error) {

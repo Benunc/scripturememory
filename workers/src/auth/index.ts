@@ -346,9 +346,11 @@ export const handleAuth = {
     ).bind(magicLink.email).first();
 
     let userId: number;
+    let isNewUser = false;
     
     if (!existingUser) {
       // Create new user
+      isNewUser = true;
       const result = await db.prepare(
         'INSERT INTO users (email, created_at) VALUES (?, ?)'
       ).bind(magicLink.email, Date.now()).run();
@@ -595,7 +597,8 @@ export const handleAuth = {
       success: true,
       token: sessionToken,
       email: magicLink.email,
-      redirect: magicLink.redirect_url
+      redirect: magicLink.redirect_url,
+      is_new_user: isNewUser
     }), {
       headers: {
         'Content-Type': 'application/json',

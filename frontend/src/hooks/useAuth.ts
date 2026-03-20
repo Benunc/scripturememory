@@ -76,10 +76,11 @@ export const useAuth = (navigate: NavigateFunction) => {
       
       if (response.data) {
         debug.log('auth', 'Verification successful, setting session');
-        const { token: sessionToken, email, redirect } = response.data;
+        const { token: sessionToken, email, redirect, is_new_user } = response.data;
         debug.log('auth', 'Session token:', sessionToken);
         debug.log('auth', 'Email:', email);
         debug.log('auth', 'Redirect URL:', redirect);
+        debug.log('auth', 'Is new user:', is_new_user);
         
         // Store session
         localStorage.setItem('session_token', sessionToken);
@@ -90,12 +91,14 @@ export const useAuth = (navigate: NavigateFunction) => {
         
         debug.log('auth', 'Session set successfully');
         
-        // Navigate to redirect URL if provided
-        if (redirect) {
+        // If this was a newly-created user, always send them home.
+        // For existing users, preserve any invite redirect destination.
+        if (is_new_user) {
+          navigate('/');
+        } else if (redirect) {
           debug.log('auth', 'Redirecting to:', redirect);
           navigate(redirect);
         } else {
-          // Default behavior: go home after successful verification
           navigate('/');
         }
 

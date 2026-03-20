@@ -17,6 +17,7 @@ import {
   IconButton,
 } from '@chakra-ui/react';
 import { useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
 import { debug } from '../utils/debug';
 import { getApiUrl } from '../utils/api';
@@ -67,6 +68,7 @@ export function Invite() {
   const [isTurnstileReady, setIsTurnstileReady] = useState(false);
   const { signIn, isAuthenticated, isLoading: authLoading, token, userEmail } = useAuthContext();
   const toast = useToast();
+  const navigate = useNavigate();
   const turnstileContainerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const { colorMode, toggleColorMode } = useColorMode();
@@ -322,6 +324,7 @@ export function Invite() {
       });
 
       resetTurnstileWidget();
+      navigate('/');
     } catch (error) {
       toast({
         title: 'Error',
